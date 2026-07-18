@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.5';
+const AUTO_CARD_STUDIO_VERSION = '0.6.6';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -5012,28 +5012,38 @@ function buildCharacterRegexScripts(selectedArtifacts, existingScripts = []) {
 
     const scripts = Array.isArray(existingScripts) ? [...existingScripts] : [];
     const scriptName = '🕹️显示状态栏';
-    const existingIndex = scripts.findIndex(script => script?.scriptName === scriptName);
+    // 酒馆助手的角色卡接口使用公开的正则结构（snake_case），而不是
+    // SillyTavern 存档内部的 scriptName / placement 等字段。
+    const existingIndex = scripts.findIndex(script => (script?.script_name || script?.scriptName) === scriptName);
     const existing = existingIndex >= 0 ? scripts[existingIndex] : null;
-    const replaceString = htmlArtifact?.content?.trim() || existing?.replaceString || '';
+    const replaceString = htmlArtifact?.content?.trim() || existing?.replace_string || existing?.replaceString || '';
     if (!replaceString) {
         throw new Error('已选择状态栏查找表达式，但没有可写入“替换为”的状态栏 HTML。请同时勾选“状态栏界面”。');
     }
 
     const regexScript = {
-        ...(existing || {}),
         id: existing?.id || createRegexId(),
-        scriptName,
-        findRegex: findArtifact?.content?.trim() || existing?.findRegex || '<StatusPlaceHolderImpl/>',
-        replaceString,
-        trimStrings: Array.isArray(existing?.trimStrings) ? existing.trimStrings : [],
-        placement: [2],
-        disabled: false,
-        markdownOnly: true,
-        promptOnly: false,
-        runOnEdit: true,
-        substituteRegex: 0,
-        minDepth: existing?.minDepth ?? null,
-        maxDepth: existing?.maxDepth ?? null,
+        script_name: scriptName,
+        enabled: true,
+        find_regex: findArtifact?.content?.trim() || existing?.find_regex || existing?.findRegex || '<StatusPlaceHolderImpl/>',
+        trim_strings: Array.isArray(existing?.trim_strings)
+            ? existing.trim_strings
+            : (Array.isArray(existing?.trimStrings) ? existing.trimStrings : []),
+        replace_string: replaceString,
+        source: {
+            user_input: false,
+            ai_output: true,
+            slash_command: false,
+            world_info: false,
+            reasoning: false,
+        },
+        destination: {
+            display: true,
+            prompt: false,
+        },
+        run_on_edit: true,
+        min_depth: existing?.min_depth ?? existing?.minDepth ?? null,
+        max_depth: existing?.max_depth ?? existing?.maxDepth ?? null,
     };
     if (existingIndex >= 0) scripts[existingIndex] = regexScript;
     else scripts.push(regexScript);
