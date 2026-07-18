@@ -16,12 +16,14 @@
 3. 启用脚本，然后点击“打开 A.U.T.O 创作台”。
 
 ```javascript
-import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v0.4.0/dist/character-creation/auto-card-studio/index.js';
+import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v0.4.1/dist/character-creation/auto-card-studio/index.js';
 ```
 
 ## 数据与更新
 
-- 当前发布版本：`0.4.0`
+- 当前发布版本：`0.4.1`
+- 工具栏入口显示为紧凑的小锤子图标，悬停可查看完整名称。
+- 左侧魔法棒菜单中也提供“A.U.T.O 角色卡创作台”入口。
 - 项目内容保存在浏览器本地存储中，更新远程脚本不会主动清空项目。
 - 发布地址使用固定版本标签；更新时只需要修改导入地址中的版本号。
 - 不要同时启用旧的 SillyTavern 插件版，以免出现重复按钮或界面冲突。

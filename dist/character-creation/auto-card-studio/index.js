@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.4.0 · 酒馆助手脚本核心包
+// A.U.T.O 角色卡创作台 v0.4.1 · 酒馆助手脚本核心包
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -306,6 +306,7 @@ let connectionSettings = loadConnectionSettings();
 let customApiKey = '';
 let shell = null;
 let helper = null;
+let launcherInstallTimer = null;
 let isGenerating = false;
 let activeGenerationId = null;
 let artifactPanelExpanded = false;
@@ -1901,13 +1902,76 @@ function handleHostKeydown(event) {
 
 function cleanupScriptRuntime() {
     document.removeEventListener('keydown', handleHostKeydown);
+    if (launcherInstallTimer) hostWindow.clearInterval(launcherInstallTimer);
+    document.querySelector('#auto-card-studio-wand-launcher')?.remove();
     document.body.classList.remove('acs-no-scroll');
     if (shell?.dataset.acsRuntime === SCRIPT_RUNTIME_MARK) shell.remove();
     document.querySelector(`#${SCRIPT_STYLE_ID}`)?.remove();
     shell = null;
 }
 
+const TOOLBAR_LAUNCHER_NAME = '打开 A.U.T.O 创作台';
+
+function installToolbarLauncher() {
+    const buttons = Array.from(document.querySelectorAll('.qr--button'));
+    const button = buttons.find(item =>
+        item.dataset.autoCardStudioLauncher === 'true'
+        || item.textContent?.trim() === TOOLBAR_LAUNCHER_NAME,
+    );
+    if (!button) return false;
+
+    button.dataset.autoCardStudioLauncher = 'true';
+    button.title = '打开 A.U.T.O 角色卡创作台';
+    button.setAttribute('aria-label', '打开 A.U.T.O 角色卡创作台');
+    // 工具栏仅保留一个清晰的小图标，完整名称通过悬停提示和菜单入口提供。
+    button.replaceChildren(Object.assign(document.createElement('i'), {
+        className: 'fa-solid fa-hammer',
+    }));
+    return true;
+}
+
+function installWandLauncher() {
+    const menu = document.querySelector('#extensionsMenu');
+    if (!menu) return false;
+
+    let item = menu.querySelector('#auto-card-studio-wand-launcher');
+    if (!item) {
+        item = document.createElement('div');
+        item.id = 'auto-card-studio-wand-launcher';
+        item.className = 'list-group-item flex-container flexGap5';
+        item.title = '打开 A.U.T.O 角色卡创作台';
+        item.innerHTML = `
+            <div class="fa-fw fa-solid fa-hammer extensionsMenuExtensionButton" aria-hidden="true"></div>
+            <span>A.U.T.O 角色卡创作台</span>
+        `;
+        item.addEventListener('click', openStudio);
+        menu.append(item);
+    }
+    return true;
+}
+
+function installStudioLaunchers() {
+    const syncLaunchers = () => {
+        const toolbarReady = installToolbarLauncher();
+        const wandReady = installWandLauncher();
+        if (toolbarReady && wandReady && launcherInstallTimer) {
+            hostWindow.clearInterval(launcherInstallTimer);
+            launcherInstallTimer = null;
+        }
+    };
+
+    syncLaunchers();
+    if (!launcherInstallTimer) launcherInstallTimer = hostWindow.setInterval(syncLaunchers, 500);
+    // 防止异常页面持续保留轮询；正常情况下两个入口会在首次检查时完成安装。
+    hostWindow.setTimeout(() => {
+        if (!launcherInstallTimer) return;
+        hostWindow.clearInterval(launcherInstallTimer);
+        launcherInstallTimer = null;
+    }, 15000);
+}
+
 document.addEventListener('keydown', handleHostKeydown);
-appendInexistentScriptButtons([{ name: '打开 A.U.T.O 创作台', visible: true }]);
-eventOn(getButtonEvent('打开 A.U.T.O 创作台'), openStudio);
+appendInexistentScriptButtons([{ name: TOOLBAR_LAUNCHER_NAME, visible: true }]);
+eventOn(getButtonEvent(TOOLBAR_LAUNCHER_NAME), openStudio);
+installStudioLaunchers();
 window.addEventListener('pagehide', cleanupScriptRuntime, { once: true });
