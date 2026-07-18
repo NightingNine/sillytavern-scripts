@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.5.0 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.5.1 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -200,11 +200,142 @@ const PROJECT_LIBRARY_CSS = `
   margin-right: 7px;
   color: var(--acs-cyan);
 }
+
+/* 原生 select 的展开层由操作系统绘制；用自定义菜单确保收起与展开状态保持同一主题。 */
+.acs-native-select {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.acs-styled-select {
+  position: relative;
+  width: 100%;
+}
+
+.acs-styled-select.is-open {
+  z-index: 30;
+}
+
+.acs-select-trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid var(--acs-line);
+  border-radius: 9px;
+  background: #34312c;
+  color: var(--acs-text);
+  font: 500 11px/1.4 var(--acs-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.acs-select-trigger:hover,
+.acs-select-trigger:focus-visible,
+.acs-styled-select.is-open .acs-select-trigger {
+  border-color: rgba(217, 119, 87, 0.58);
+  background: #3b3832;
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.09);
+  outline: none;
+}
+
+.acs-select-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.acs-select-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-select-trigger i {
+  color: var(--acs-cyan);
+  font-size: 9px;
+  transition: transform 150ms ease;
+}
+
+.acs-styled-select.is-open .acs-select-trigger i {
+  transform: rotate(180deg);
+}
+
+.acs-select-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 31;
+  display: grid;
+  gap: 3px;
+  max-height: min(250px, 42vh);
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid rgba(232, 224, 212, 0.2);
+  border-radius: 11px;
+  background: #302d28;
+  box-shadow: 0 16px 38px rgba(10, 9, 8, 0.46), 0 2px 8px rgba(10, 9, 8, 0.24);
+  scrollbar-color: var(--acs-line) transparent;
+  scrollbar-width: thin;
+}
+
+.acs-styled-select.opens-up .acs-select-options {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.acs-select-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--acs-text-soft);
+  font: 500 11px/1.45 var(--acs-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.acs-select-option:hover,
+.acs-select-option:focus-visible {
+  border-color: rgba(232, 224, 212, 0.13);
+  background: #3b3832;
+  color: var(--acs-text);
+  outline: none;
+}
+
+.acs-select-option.is-selected {
+  border-color: rgba(217, 119, 87, 0.34);
+  background: rgba(217, 119, 87, 0.12);
+  color: #f0ded5;
+}
+
+.acs-select-option i {
+  color: var(--acs-cyan);
+  font-size: 9px;
+  text-align: center;
+}
 `;
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.5.0';
+const AUTO_CARD_STUDIO_VERSION = '0.5.1';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
@@ -515,6 +646,7 @@ let activeGenerationId = null;
 let artifactPanelExpanded = false;
 const artifactSaveTimers = new Map();
 let environment = {
+    checked: false,
     presetNames: [],
     worldbookNames: [],
     presetName: project.presetName || '',
@@ -705,10 +837,12 @@ async function inspectEnvironment() {
 
     helper = await waitForTavernHelper();
     if (!helper) {
+        environment.checked = true;
         status.classList.add('is-error');
         status.querySelector('span:last-child').textContent = '未检测到酒馆助手';
         notify('error', '请先启用“酒馆助手”扩展，然后刷新 SillyTavern。');
         renderEnvironmentSelectors();
+        renderCurrentStep();
         return;
     }
 
@@ -719,8 +853,10 @@ async function inspectEnvironment() {
         environment.worldbookName = chooseWorldbookName(environment.worldbookNames);
         project.presetName = environment.presetName;
         project.sourceWorldbookName = environment.worldbookName;
+        environment.checked = true;
         saveProject();
         renderEnvironmentSelectors();
+        renderCurrentStep();
 
         const missing = [];
         if (!environment.presetName) missing.push('A.U.T.O v2.0 预设');
@@ -734,9 +870,11 @@ async function inspectEnvironment() {
         status.classList.add('is-ready');
         status.querySelector('span:last-child').textContent = '预设、世界书与酒馆助手已就绪';
     } catch (error) {
+        environment.checked = true;
         console.error('[A.U.T.O Card Studio] 环境检查失败', error);
         status.classList.add('is-error');
         status.querySelector('span:last-child').textContent = '环境检查失败';
+        renderCurrentStep();
     }
 }
 
@@ -747,6 +885,10 @@ function renderEnvironmentSelectors() {
     const presetReady = Boolean(environment.presetName);
     presetLock.classList.toggle('is-missing', !presetReady);
     presetName.textContent = presetReady ? environment.presetName : `未找到 ${FIXED_PRESET_NAME}`;
+    presetLock.querySelector('.acs-fixed-resource-badge').textContent = presetReady ? '已锁定' : '需要导入';
+    presetLock.querySelector('.acs-fixed-resource-copy small').textContent = presetReady
+        ? '创作台始终读取这份预设，不跟随主界面当前选择。'
+        : `请先在 SillyTavern 导入 ${FIXED_PRESET_NAME}，然后重新打开创作台。`;
     fillSelect(worldbookSelect, environment.worldbookNames, environment.worldbookName, '未找到可用世界书');
 }
 
@@ -757,10 +899,112 @@ function fillSelect(select, items, selected, emptyLabel) {
         option.disabled = true;
         option.selected = true;
         select.add(option);
+        syncStyledSelect(select);
         return;
     }
     for (const item of items) {
         select.add(new Option(item, item, false, item === selected));
+    }
+    syncStyledSelect(select);
+}
+
+function closeStyledSelects(except = null) {
+    if (!shell) return;
+    for (const widget of shell.querySelectorAll('.acs-styled-select.is-open')) {
+        if (widget === except) continue;
+        widget.classList.remove('is-open', 'opens-up');
+        widget.querySelector('.acs-select-trigger').setAttribute('aria-expanded', 'false');
+        widget.querySelector('.acs-select-options').hidden = true;
+    }
+}
+
+function syncStyledSelect(select) {
+    const widget = select?.nextElementSibling;
+    if (!widget?.classList.contains('acs-styled-select')) return;
+    const trigger = widget.querySelector('.acs-select-trigger');
+    const value = widget.querySelector('.acs-select-value');
+    const optionsPanel = widget.querySelector('.acs-select-options');
+    const selectedOption = select.selectedOptions?.[0];
+    value.textContent = selectedOption?.textContent || '请选择';
+    trigger.disabled = select.disabled || ![...select.options].some(option => !option.disabled);
+    optionsPanel.replaceChildren();
+
+    for (const option of select.options) {
+        if (option.disabled) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `acs-select-option${option.value === select.value ? ' is-selected' : ''}`;
+        button.dataset.selectValue = option.value;
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', String(option.value === select.value));
+        const copy = document.createElement('span');
+        copy.textContent = option.textContent;
+        const check = document.createElement('i');
+        check.className = option.value === select.value ? 'fa-solid fa-check' : '';
+        check.setAttribute('aria-hidden', 'true');
+        button.append(copy, check);
+        optionsPanel.append(button);
+    }
+}
+
+function toggleStyledSelect(widget, force) {
+    const trigger = widget.querySelector('.acs-select-trigger');
+    if (trigger.disabled) return;
+    const opened = typeof force === 'boolean' ? force : !widget.classList.contains('is-open');
+    closeStyledSelects(opened ? widget : null);
+    widget.classList.toggle('is-open', opened);
+    trigger.setAttribute('aria-expanded', String(opened));
+    const options = widget.querySelector('.acs-select-options');
+    options.hidden = !opened;
+    if (!opened) {
+        widget.classList.remove('opens-up');
+        return;
+    }
+    const bounds = trigger.getBoundingClientRect();
+    const estimatedHeight = Math.min(options.scrollHeight || 220, 250);
+    widget.classList.toggle('opens-up', hostWindow.innerHeight - bounds.bottom < estimatedHeight + 18 && bounds.top > estimatedHeight);
+}
+
+function installStyledSelects() {
+    for (const select of shell.querySelectorAll('#acs-custom-source, #acs-worldbook-select, #acs-person')) {
+        if (select.nextElementSibling?.classList.contains('acs-styled-select')) continue;
+        select.classList.add('acs-native-select');
+        select.tabIndex = -1;
+        select.setAttribute('aria-hidden', 'true');
+        const labelText = select.closest('label')?.querySelector(':scope > span')?.textContent?.trim() || '选项';
+        const widget = document.createElement('div');
+        widget.className = 'acs-styled-select';
+        const optionsId = `${select.id}-styled-options`;
+        widget.innerHTML = `
+          <button class="acs-select-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="${optionsId}" aria-label="选择${labelText}">
+            <span class="acs-select-value"></span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </button>
+          <div id="${optionsId}" class="acs-select-options" role="listbox" hidden></div>`;
+        select.insertAdjacentElement('afterend', widget);
+        const trigger = widget.querySelector('.acs-select-trigger');
+        trigger.addEventListener('click', event => {
+            event.preventDefault();
+            toggleStyledSelect(widget);
+        });
+        trigger.addEventListener('keydown', event => {
+            if (!['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) return;
+            event.preventDefault();
+            toggleStyledSelect(widget, true);
+            const selected = widget.querySelector('.acs-select-option.is-selected') || widget.querySelector('.acs-select-option');
+            selected?.focus();
+        });
+        widget.querySelector('.acs-select-options').addEventListener('click', event => {
+            const option = event.target.closest('[data-select-value]');
+            if (!option) return;
+            select.value = option.dataset.selectValue;
+            select.dispatchEvent(new hostWindow.Event('change', { bubbles: true }));
+            syncStyledSelect(select);
+            toggleStyledSelect(widget, false);
+            trigger.focus();
+        });
+        select.addEventListener('change', () => syncStyledSelect(select));
+        syncStyledSelect(select);
     }
 }
 
@@ -1093,11 +1337,14 @@ function renderCurrentStep() {
         turns.append(article);
     }
 
+    const dependencyMessage = generationDependencyMessage();
+    const generateButton = shell.querySelector('#acs-generate');
     shell.querySelector('#acs-accept-step').disabled = !latestAssistantResponse(step.number) || isGenerating;
-    shell.querySelector('#acs-generate').disabled = isGenerating;
-    shell.querySelector('#acs-generation-hint').textContent = state.turns?.length
+    generateButton.disabled = isGenerating || Boolean(dependencyMessage);
+    generateButton.title = dependencyMessage || '使用 A.U.T.O 预设生成本阶段草案';
+    shell.querySelector('#acs-generation-hint').textContent = dependencyMessage || (state.turns?.length
         ? `会带上本阶段对话与已确认产物继续生成 · ${connectionDisplayName()}`
-        : `可留空生成；本阶段将整理「${step.name}」 · ${connectionDisplayName()}`;
+        : `可留空生成；本阶段将整理「${step.name}」 · ${connectionDisplayName()}`);
 
     requestAnimationFrame(() => {
         const conversation = shell.querySelector('.acs-conversation');
@@ -1295,6 +1542,7 @@ function renderProjectFields() {
     shell.querySelector('#acs-word-count').value = project.preferences.wordCount;
     shell.querySelector('#acs-language').value = project.preferences.language;
     shell.querySelector('#acs-person').value = project.preferences.person;
+    syncStyledSelect(shell.querySelector('#acs-person'));
     shell.querySelector('#acs-character-name').value = project.output.characterName;
     shell.querySelector('#acs-output-worldbook').value = project.output.worldbookName || defaultOutputWorldbookName();
     renderConnectionSettings();
@@ -1457,6 +1705,13 @@ function connectionDisplayName() {
     return connectionSettings.model.trim() || '独立连接未完成';
 }
 
+function generationDependencyMessage() {
+    if (!environment.checked) return '';
+    if (!helper) return '未检测到酒馆助手，暂时不能调用 AI。';
+    if (!environment.presetName) return `缺少 ${FIXED_PRESET_NAME}，请先在 SillyTavern 导入该预设，然后重新打开创作台。`;
+    return '';
+}
+
 function renderConnectionSettings() {
     for (const radio of shell.querySelectorAll('input[name="acs-connection-mode"]')) {
         radio.checked = radio.value === connectionSettings.mode;
@@ -1465,6 +1720,7 @@ function renderConnectionSettings() {
     const isCustom = connectionSettings.mode === 'custom';
     shell.querySelector('#acs-custom-connection').hidden = !isCustom;
     shell.querySelector('#acs-custom-source').value = connectionSettings.source;
+    syncStyledSelect(shell.querySelector('#acs-custom-source'));
     shell.querySelector('#acs-custom-api-url').value = connectionSettings.apiUrl;
     shell.querySelector('#acs-custom-api-key').value = customApiKey;
     shell.querySelector('#acs-custom-model').value = connectionSettings.model;
@@ -1685,7 +1941,8 @@ function prepareGeneration() {
         return null;
     }
     if (!environment.presetName) {
-        notify('error', '没有找到 A.U.T.O v2.0 预设，请在“设置”中选择正确预设。');
+        notify('error', `没有找到 ${FIXED_PRESET_NAME}。请先在 SillyTavern 导入该预设，然后重新打开创作台。`);
+        switchInspectorTab('settings');
         return null;
     }
     if (!project.brief.trim() && project.currentStep === 1) {
@@ -1805,7 +2062,7 @@ function setGenerating(value) {
     isGenerating = value;
     const generateButton = shell.querySelector('#acs-generate');
     const stopButton = shell.querySelector('#acs-stop-generation');
-    generateButton.disabled = value;
+    generateButton.disabled = value || Boolean(generationDependencyMessage());
     generateButton.innerHTML = value
         ? '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> A.U.T.O 正在构筑'
         : '<i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> 生成阶段草案';
@@ -2152,6 +2409,7 @@ function bindStudioEvents() {
     });
     shell.addEventListener('click', event => {
         if (!event.target.closest('.acs-project-identity')) toggleProjectMenu(false);
+        if (!event.target.closest('.acs-styled-select')) closeStyledSelects();
     });
 
     const artifactList = shell.querySelector('#acs-artifact-list');
@@ -2280,6 +2538,7 @@ async function ensureStudioLoaded() {
     shell.dataset.acsRuntime = SCRIPT_RUNTIME_MARK;
     document.body.append(shell);
     installProjectLibraryUI();
+    installStyledSelects();
     bindStudioEvents();
     renderAll();
     await inspectEnvironment();
@@ -2336,6 +2595,7 @@ function closeStudio() {
     }
     if (artifactPanelExpanded) toggleArtifactPanel(false);
     toggleProjectMenu(false);
+    closeStyledSelects();
     shell.classList.remove('is-open');
     shell.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('acs-no-scroll');
@@ -2343,6 +2603,10 @@ function closeStudio() {
 
 function handleHostKeydown(event) {
     if (event.key !== 'Escape' || !shell?.classList.contains('is-open')) return;
+    if (shell.querySelector('.acs-styled-select.is-open')) {
+        closeStyledSelects();
+        return;
+    }
     if (!shell.querySelector('#acs-project-menu')?.hidden) {
         toggleProjectMenu(false);
         return;
