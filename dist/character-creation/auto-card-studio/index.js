@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.5 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.10 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.9';
+const AUTO_CARD_STUDIO_VERSION = '0.6.10';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -6457,23 +6457,43 @@ function cleanupScriptRuntime() {
     shell = null;
 }
 
-const TOOLBAR_LAUNCHER_NAME = '打开 A.U.T.O 创作台';
+const TOOLBAR_LAUNCHER_NAME = '🔨';
+const LEGACY_TOOLBAR_LAUNCHER_NAME = '打开 A.U.T.O 创作台';
+
+function migrateToolbarLauncherName() {
+    try {
+        const buttons = getScriptButtons();
+        const migrated = [];
+        for (const button of buttons) {
+            const next = button.name === LEGACY_TOOLBAR_LAUNCHER_NAME
+                ? { ...button, name: TOOLBAR_LAUNCHER_NAME }
+                : button;
+            if (!migrated.some(item => item.name === next.name)) migrated.push(next);
+        }
+        if (!migrated.some(button => button.name === TOOLBAR_LAUNCHER_NAME)) {
+            migrated.push({ name: TOOLBAR_LAUNCHER_NAME, visible: true });
+        }
+        replaceScriptButtons(migrated);
+    } catch (error) {
+        // 兼容尚未提供按钮配置接口的旧版酒馆助手。
+        console.warn('[A.U.T.O Card Studio] 工具栏按钮名称迁移失败', error);
+        appendInexistentScriptButtons([{ name: TOOLBAR_LAUNCHER_NAME, visible: true }]);
+    }
+}
 
 function installToolbarLauncher() {
     const buttons = Array.from(document.querySelectorAll('.qr--button'));
     const button = buttons.find(item =>
         item.dataset.autoCardStudioLauncher === 'true'
-        || item.textContent?.trim() === TOOLBAR_LAUNCHER_NAME,
+        || item.textContent?.trim() === TOOLBAR_LAUNCHER_NAME
+        || item.textContent?.trim() === LEGACY_TOOLBAR_LAUNCHER_NAME,
     );
     if (!button) return false;
 
     button.dataset.autoCardStudioLauncher = 'true';
     button.title = '打开 A.U.T.O 角色卡创作台';
     button.setAttribute('aria-label', '打开 A.U.T.O 角色卡创作台');
-    // 工具栏仅保留一个清晰的小图标，完整名称通过悬停提示和菜单入口提供。
-    button.replaceChildren(Object.assign(document.createElement('i'), {
-        className: 'fa-solid fa-hammer',
-    }));
+    // 按钮配置本身就是图标字符；这里不再等脚本加载后替换文字内容。
     return true;
 }
 
@@ -6614,8 +6634,10 @@ function startStudioRuntime() {
     document.addEventListener('keydown', handleHostKeydown);
     hostWindow.addEventListener('resize', handleTourResize);
     hostWindow.visualViewport?.addEventListener('resize', handleTourResize);
-    appendInexistentScriptButtons([{ name: TOOLBAR_LAUNCHER_NAME, visible: true }]);
+    migrateToolbarLauncherName();
     eventOn(getButtonEvent(TOOLBAR_LAUNCHER_NAME), openStudio);
+    // 首次升级时旧按钮可能已经渲染并持有旧事件，保留一次兼容绑定。
+    eventOn(getButtonEvent(LEGACY_TOOLBAR_LAUNCHER_NAME), openStudio);
     installStudioLaunchers();
     window.addEventListener('pagehide', cleanupScriptRuntime, { once: true });
     if (hostWindow.sessionStorage.getItem(UPDATE_REOPEN_KEY)) {
