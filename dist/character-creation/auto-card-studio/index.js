@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.5.22 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.0 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1116,7 +1116,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.5.22';
+const AUTO_CARD_STUDIO_VERSION = '0.6.0';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1159,6 +1159,242 @@ const PHASES = [
     { id: 'variables', label: 'III · 变量化系统', range: [16, 21] },
     { id: 'production', label: 'IV · 装配与交付', range: [22, 30] },
 ];
+
+const DELIVERY_DIALOG_CSS = `
+.acs-delivery-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  padding: clamp(16px, 4vh, 44px);
+  place-items: center;
+  background: rgba(18, 16, 14, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.acs-delivery-dialog {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(900px, 94vw);
+  max-height: min(820px, 90vh);
+  overflow: hidden;
+  border: 1px solid rgba(217, 119, 87, 0.34);
+  border-radius: 18px;
+  background: #2b2925;
+  box-shadow: 0 30px 90px rgba(10, 9, 8, 0.6);
+}
+
+.acs-delivery-head,
+.acs-delivery-toolbar,
+.acs-delivery-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.acs-delivery-head {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--acs-line-soft);
+}
+
+.acs-delivery-title p,
+.acs-delivery-title h2 {
+  margin: 0;
+}
+
+.acs-delivery-title p {
+  color: var(--acs-cyan);
+  font: 700 9px/1 var(--acs-mono);
+  letter-spacing: 0.16em;
+}
+
+.acs-delivery-title h2 {
+  margin-top: 6px;
+  font: 500 25px/1.2 var(--acs-display);
+}
+
+.acs-delivery-title small {
+  display: block;
+  margin-top: 7px;
+  color: var(--acs-muted);
+  font-size: 10px;
+}
+
+.acs-delivery-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--acs-line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--acs-muted);
+  cursor: pointer;
+}
+
+.acs-delivery-toolbar {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--acs-line-soft);
+  background: #302e29;
+}
+
+.acs-delivery-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.acs-delivery-preset {
+  padding: 6px 9px;
+  border: 1px solid var(--acs-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--acs-muted);
+  cursor: pointer;
+  font: 650 9px/1 var(--acs-body);
+}
+
+.acs-delivery-preset:hover {
+  border-color: var(--acs-cyan);
+  color: var(--acs-text);
+}
+
+.acs-delivery-count {
+  color: var(--acs-gold);
+  font: 700 9px/1 var(--acs-mono);
+  white-space: nowrap;
+}
+
+.acs-delivery-reorg-status {
+  flex: 1 1 210px;
+  color: var(--acs-muted);
+  font-size: 9px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.acs-delivery-reorg-status.is-active { color: var(--acs-green); }
+.acs-delivery-reorg-status.is-warning { color: var(--acs-gold); }
+
+.acs-delivery-list {
+  display: grid;
+  gap: 8px;
+  min-height: 150px;
+  overflow: auto;
+  padding: 14px 20px 20px;
+  scrollbar-color: var(--acs-line) transparent;
+  scrollbar-width: thin;
+}
+
+.acs-delivery-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--acs-line-soft);
+  border-radius: 11px;
+  background: #35322d;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.acs-delivery-item:hover {
+  border-color: rgba(217, 119, 87, 0.42);
+  transform: translateY(-1px);
+}
+
+.acs-delivery-item:has(input:checked) {
+  border-color: rgba(217, 119, 87, 0.5);
+  background: rgba(217, 119, 87, 0.09);
+}
+
+.acs-delivery-item input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--acs-cyan);
+}
+
+.acs-delivery-item-copy {
+  min-width: 0;
+}
+
+.acs-delivery-item-copy strong,
+.acs-delivery-item-copy small {
+  display: block;
+}
+
+.acs-delivery-item-copy strong {
+  overflow: hidden;
+  color: var(--acs-text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-delivery-item-copy small {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--acs-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-delivery-item-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  color: var(--acs-muted);
+  font: 700 8px/1 var(--acs-mono);
+}
+
+.acs-delivery-item-meta span:first-child {
+  color: var(--acs-green);
+}
+
+.acs-delivery-item.is-draft .acs-delivery-item-meta span:first-child {
+  color: var(--acs-gold);
+}
+
+.acs-delivery-footer {
+  justify-content: space-between;
+  border-top: 1px solid var(--acs-line-soft);
+  background: #292722;
+}
+
+.acs-delivery-footer p {
+  max-width: 58%;
+  margin: 0;
+  color: var(--acs-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.acs-delivery-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 交付窗口内的主按钮保持紧凑，不继承发布页的整行宽度。 */
+.acs-delivery-actions .acs-button-publish {
+  width: auto;
+  margin-top: 0;
+}
+
+@media (max-width: 620px) {
+  .acs-delivery-overlay { padding: 0; }
+  .acs-delivery-dialog { width: 100%; max-height: 100%; border-radius: 0; }
+  .acs-delivery-toolbar, .acs-delivery-footer { align-items: stretch; flex-direction: column; }
+  .acs-delivery-footer p { max-width: none; }
+  .acs-delivery-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .acs-delivery-item { grid-template-columns: 22px minmax(0, 1fr); }
+  .acs-delivery-item-meta { grid-column: 2; grid-auto-flow: column; justify-content: start; }
+}
+`;
 
 const TOUR_STEPS = Object.freeze([
     {
@@ -1261,8 +1497,8 @@ const TOUR_STEPS = Object.freeze([
         scene: 'publish',
         eyebrow: 'HANDOFF 10',
         title: '完成后交付角色卡与世界书',
-        description: '发布页会把各步骤的正式产物装配进配套世界书，并创建或更新 SillyTavern 角色卡。',
-        points: ['同名角色卡或世界书不会静默覆盖，操作前会再次确认。', '创作档案可单独下载，方便审阅完整过程或迁移。'],
+        description: '发布页会先列出当前可交付产物。勾选需要的内容后，创作台直接创建世界书并绑定 SillyTavern 角色卡。',
+        points: ['默认选择已确认产物，草案也可手动加入。', '同一目标条目的多个产物会合并；同名角色卡或世界书在覆盖前会再次确认。'],
         actionNote: '已自动切换到“发布”页；引导不会执行真正发布。',
     },
     {
@@ -1512,49 +1748,15 @@ const PLACEHOLDER_IDS = new Set([
     'chatHistory',
 ]);
 
-const WORLD_ENTRY_MAPPINGS = [
-    { step: 1, needle: '交互范式', tags: ['WORLD_interaction_paradigm'] },
-    { step: 1, needle: '美学纲领', tags: ['WORLD_aesthetic_program'] },
-    { step: 2, needle: '实现机制', prefixes: ['WORLD_implementation_mechanisms'] },
-    { step: 3, needle: '弧光识别' },
-    { step: 4, needle: '世界蓝图', tags: ['WORLD_blueprint'] },
-    { step: 5, needle: '主要角色-原点', suffixes: ['_原点'] },
-    { step: 5, needle: '主要角色-画像', suffixes: ['_画像'] },
-    { step: 5, needle: '主要角色-状态', sourcePrefixes: ['SOURCE_main_characters_'] },
-    { step: 6, needle: '关系图谱', prefixes: ['WORLD_relationship_map'] },
-    { step: 7, needle: '生成规则', prefixes: ['WORLD_generative_rules_'] },
-    { step: 8, needle: '具体实例', prefixes: ['WORLD_specific_instances'] },
-    { step: 9, needle: '世界知识', prefixes: ['WORLD_lore_'] },
-    { step: 10, needle: '空间规划' },
-    { step: 11, needle: '情节图谱' },
-    { step: 12, needle: '维度内容', prefixes: ['WORLD_dimension_'] },
-    { step: 13, needle: '叙事指南核心', tags: ['WORLD_narrative_core'] },
-    { step: 14, needle: '语料库', prefixes: ['WORLD_language_materials_'] },
-    { step: 15, needle: '场景策略集', prefixes: ['WORLD_scene_strategies_'] },
-    { step: 16, needle: '数据盘点' },
-    { step: 17, needle: '变量体系规划' },
-    { step: 18, needle: '当前变量', prefixes: ['WORLD_current_'] },
-    { step: 19, needle: '更新指南', tags: ['WORLD_variable_update_guide'] },
-    { step: 20, needle: '条件显示规划' },
-    { step: 21, needle: '其他条件显示内容', prefixes: ['WORLD_'] },
-    { step: 22, needle: '世界根目录', tags: ['WORLD_root_index'] },
-    { step: 23, needle: '输出格式', tags: ['SOURCE_statusbar_data_guide', 'STATUSBAR_DATA'], append: true },
-    { step: 24, needle: '输出格式', prefixes: ['SYS_output_format', 'WORLD_'], append: true },
-    { step: 25, needle: '副AI任务清单' },
-    { step: 26, needle: '世界书提示词' },
-    { step: 27, needle: '变量提示词' },
-    { step: 28, needle: '条目规划表' },
-];
-
 // 固定 A.U.T.O v2.0 各步骤的正式交付物。CONTEXT_* 属于思考、评分或追问，不进入产物栏。
 const STEP_ARTIFACT_RULES = Object.freeze({
     1: { tags: ['WORLD_interaction_paradigm', 'WORLD_aesthetic_program'] },
     2: { prefixes: ['WORLD_implementation_mechanisms'] },
     3: { prefixes: ['WORLD_arc_framework_'] },
     4: { tags: ['WORLD_blueprint'] },
-    // Step 5 的“状态”按 A.U.T.O 预设定义为 SOURCE 中间产物，
-    // 但它是角色卡后续变量系统的必要输入，因此与原点、画像一起纳入正式产物。
-    5: { prefixes: ['WORLD_main_characters_', 'SOURCE_main_characters_'] },
+    // 预设要求 Step 5 交付原点、画像、状态。兼容少数模型把“状态”误写成 SOURCE，
+    // 但不会把其他 SOURCE_main_characters_* 中间分析误算为正式产物。
+    5: { patterns: [/^WORLD_main_characters_.+_(?:原点|画像|状态)$/, /^SOURCE_main_characters_.+_状态$/] },
     6: { prefixes: ['WORLD_relationship_map'] },
     7: { prefixes: ['WORLD_generative_rules_'] },
     8: { prefixes: ['WORLD_specific_instances_'] },
@@ -1565,14 +1767,15 @@ const STEP_ARTIFACT_RULES = Object.freeze({
     13: { tags: ['WORLD_narrative_core'] },
     14: { prefixes: ['WORLD_language_materials_'] },
     15: { prefixes: ['WORLD_scene_strategies_'] },
-    16: { fences: ['part1', 'part2'] },
+    // 以预设正则中的“复制并粘贴”说明为准：Step16 只交付待变量化与待条件化清单。
+    16: { tags: ['SOURCE_待变量化', 'SOURCE_待条件化'] },
     17: { tags: ['SOURCE_variable_system_planning'] },
     18: { prefixes: ['WORLD_current_', 'SOURCE_condition_mapping_'], fences: ['schema'] },
-    19: { tags: ['WORLD_variable_update_guide'] },
+    19: { tags: ['WORLD_variable_update_guide', 'SOURCE_step19_plan'] },
     20: { prefixes: ['WORLD_'] },
     21: { prefixes: ['WORLD_'] },
     22: { tags: ['WORLD_root_index'] },
-    23: { statusbarFences: true },
+    23: { tags: ['SOURCE_statusbar_data_guide'], statusbarFences: true },
     24: { tags: ['SYS_output_format'] },
     25: { tags: ['SOURCE_task_list'] },
     26: { prefixes: ['SYS_task_'] },
@@ -1598,8 +1801,11 @@ const ARTIFACT_EXACT_DISPLAY_NAMES = Object.freeze({
     WORLD_blueprint: '世界蓝图',
     SOURCE_spatial_planning: '空间规划',
     WORLD_narrative_core: '叙事指南核心',
+    SOURCE_待变量化: '数据盘点 · 待变量化',
+    SOURCE_待条件化: '数据盘点 · 待条件化',
     SOURCE_variable_system_planning: '变量体系规划',
     WORLD_variable_update_guide: '变量更新指南',
+    SOURCE_step19_plan: '条件显示规划',
     WORLD_root_index: '世界根目录',
     SOURCE_statusbar_data_guide: '状态栏数据指南',
     STATUSBAR_HTML: '状态栏界面',
@@ -1610,8 +1816,6 @@ const ARTIFACT_EXACT_DISPLAY_NAMES = Object.freeze({
     autotask_config: 'AutoTask 配置',
     reorg_plan: '世界书重组方案',
     opening: '正式开场白',
-    part1: '数据盘点 · 第一部分',
-    part2: '数据盘点 · 第二部分',
 });
 
 const ARTIFACT_PREFIX_DISPLAY_NAMES = Object.freeze([
@@ -1651,15 +1855,14 @@ let tourRestoreState = null;
 let renderedArtifactGroups = [];
 let promptPreviewMessages = [];
 let promptTokenRenderEpoch = 0;
+let deliveryArtifacts = [];
 let artifactFilterScope = 'all';
 let artifactFilterQuery = '';
 const artifactSaveTimers = new Map();
 let environment = {
     checked: false,
     presetNames: [],
-    worldbookNames: [],
     presetName: project.presetName || '',
-    worldbookName: project.sourceWorldbookName || '',
 };
 
 function createDefaultProject() {
@@ -1818,18 +2021,6 @@ function choosePresetName(names) {
     }) || '';
 }
 
-function chooseWorldbookName(names) {
-    if (project.sourceWorldbookName && names.includes(project.sourceWorldbookName)) {
-        return project.sourceWorldbookName;
-    }
-    const exact = names.find(name => /A\.U\.T\.O.*预设.*2\.0/i.test(name));
-    if (exact) return exact;
-    return names.find(name => {
-        const normalized = normalizeName(name);
-        return normalized.includes('auto') && normalized.includes('预设') && normalized.includes('20');
-    }) || '';
-}
-
 async function waitForTavernHelper(timeout = 12000) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeout) {
@@ -1859,27 +2050,21 @@ async function inspectEnvironment() {
 
     try {
         environment.presetNames = helper.getPresetNames?.() || [];
-        environment.worldbookNames = helper.getWorldbookNames?.() || [];
         environment.presetName = choosePresetName(environment.presetNames);
-        environment.worldbookName = chooseWorldbookName(environment.worldbookNames);
         project.presetName = environment.presetName;
-        project.sourceWorldbookName = environment.worldbookName;
         environment.checked = true;
         saveProject();
         renderEnvironmentSelectors();
         renderCurrentStep();
 
-        const missing = [];
-        if (!environment.presetName) missing.push('A.U.T.O v2.0 预设');
-        if (!environment.worldbookName) missing.push('A.U.T.O v2.0 世界书');
-        if (missing.length) {
+        if (!environment.presetName) {
             status.classList.add('is-error');
-            status.querySelector('span:last-child').textContent = `缺少：${missing.join('、')}`;
+            status.querySelector('span:last-child').textContent = `缺少：${FIXED_PRESET_NAME}`;
             return;
         }
 
         status.classList.add('is-ready');
-        status.querySelector('span:last-child').textContent = '预设、世界书与酒馆助手已就绪';
+        status.querySelector('span:last-child').textContent = '预设与酒馆助手已就绪';
     } catch (error) {
         environment.checked = true;
         console.error('[A.U.T.O Card Studio] 环境检查失败', error);
@@ -1892,7 +2077,6 @@ async function inspectEnvironment() {
 function renderEnvironmentSelectors() {
     const presetLock = shell.querySelector('#acs-preset-lock');
     const presetName = shell.querySelector('#acs-preset-name');
-    const worldbookSelect = shell.querySelector('#acs-worldbook-select');
     const presetReady = Boolean(environment.presetName);
     presetLock.classList.toggle('is-missing', !presetReady);
     presetName.textContent = presetReady ? environment.presetName : `未找到 ${FIXED_PRESET_NAME}`;
@@ -1900,7 +2084,6 @@ function renderEnvironmentSelectors() {
     presetLock.querySelector('.acs-fixed-resource-copy small').textContent = presetReady
         ? '创作台始终读取这份预设，不跟随主界面当前选择。'
         : `请先在 SillyTavern 导入 ${FIXED_PRESET_NAME}，然后重新打开创作台。`;
-    fillSelect(worldbookSelect, environment.worldbookNames, environment.worldbookName, '未找到可用世界书');
 }
 
 function fillSelect(select, items, selected, emptyLabel) {
@@ -2965,6 +3148,57 @@ function installStudioToolsUI() {
     }
 }
 
+function installDeliveryUI() {
+    // 世界书不再依赖预制模板；旧项目字段继续保留，仅用于兼容历史存档。
+    shell.querySelector('#acs-worldbook-select')?.closest('label')?.remove();
+    const publishCopy = shell.querySelector('.acs-publish-copy p:last-child');
+    if (publishCopy) publishCopy.textContent = '从项目产物中选择要交付的条目，直接创建世界书并绑定角色卡。';
+    const publishNote = shell.querySelector('#acs-publish-note');
+    if (publishNote) publishNote.textContent = '点击创建后可逐项勾选；默认选择所有已确认产物。';
+    const updateButton = shell.querySelector('#acs-check-update');
+    if (updateButton) updateButton.title = `检查更新（当前 v${AUTO_CARD_STUDIO_VERSION}）`;
+
+    if (shell.querySelector('#acs-delivery-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'acs-delivery-overlay';
+    overlay.className = 'acs-delivery-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML = `
+      <section class="acs-delivery-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-delivery-title">
+        <header class="acs-delivery-head">
+          <div class="acs-delivery-title">
+            <p>DELIVERY MANIFEST</p>
+            <h2 id="acs-delivery-title">选择本次交付产物</h2>
+            <small>清单依据 A.U.T.O 预设正则中的复制与粘贴说明生成；同一目标的多项产物会合并，并使用各自最新版。</small>
+          </div>
+          <button class="acs-delivery-close" type="button" data-delivery-close aria-label="关闭交付窗口">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </header>
+        <div class="acs-delivery-toolbar">
+          <div class="acs-delivery-presets" role="toolbar" aria-label="快速选择">
+            <button class="acs-delivery-preset" type="button" data-delivery-select="accepted">只选已确认</button>
+            <button class="acs-delivery-preset" type="button" data-delivery-select="all">选择全部</button>
+            <button class="acs-delivery-preset" type="button" data-delivery-select="none">清空</button>
+          </div>
+          <span id="acs-delivery-reorg-status" class="acs-delivery-reorg-status"></span>
+          <span id="acs-delivery-count" class="acs-delivery-count">0 / 0 项</span>
+        </div>
+        <div id="acs-delivery-list" class="acs-delivery-list"></div>
+        <footer class="acs-delivery-footer">
+          <p>🕹️、🧩条目默认启用；🗑️、🔇、🔢及配置条目默认关闭，避免中间规划与条件内容常驻上下文。</p>
+          <div class="acs-delivery-actions">
+            <button class="acs-button" type="button" data-delivery-close>取消</button>
+            <button id="acs-confirm-delivery" class="acs-button acs-button-publish" type="button">
+              <i class="fa-solid fa-feather-pointed" aria-hidden="true"></i>确认创建
+            </button>
+          </div>
+        </footer>
+      </section>`;
+    shell.append(overlay);
+}
+
 function toggleProjectMenu(force) {
     const menu = shell.querySelector('#acs-project-menu');
     const icon = shell.querySelector('.acs-project-title-icon');
@@ -2994,9 +3228,7 @@ function toggleProjectMenu(force) {
 
 function syncEnvironmentToProject() {
     environment.presetName = project.presetName || choosePresetName(environment.presetNames);
-    environment.worldbookName = project.sourceWorldbookName || chooseWorldbookName(environment.worldbookNames);
     project.presetName = environment.presetName;
-    project.sourceWorldbookName = environment.worldbookName;
 }
 
 function switchProject(projectId) {
@@ -3288,6 +3520,11 @@ function buildProjectContext(currentStep, preset) {
     const currentArtifacts = effectiveStepArtifacts(currentStep.number);
     if (currentArtifacts) {
         sections.push(`\n# 当前阶段正式产物（各产物最新版）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
+    }
+
+    if (currentStep.number === 29) {
+        // Step29 的 blockId 必须来自与发布流程一致的结构报告，否则生成的重组方案无法自动执行。
+        sections.push(`\n# 创作台虚拟世界书结构报告（供 Step29 使用）\n${buildReorgStructureReport()}`);
     }
     sections.push('\n</STUDIO_PROJECT_CONTEXT>');
 
@@ -3772,7 +4009,7 @@ function extractFencedBlocks(text) {
 }
 
 function statusbarFenceTag(block) {
-    if (block.language) return '';
+    // 不依赖模型是否正确标注 html/xml/regex 语言，以内容结构判定交付类型。
     if (/<body\b/i.test(block.content) && /<\/body>/i.test(block.content)) return 'STATUSBAR_HTML';
     if (/<SOURCE_statusbar_data_guide\b/.test(block.content)) return 'SOURCE_statusbar_data_guide';
     if (/<STATUSBAR_DATA>/.test(block.content) && /<\/STATUSBAR_DATA>/.test(block.content)) return 'STATUSBAR_REGEX';
@@ -3800,46 +4037,19 @@ function extractArtifactBlocks(text, stepNumber) {
     const xmlBlocks = extractXmlBlocks(text).filter(block => (
         rules.tags?.includes(block.tag)
         || rules.prefixes?.some(prefix => block.tag.startsWith(prefix))
+        || rules.patterns?.some(pattern => pattern.test(block.tag))
     ));
     const fencedBlocks = extractFencedBlocks(text).filter(block => rules.fences?.includes(block.language));
 
     if (rules.statusbarFences) {
         for (const block of extractFencedBlocks(text)) {
             const tag = statusbarFenceTag(block);
-            if (tag) fencedBlocks.push({ ...block, tag });
+            // SOURCE 指南同时是 XML 时优先保留精确标签，不把整个代码围栏重复算作新版本。
+            if (tag && !xmlBlocks.some(item => item.tag === tag)) fencedBlocks.push({ ...block, tag });
         }
     }
 
     return [...xmlBlocks, ...fencedBlocks].sort((left, right) => left.start - right.start || left.end - right.end);
-}
-
-function blockMatchesMapping(block, mapping) {
-    if (mapping.tags?.includes(block.tag)) return true;
-    if (mapping.prefixes?.some(prefix => block.tag.startsWith(prefix))) return true;
-    if (mapping.suffixes?.some(suffix => block.tag.endsWith(suffix))) return true;
-    if (mapping.sourcePrefixes?.some(prefix => block.tag.startsWith(prefix) && block.tag.endsWith('_状态'))) return true;
-    return false;
-}
-
-function extractMappedContent(response, mapping) {
-    if (!response) return '';
-    const blocks = extractXmlBlocks(response);
-    const selected = blocks.filter(block => blockMatchesMapping(block, mapping));
-    return selected.length ? selected.map(block => block.content).join('\n\n') : response;
-}
-
-function latestMappedContent(stepNumber, mapping) {
-    const hasSelectors = Boolean(mapping.tags || mapping.prefixes || mapping.suffixes || mapping.sourcePrefixes);
-    if (!hasSelectors) return latestAssistantResponse(stepNumber);
-
-    // 同一标签只保留最后一次出现；不同标签仍按首次出现顺序组合。
-    const latestByTag = new Map();
-    for (const turn of allAssistantArtifactTurns(stepNumber)) {
-        for (const block of extractXmlBlocks(turn.content)) {
-            if (blockMatchesMapping(block, mapping)) latestByTag.set(block.tag, block.content);
-        }
-    }
-    return [...latestByTag.values()].join('\n\n');
 }
 
 function effectiveStepArtifacts(stepNumber) {
@@ -3854,36 +4064,352 @@ function effectiveStepArtifacts(stepNumber) {
     return [...latestArtifacts.values()].join('\n\n');
 }
 
-function entryDisplayName(entry) {
-    return String(entry.name || entry.comment || '');
-}
-
-function buildOutputWorldbook(template) {
-    const worldbook = typeof structuredClone === 'function'
-        ? structuredClone(template)
-        : JSON.parse(JSON.stringify(template));
-
-    for (const mapping of WORLD_ENTRY_MAPPINGS) {
-        if (project.steps[mapping.step]?.status !== 'accepted') continue;
-        const response = latestMappedContent(mapping.step, mapping);
-        if (!response) continue;
-        const entry = worldbook.find(item => entryDisplayName(item).includes(mapping.needle));
-        if (!entry) {
-            console.warn(`[A.U.T.O Card Studio] 世界书模板中没有找到条目：${mapping.needle}`);
-            continue;
-        }
-        const content = extractMappedContent(response, mapping);
-        if (mapping.append && entry.content?.trim()) {
-            if (!entry.content.includes(content)) entry.content = `${entry.content}\n\n${content}`;
-        } else {
-            entry.content = content;
-        }
+function deliveryTargetForArtifact(tag, stepNumber) {
+    const step = Number(stepNumber);
+    const rawTag = String(tag || '');
+    const exactTargets = {
+        WORLD_interaction_paradigm: '🕹️交互范式',
+        WORLD_aesthetic_program: '🕹️美学纲领',
+        WORLD_blueprint: '🧩世界蓝图',
+        SOURCE_spatial_planning: '🗑️空间规划1️⃣',
+        WORLD_narrative_core: '🕹️叙事指南核心',
+        SOURCE_待变量化: '🗑️数据盘点3️⃣',
+        SOURCE_待条件化: '🗑️数据盘点3️⃣',
+        SOURCE_variable_system_planning: '🗑️变量体系规划2️⃣',
+        WORLD_variable_update_guide: '🕹️更新指南2️⃣[mvu_update]',
+        SOURCE_step19_plan: '🗑️条件显示规划3️⃣',
+        WORLD_root_index: '🕹️世界根目录',
+        SOURCE_statusbar_data_guide: '🗑️状态栏更新提示4️⃣',
+        SYS_output_format: '🕹️输出格式[mvu_plot]',
+        SOURCE_task_list: '🗑️副AI任务清单5️⃣',
+        SOURCE_entry_plan: '🗑️条目规划表6️⃣',
+        autotask_config: '[AutoTask配置-请勿修改]',
+        opening: '角色卡 · 其他开场',
+    };
+    if (exactTargets[rawTag]) {
+        return { kind: rawTag === 'opening' ? 'opening' : 'worldbook', name: exactTargets[rawTag] };
     }
-    return worldbook;
+    if (rawTag.startsWith('WORLD_implementation_mechanisms')) return { kind: 'worldbook', name: '🕹️实现机制' };
+    if (rawTag.startsWith('WORLD_arc_framework_')) return { kind: 'worldbook', name: '🗑️弧光识别1️⃣' };
+    if (rawTag.startsWith('WORLD_relationship_map')) return { kind: 'worldbook', name: '🧩关系图谱' };
+    if (rawTag.startsWith('WORLD_generative_rules_')) return { kind: 'worldbook', name: '🧩生成规则' };
+    if (rawTag.startsWith('WORLD_specific_instances_')) return { kind: 'worldbook', name: '🧩具体实例' };
+    if (rawTag.startsWith('WORLD_lore_')) return { kind: 'worldbook', name: '🧩世界知识' };
+    if (rawTag.startsWith('SOURCE_plot_graph_')) return { kind: 'worldbook', name: '🗑️情节图谱' };
+    if (rawTag.startsWith('WORLD_dimension_')) return { kind: 'worldbook', name: '🧩维度内容' };
+    if (rawTag.startsWith('WORLD_language_materials_')) return { kind: 'worldbook', name: '🧩语料库' };
+    if (rawTag.startsWith('WORLD_scene_strategies_')) return { kind: 'worldbook', name: '🧩场景策略集' };
+    if (rawTag.startsWith('WORLD_current_')) return { kind: 'worldbook', name: '🕹️当前变量' };
+    if (rawTag.startsWith('SOURCE_condition_mapping_')) return { kind: 'worldbook', name: '🗑️条件地图2️⃣' };
+    if (rawTag.startsWith('WORLD_main_characters_') || rawTag.startsWith('SOURCE_main_characters_')) {
+        if (rawTag.endsWith('_原点')) return { kind: 'worldbook', name: '🕹️主要角色-原点' };
+        if (rawTag.endsWith('_画像')) return { kind: 'worldbook', name: '🧩主要角色-画像' };
+        if (rawTag.endsWith('_状态')) return { kind: 'worldbook', name: '🗑️主要角色-状态2️⃣' };
+    }
+    if (rawTag.startsWith('SYS_task_')) {
+        if (step === 26) return { kind: 'worldbook', name: '🔇世界书提示词' };
+        if (step === 27) return { kind: 'worldbook', name: '🔇变量提示词' };
+    }
+    if (step === 20 && rawTag.startsWith('WORLD_')) {
+        return { kind: 'worldbook', name: `🔢${artifactSuffixLabel(rawTag.slice('WORLD_'.length)) || '条件显示内容'}` };
+    }
+    if (step === 21 && rawTag.startsWith('WORLD_')) return { kind: 'worldbook', name: '🔢其他条件展示内容' };
+    return null;
 }
 
-function extractOpeningMessage() {
-    const response = effectiveStepArtifacts(30);
+function collectDeliveryArtifacts() {
+    return collectArtifactGroups().flatMap(group => {
+        const artifact = group.versions.at(-1);
+        const target = deliveryTargetForArtifact(group.tag, artifact.step);
+        if (!target) return [];
+        return [{
+            id: `${artifact.step}:${group.tag}`,
+            tag: group.tag,
+            step: artifact.step,
+            accepted: artifact.accepted,
+            content: artifact.content,
+            displayName: artifactDisplayName(group.tag, artifact.step),
+            target,
+        }];
+    });
+}
+
+function worldbookEntryEnabled(name) {
+    return String(name).startsWith('🕹️') || String(name).startsWith('🧩');
+}
+
+function buildDefaultOutputWorldbook(selectedArtifacts) {
+    const grouped = new Map();
+    for (const artifact of selectedArtifacts.filter(item => item.target.kind === 'worldbook')) {
+        if (!grouped.has(artifact.target.name)) grouped.set(artifact.target.name, []);
+        const contents = grouped.get(artifact.target.name);
+        if (!contents.includes(artifact.content)) contents.push(artifact.content);
+    }
+
+    return [...grouped.entries()].map(([name, contents], index) => ({
+        uid: index,
+        name,
+        enabled: worldbookEntryEnabled(name),
+        strategy: {
+            type: 'constant',
+            keys: [],
+            keys_secondary: { logic: 'and_any', keys: [] },
+            scan_depth: 'same_as_global',
+        },
+        position: {
+            type: 'before_character_definition',
+            role: 'system',
+            depth: 4,
+            order: 1000 - index,
+        },
+        content: contents.join('\n\n'),
+        probability: 100,
+        recursion: { prevent_incoming: false, prevent_outgoing: false, delay_until: null },
+        effect: { sticky: null, cooldown: null, delay: null },
+        extra: {
+            auto_card_studio: {
+                projectId: project.id,
+                generatedAt: new Date().toISOString(),
+            },
+        },
+    }));
+}
+
+function createReorgSourceModel(artifacts = collectDeliveryArtifacts()) {
+    const grouped = new Map();
+    for (const artifact of artifacts.filter(item => item.target.kind === 'worldbook')) {
+        if (!grouped.has(artifact.target.name)) grouped.set(artifact.target.name, []);
+        const group = grouped.get(artifact.target.name);
+        if (!group.some(item => item.content === artifact.content)) group.push(artifact);
+    }
+
+    const entries = [];
+    const blockById = new Map();
+    [...grouped.entries()].forEach(([name, items], uid) => {
+        const blocks = items.map((artifact, blockIndex) => {
+            const blockId = `uid_${uid}_block_${blockIndex}`;
+            const block = { blockId, artifact, tagName: artifact.tag, entryName: name };
+            blockById.set(blockId, block);
+            return block;
+        });
+        entries.push({ uid, name, blocks });
+    });
+    return { entries, blockById };
+}
+
+function buildReorgStructureReport() {
+    const model = createReorgSourceModel();
+    const report = {
+        version: '1.0',
+        sourceWorldbook: `A.U.T.O 创作台·${project.name}`,
+        note: '请在 reorg_plan.mappings[].blockIds 中严格使用下列 blockId。',
+        entries: model.entries.map(entry => ({
+            uid: entry.uid,
+            name: entry.name,
+            blocks: entry.blocks.map(block => ({
+                blockId: block.blockId,
+                tagName: block.tagName,
+                displayName: block.artifact.displayName,
+                step: block.artifact.step,
+                characters: block.artifact.content.length,
+            })),
+        })),
+    };
+    return JSON.stringify(report, null, 2);
+}
+
+function parseJsonArtifact(content) {
+    const source = String(content || '').replace(/^\uFEFF/, '').trim();
+    if (!source) throw new Error('内容为空');
+    try {
+        return JSON.parse(source);
+    } catch {
+        const start = source.indexOf('{');
+        const end = source.lastIndexOf('}');
+        if (start < 0 || end <= start) throw new Error('未找到 JSON 对象');
+        return JSON.parse(source.slice(start, end + 1));
+    }
+}
+
+function latestReorgPlanResult() {
+    const group = collectArtifactGroups().find(item => item.tag === 'reorg_plan');
+    const artifact = group?.versions?.at(-1);
+    if (!artifact) return { status: 'none', plan: null, artifact: null };
+    try {
+        const plan = parseJsonArtifact(artifact.content);
+        if (!Array.isArray(plan?.mappings) || !plan.mappings.length) {
+            throw new Error('mappings 缺失或为空');
+        }
+        return { status: 'ready', plan, artifact };
+    } catch (error) {
+        return { status: 'invalid', plan: null, artifact, error: String(error?.message || error) };
+    }
+}
+
+function latestReorgBlockTagHints() {
+    const hints = new Map();
+    const latest = latestAssistantTurn(29)?.turn?.content || '';
+    for (const line of String(latest).split(/\r?\n/)) {
+        const tag = line.match(/\[([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)\]/)?.[1];
+        const blockIds = line.match(/uid_\d+_block_\d+/g) || [];
+        if (!tag) continue;
+        for (const blockId of blockIds) hints.set(blockId, tag);
+    }
+    return hints;
+}
+
+function normalizeReorgLabel(value) {
+    return String(value || '')
+        .replace(/[\u{1F000}-\u{1FAFF}\u2600-\u27BF\uFE0F\u20E3]/gu, '')
+        .replace(/(?:A\.U\.T\.O|AUTO|世界书|世界|角色卡|主要角色)/gi, '')
+        .replace(/[\s_\-\.·・【】\[\]()（）:：·]/g, '')
+        .toLowerCase();
+}
+
+function fuzzyArtifactsForMapping(mapping, selectedArtifacts, usedArtifactIds) {
+    const wanted = normalizeReorgLabel(mapping.targetEntryName);
+    if (!wanted) return [];
+    return selectedArtifacts.filter(artifact => {
+        if (artifact.target.kind !== 'worldbook' || usedArtifactIds.has(artifact.id)) return false;
+        const labels = [artifact.displayName, artifact.target.name, artifact.tag].map(normalizeReorgLabel);
+        return labels.some(label => label && (label === wanted || label.includes(wanted) || wanted.includes(label)));
+    });
+}
+
+function escapeReorgRegex(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function transformReorgContent(content, artifactTag, action) {
+    if (!action) return content;
+    if (action.action === 'wrap' && action.params?.wrapTagName) {
+        const tag = action.params.wrapTagName;
+        return `<${tag}>${content}</${tag}>`;
+    }
+    if (action.action === 'rename' && action.params?.newTagName && artifactTag) {
+        const oldTag = escapeReorgRegex(artifactTag);
+        const newTag = action.params.newTagName;
+        return String(content)
+            .replace(new RegExp(`<${oldTag}(?=\\s|>)`, 'gu'), `<${newTag}`)
+            .replace(new RegExp(`<\\/${oldTag}>`, 'gu'), `</${newTag}>`);
+    }
+    return content;
+}
+
+function reorgWorldbookEntry(mapping, resolvedBlocks, index) {
+    const overrides = mapping.attributes?.overrides || {};
+    const content = resolvedBlocks.map(({ artifact, blockId }) => (
+        transformReorgContent(artifact.content, artifact.tag, mapping.actionMap?.get(blockId))
+    )).join('\n\n');
+    return {
+        uid: index,
+        name: String(mapping.targetEntryName || `重组条目 ${index + 1}`),
+        enabled: overrides.enabled !== undefined ? Boolean(overrides.enabled) : true,
+        strategy: {
+            type: overrides.strategyType || 'constant',
+            keys: Array.isArray(overrides.keys) ? overrides.keys : [],
+            keys_secondary: {
+                logic: overrides.secondaryLogic || 'and_any',
+                keys: Array.isArray(overrides.keysSecondary) ? overrides.keysSecondary : [],
+            },
+            scan_depth: 'same_as_global',
+        },
+        position: {
+            type: overrides.positionType || 'after_character_definition',
+            role: overrides.role || 'system',
+            depth: Number.isFinite(overrides.depth) ? overrides.depth : 0,
+            order: Number.isFinite(overrides.order) ? overrides.order : 100 + index * 5,
+        },
+        content,
+        probability: 100,
+        recursion: { prevent_incoming: false, prevent_outgoing: false, delay_until: null },
+        effect: {
+            sticky: overrides.sticky ?? null,
+            cooldown: overrides.cooldown ?? null,
+            delay: overrides.delay ?? null,
+        },
+        extra: {
+            auto_card_studio: {
+                projectId: project.id,
+                generatedAt: new Date().toISOString(),
+                reorgPlan: true,
+            },
+        },
+    };
+}
+
+function applyReorgPlan(selectedArtifacts, allArtifacts, planResult) {
+    if (planResult.status !== 'ready') {
+        return { applied: false, entries: buildDefaultOutputWorldbook(selectedArtifacts), reason: planResult.status };
+    }
+
+    const selectedWorldbook = selectedArtifacts.filter(item => item.target.kind === 'worldbook');
+    const selectedIds = new Set(selectedWorldbook.map(item => item.id));
+    const model = createReorgSourceModel(allArtifacts);
+    const hints = latestReorgBlockTagHints();
+    const actionMap = new Map((planResult.plan.blockActions || []).map(action => [action.blockId, action]));
+    const usedArtifactIds = new Set();
+    const unresolvedBlockIds = [];
+    const mappings = planResult.plan.mappings.map((mapping, sourceIndex) => ({ ...mapping, sourceIndex, actionMap }));
+    mappings.sort((left, right) => {
+        const leftOrder = left.attributes?.overrides?.order;
+        const rightOrder = right.attributes?.overrides?.order;
+        if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder)) return leftOrder - rightOrder;
+        if (Number.isFinite(leftOrder)) return -1;
+        if (Number.isFinite(rightOrder)) return 1;
+        return left.sourceIndex - right.sourceIndex;
+    });
+
+    const resolvedMappings = [];
+    for (const mapping of mappings) {
+        const resolved = [];
+        for (const blockId of mapping.blockIds || []) {
+            let artifact = model.blockById.get(blockId)?.artifact;
+            if (artifact && !selectedIds.has(artifact.id)) artifact = null;
+            if (!artifact && hints.has(blockId)) {
+                artifact = selectedWorldbook.find(item => item.tag === hints.get(blockId) && !usedArtifactIds.has(item.id));
+            }
+            if (artifact && !usedArtifactIds.has(artifact.id)) {
+                resolved.push({ artifact, blockId });
+                usedArtifactIds.add(artifact.id);
+            } else if (!artifact) {
+                unresolvedBlockIds.push(blockId);
+            }
+        }
+        if (!resolved.length) {
+            for (const artifact of fuzzyArtifactsForMapping(mapping, selectedWorldbook, usedArtifactIds)) {
+                resolved.push({ artifact, blockId: mapping.blockIds?.[0] || '' });
+                usedArtifactIds.add(artifact.id);
+            }
+        }
+        if (resolved.length) resolvedMappings.push({ mapping, resolved });
+    }
+
+    if (!resolvedMappings.length) {
+        return {
+            applied: false,
+            entries: buildDefaultOutputWorldbook(selectedArtifacts),
+            reason: 'unresolved',
+            unresolvedBlockIds,
+        };
+    }
+
+    const entries = resolvedMappings.map(({ mapping, resolved }, index) => reorgWorldbookEntry(mapping, resolved, index));
+    return {
+        applied: true,
+        entries,
+        plan: planResult.plan,
+        usedArtifacts: usedArtifactIds.size,
+        omittedArtifacts: Math.max(0, selectedWorldbook.length - usedArtifactIds.size),
+        unresolvedBlockIds: [...new Set(unresolvedBlockIds)],
+    };
+}
+
+function buildOutputWorldbook(selectedArtifacts, allArtifacts = selectedArtifacts) {
+    return applyReorgPlan(selectedArtifacts, allArtifacts, latestReorgPlanResult());
+}
+
+function extractOpeningMessageFromContent(response) {
     if (!response) return `欢迎来到「${project.name}」。`;
     const wanted = extractXmlBlocks(response).filter(block => [
         'NARRATIVE',
@@ -3897,45 +4423,138 @@ function extractOpeningMessage() {
     return wanted.length ? wanted.map(block => block.content).join('\n\n') : response;
 }
 
+function extractOpeningMessage() {
+    return extractOpeningMessageFromContent(effectiveStepArtifacts(30));
+}
+
 function defaultOutputWorldbookName() {
     return `${project.name || '未命名世界'} · 世界书`;
 }
 
-async function publishProject() {
+function updateDeliveryCount() {
+    const checkboxes = [...shell.querySelectorAll('#acs-delivery-list input[type="checkbox"]')];
+    const selected = checkboxes.filter(input => input.checked).length;
+    shell.querySelector('#acs-delivery-count').textContent = `${selected} / ${checkboxes.length} 项`;
+    shell.querySelector('#acs-confirm-delivery').disabled = selected === 0;
+}
+
+function renderDeliveryReorgStatus() {
+    const element = shell.querySelector('#acs-delivery-reorg-status');
+    if (!element) return;
+    const result = latestReorgPlanResult();
+    element.className = 'acs-delivery-reorg-status';
+    if (result.status === 'ready') {
+        element.classList.add('is-active');
+        element.textContent = `Step29 已就绪：发布时自动执行 ${result.plan.mappings.length} 项重组映射`;
+    } else if (result.status === 'invalid') {
+        element.classList.add('is-warning');
+        element.textContent = `Step29 方案无法解析，将使用常规结构：${result.error}`;
+    } else {
+        element.textContent = '未生成 Step29：将按产物的默认目标条目创建';
+    }
+}
+
+function renderDeliveryArtifacts() {
+    const list = shell.querySelector('#acs-delivery-list');
+    list.replaceChildren();
+    for (const artifact of deliveryArtifacts) {
+        const item = document.createElement('label');
+        item.className = `acs-delivery-item${artifact.accepted ? '' : ' is-draft'}`;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = artifact.id;
+        input.checked = artifact.accepted;
+        input.addEventListener('change', updateDeliveryCount);
+        const copy = document.createElement('span');
+        copy.className = 'acs-delivery-item-copy';
+        const name = document.createElement('strong');
+        name.textContent = artifact.displayName;
+        const destination = document.createElement('small');
+        destination.textContent = `写入：${artifact.target.name}`;
+        copy.append(name, destination);
+        const meta = document.createElement('span');
+        meta.className = 'acs-delivery-item-meta';
+        meta.innerHTML = `<span>${artifact.accepted ? '已确认' : '草案'}</span><span>S${String(artifact.step).padStart(2, '0')}</span>`;
+        item.append(input, copy, meta);
+        list.append(item);
+    }
+    renderDeliveryReorgStatus();
+    updateDeliveryCount();
+}
+
+function closeDeliveryDialog() {
+    const overlay = shell?.querySelector('#acs-delivery-overlay');
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    shell.querySelector('#acs-publish')?.focus({ preventScroll: true });
+}
+
+function selectDeliveryPreset(mode) {
+    for (const input of shell.querySelectorAll('#acs-delivery-list input[type="checkbox"]')) {
+        const artifact = deliveryArtifacts.find(item => item.id === input.value);
+        input.checked = mode === 'all' || (mode === 'accepted' && artifact?.accepted);
+    }
+    updateDeliveryCount();
+}
+
+function publishProject() {
     if (!helper) {
         notify('error', '未检测到酒馆助手，无法写入角色卡。');
         return;
     }
-    if (!environment.worldbookName) {
-        notify('error', '请先在“设置”中选择 A.U.T.O 世界书模板。');
-        return;
-    }
 
     const characterName = shell.querySelector('#acs-character-name').value.trim();
-    const worldbookName = shell.querySelector('#acs-output-worldbook').value.trim() || defaultOutputWorldbookName();
     if (!characterName) {
         notify('warning', '请填写角色卡名称。');
         shell.querySelector('#acs-character-name').focus();
         return;
     }
 
+    deliveryArtifacts = collectDeliveryArtifacts();
+    if (!deliveryArtifacts.length) {
+        notify('warning', '当前项目还没有可交付的正式产物。请先生成至少一个阶段产物。');
+        return;
+    }
+    renderDeliveryArtifacts();
+    const overlay = shell.querySelector('#acs-delivery-overlay');
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.querySelector('input[type="checkbox"]')?.focus({ preventScroll: true });
+}
+
+async function confirmProjectDelivery() {
+    const characterName = shell.querySelector('#acs-character-name').value.trim();
+    const worldbookName = shell.querySelector('#acs-output-worldbook').value.trim() || defaultOutputWorldbookName();
+    const selectedIds = new Set([...shell.querySelectorAll('#acs-delivery-list input:checked')].map(input => input.value));
+    const selectedArtifacts = deliveryArtifacts.filter(item => selectedIds.has(item.id));
+    if (!selectedArtifacts.length) return;
+    const worldbookBuild = buildOutputWorldbook(selectedArtifacts, deliveryArtifacts);
+
     const existingCharacters = helper.getCharacterNames?.() || [];
     const existingWorldbooks = helper.getWorldbookNames?.() || [];
     const overwritten = [];
     if (existingCharacters.includes(characterName)) overwritten.push(`角色卡“${characterName}”`);
     if (existingWorldbooks.includes(worldbookName)) overwritten.push(`世界书“${worldbookName}”`);
-    const message = overwritten.length
-        ? `将更新${overwritten.join('和')}。已有头像与扩展数据会尽量保留，是否继续？`
-        : `将创建角色卡“${characterName}”及世界书“${worldbookName}”，是否继续？`;
+    const reorgSummary = worldbookBuild.applied
+        ? `\n\nStep29 将自动重组为 ${worldbookBuild.entries.length} 个世界书条目`
+            + (worldbookBuild.omittedArtifacts ? `，并按方案不写入 ${worldbookBuild.omittedArtifacts} 项未引用产物` : '')
+            + '。'
+        : worldbookBuild.reason === 'invalid'
+            ? '\n\nStep29 JSON 无效，本次将使用默认条目结构。'
+            : worldbookBuild.reason === 'unresolved'
+                ? '\n\nStep29 未能匹配当前产物，本次将使用默认条目结构。'
+                : '';
+    const message = (overwritten.length
+        ? `将用已选择的 ${selectedArtifacts.length} 项产物更新${overwritten.join('和')}。已有头像与扩展数据会尽量保留，是否继续？`
+        : `将用已选择的 ${selectedArtifacts.length} 项产物创建角色卡“${characterName}”及世界书“${worldbookName}”，是否继续？`) + reorgSummary;
     if (!hostWindow.confirm(message)) return;
 
-    const button = shell.querySelector('#acs-publish');
+    const button = shell.querySelector('#acs-confirm-delivery');
     button.disabled = true;
-    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在装配角色卡';
+    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在创建';
     try {
-        const template = await helper.getWorldbook(environment.worldbookName);
-        const outputWorldbook = buildOutputWorldbook(template);
-        await helper.createOrReplaceWorldbook(worldbookName, outputWorldbook, { render: 'immediate' });
+        await helper.createOrReplaceWorldbook(worldbookName, worldbookBuild.entries, { render: 'immediate' });
 
         let existing = {};
         if (existingCharacters.includes(characterName)) {
@@ -3945,15 +4564,20 @@ async function publishProject() {
             `由 A.U.T.O 角色卡创作台生成`,
             `项目: ${project.name}`,
             `更新时间: ${new Date().toLocaleString('zh-CN')}`,
+            `本次交付: ${selectedArtifacts.map(item => item.displayName).join('、')}`,
+            `Step29 自动重组: ${worldbookBuild.applied ? '已执行' : '未执行（使用默认结构）'}`,
             '',
             project.brief,
         ].join('\n');
+        const openingArtifact = selectedArtifacts.find(item => item.target.kind === 'opening');
         const character = {
             ...existing,
             creator: project.preferences.creatorRole,
             creator_notes: creatorNotes,
             description: existing.description || `# ${project.name}\n\n${project.brief}`,
-            first_messages: [extractOpeningMessage()],
+            first_messages: openingArtifact
+                ? [extractOpeningMessageFromContent(openingArtifact.content)]
+                : (existing.first_messages || [extractOpeningMessageFromContent('')]),
             worldbook: worldbookName,
             extensions: existing.extensions || {
                 regex_scripts: [],
@@ -3965,14 +4589,17 @@ async function publishProject() {
         project.output.characterName = characterName;
         project.output.worldbookName = worldbookName;
         saveProject();
-        shell.querySelector('#acs-publish-note').textContent = `已创建：${characterName} · ${worldbookName}`;
-        notify('success', '角色卡与世界书已写入 SillyTavern。');
+        shell.querySelector('#acs-publish-note').textContent = `已创建：${characterName} · ${worldbookName}${worldbookBuild.applied ? ' · Step29 已执行' : ''}`;
+        closeDeliveryDialog();
+        notify('success', worldbookBuild.applied
+            ? '角色卡与世界书已写入 SillyTavern，Step29 重组方案已自动执行。'
+            : '角色卡与世界书已写入 SillyTavern。');
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 发布失败', error);
         notify('error', `发布失败：${error?.message || error}`);
     } finally {
         button.disabled = false;
-        button.innerHTML = '<i class="fa-solid fa-feather-pointed" aria-hidden="true"></i> 创建角色卡与世界书';
+        button.innerHTML = '<i class="fa-solid fa-feather-pointed" aria-hidden="true"></i>确认创建';
     }
 }
 
@@ -3987,7 +4614,7 @@ function projectDossier() {
         '## 创作设置',
         '',
         `- A.U.T.O 预设：${environment.presetName || '未选择'}`,
-        `- 世界书模板：${environment.worldbookName || '未选择'}`,
+        `- 世界书生成方式：${latestReorgPlanResult().status === 'ready' ? '自动执行 Step29 重组方案' : '由所选正式产物直接创建'}`,
         `- 创作者：${project.preferences.creatorRole}`,
         `- 输出语言：${project.preferences.language}`,
         `- 叙事人称：${project.preferences.person}`,
@@ -4447,6 +5074,14 @@ function bindStudioEvents() {
     shell.querySelector('#acs-stop-generation').addEventListener('click', stopGeneration);
     shell.querySelector('#acs-accept-step').addEventListener('click', acceptCurrentStep);
     shell.querySelector('#acs-publish').addEventListener('click', publishProject);
+    shell.querySelector('#acs-confirm-delivery').addEventListener('click', confirmProjectDelivery);
+    for (const close of shell.querySelectorAll('[data-delivery-close]')) close.addEventListener('click', closeDeliveryDialog);
+    for (const preset of shell.querySelectorAll('[data-delivery-select]')) {
+        preset.addEventListener('click', () => selectDeliveryPreset(preset.dataset.deliverySelect));
+    }
+    shell.querySelector('#acs-delivery-overlay').addEventListener('click', event => {
+        if (event.target === event.currentTarget) closeDeliveryDialog();
+    });
     shell.querySelector('#acs-download-dossier').addEventListener('click', downloadDossier);
     shell.querySelector('#acs-save-project').addEventListener('click', exportProjectJson);
     shell.querySelector('#acs-import-project-button').addEventListener('click', () => {
@@ -4597,11 +5232,6 @@ function bindStudioEvents() {
         });
     }
 
-    shell.querySelector('#acs-worldbook-select').addEventListener('change', event => {
-        environment.worldbookName = event.target.value;
-        project.sourceWorldbookName = event.target.value;
-        saveProject();
-    });
     shell.querySelector('#acs-character-name').addEventListener('input', event => {
         project.output.characterName = event.target.value;
         saveProject();
@@ -4625,7 +5255,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${DELIVERY_DIALOG_CSS}`;
     document.head.append(style);
 }
 
@@ -4649,6 +5279,7 @@ async function ensureStudioLoaded() {
     updateStudioViewportScale();
     installProjectLibraryUI();
     installStudioToolsUI();
+    installDeliveryUI();
     installStyledSelects();
     bindStudioEvents();
     renderAll();
