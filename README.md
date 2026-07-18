@@ -6,14 +6,14 @@
 
 | 分类 | 脚本 | 当前版本 | 使用说明 |
 | --- | --- | --- | --- |
-| 角色卡创作 | A.U.T.O 角色卡创作台 | 0.4.2 | [查看文档](docs/character-creation/auto-card-studio.md) |
+| 角色卡创作 | A.U.T.O 角色卡创作台 | 0.4.3 | [查看文档](docs/character-creation/auto-card-studio.md) |
 
 ## 酒馆助手导入
 
 在酒馆助手中新建一个脚本，并填入：
 
 ```javascript
-import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v1/dist/character-creation/auto-card-studio/index.js';
+import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v2/dist/character-creation/auto-card-studio/index.js';
 ```
 
 这个入口内置自动更新器。刷新 SillyTavern 时会检查 `catalog.json`，发现更高版本后自动加载对应的固定版本；检查或加载失败时继续运行入口内置版本。
