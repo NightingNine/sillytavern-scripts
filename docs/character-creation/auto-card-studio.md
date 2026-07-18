@@ -21,7 +21,9 @@ import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-s
 
 ## 数据与更新
 
-- 当前发布版本：`0.6.8`
+- 当前发布版本：`0.6.9`
+- 修复导入预设后渲染条目 token 估算时出现 `estimateTokens is not defined` 的问题。
+- 导入预设时会自动提取并同步其中由“【SoliUmbra】预设内置正则 v2”等工具写入的 `extensions.regex_scripts`；只有预设本身不含正则时，才保留此前单独导入的正则。
 - A.U.T.O 预设和回复正则现由创作台独立保存，不再绑定 SillyTavern 当前预设，也不读取全局、预设或角色正则。
 - 首次使用时在“设置”页分别导入 A.U.T.O 预设 JSON 与所需正则 JSON；大型预设保存在浏览器本地数据库中，不会被复制进每个项目。
 - 左侧流程显示 29 个可创作步骤；原世界书重组步骤已隐藏，并在发布角色卡与世界书时按本次勾选产物自动执行。

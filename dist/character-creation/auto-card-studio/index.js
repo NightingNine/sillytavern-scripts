@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.8';
+const AUTO_CARD_STUDIO_VERSION = '0.6.9';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -6007,7 +6007,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
         const name = document.createElement('strong');
         name.textContent = kind === 'prompts' ? item.name : item.scriptName;
         const meta = document.createElement('small');
-        meta.textContent = kind === 'prompts' ? `${String(item.role || 'system').toUpperCase()} · ${estimateTokens(item.content)} tokens` : `${item.findRegex || '无查找表达式'}`;
+        meta.textContent = kind === 'prompts' ? `${String(item.role || 'system').toUpperCase()} · ≈${estimateTokenCount(item.content)} tokens` : `${item.findRegex || '无查找表达式'}`;
         copy.append(name, meta);
         const label = document.createElement('label');
         label.className = 'acs-resource-switch';
@@ -6037,14 +6037,24 @@ async function importPresetFile(event) {
     if (!file) return;
     try {
         if (file.size > 20 * 1024 * 1024) throw new Error('预设文件超过 20 MB。');
-        const preset = normalizeImportedPreset(JSON.parse(await file.text()), file.name);
+        const rawPreset = JSON.parse(await file.text());
+        const preset = normalizeImportedPreset(rawPreset, file.name);
+        const embeddedRegexSource = rawPreset?.extensions?.regex_scripts;
+        const embeddedRegexes = Array.isArray(embeddedRegexSource) && embeddedRegexSource.length
+            ? normalizeImportedRegexes(embeddedRegexSource)
+            : null;
         await writeResourceRecord('preset', preset);
+        // SoliUmbra 等工具写入预设 JSON 的内置正则随预设一起同步；
+        // 没有内置正则的预设则不覆盖用户此前单独导入的正则。
+        if (embeddedRegexes) await writeResourceRecord('regexes', embeddedRegexes);
         studioResources.preset = preset;
+        if (embeddedRegexes) studioResources.regexes = embeddedRegexes;
         environment.presetName = preset.name;
         renderEnvironmentSelectors();
         renderResourceDrawer('prompts');
         renderCurrentStep();
-        notify('success', `已导入“${preset.name}”，识别到 ${STEPS.length} 个创作步骤。`);
+        const regexCopy = embeddedRegexes ? `，并同步导入 ${embeddedRegexes.length} 条内置正则` : '';
+        notify('success', `已导入“${preset.name}”，识别到 ${STEPS.length} 个创作步骤${regexCopy}。`);
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 预设导入失败', error);
         notify('error', `预设导入失败：${error?.message || error}`);
