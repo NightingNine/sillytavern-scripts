@@ -1,11 +1,11 @@
-// A.U.T.O 角色卡创作台 v0.5.5 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.5.6 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
 const document = hostWindow.document;
 const localStorage = hostWindow.localStorage;
 const Option = hostWindow.Option;
-const STUDIO_HTML = "<div id=\"auto-card-studio\" class=\"acs-shell\" aria-hidden=\"true\">\n  <div class=\"acs-backdrop\" data-acs-close></div>\n\n  <section class=\"acs-window\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"acs-title\">\n    <header class=\"acs-topbar\">\n      <div class=\"acs-brand\">\n        <span class=\"acs-brand-mark\" aria-hidden=\"true\">\n          <span class=\"acs-orbit\"></span>\n          <span class=\"acs-core\"></span>\n        </span>\n        <div>\n          <p class=\"acs-eyebrow\">L3 / CHARACTER FORGE</p>\n          <h1 id=\"acs-title\">A.U.T.O 角色卡创作台</h1>\n        </div>\n        <button id=\"acs-tour-launch\" class=\"acs-tour-launch\" type=\"button\" title=\"打开新手引导\">\n          <i class=\"fa-solid fa-compass\" aria-hidden=\"true\"></i>\n          <span>新手引导</span>\n        </button>\n      </div>\n\n      <div class=\"acs-topbar-actions\">\n        <div id=\"acs-dependency-status\" class=\"acs-dependency\" aria-live=\"polite\">\n          <span class=\"acs-status-dot\"></span>\n          <span>正在检查创作环境</span>\n        </div>\n        <div class=\"acs-update-control\">\n          <button id=\"acs-check-update\" class=\"acs-icon-button acs-update-button\" type=\"button\" title=\"检查更新（当前 v0.5.5）\" aria-label=\"检查更新\">\n            <i class=\"fa-solid fa-rotate\" aria-hidden=\"true\"></i>\n          </button>\n          <span id=\"acs-update-feedback\" class=\"acs-update-feedback\" role=\"status\" aria-live=\"polite\" hidden></span>\n        </div>\n        <button id=\"acs-save-project\" class=\"acs-icon-button\" type=\"button\" title=\"导出项目\">\n          <i class=\"fa-solid fa-box-archive\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">导出项目</span>\n        </button>\n        <button id=\"acs-inspector-toggle\" class=\"acs-icon-button\" type=\"button\" title=\"打开项目检查器\" aria-expanded=\"false\">\n          <i class=\"fa-solid fa-table-columns\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">打开项目检查器</span>\n        </button>\n        <button class=\"acs-icon-button\" type=\"button\" data-acs-close title=\"关闭创作台\">\n          <i class=\"fa-solid fa-xmark\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">关闭创作台</span>\n        </button>\n      </div>\n    </header>\n\n    <div class=\"acs-workspace\">\n      <aside class=\"acs-rail\" aria-label=\"创作流程\">\n        <div class=\"acs-project-identity\">\n          <div class=\"acs-project-title-field\">\n            <label for=\"acs-project-name\">当前项目</label>\n            <span class=\"acs-project-name-control\">\n              <span class=\"acs-project-title-icon\" aria-hidden=\"true\">\n                <i class=\"fa-solid fa-folder-open\"></i>\n              </span>\n              <input id=\"acs-project-name\" type=\"text\" maxlength=\"80\" placeholder=\"未命名世界\">\n              <i class=\"fa-solid fa-pen\" aria-hidden=\"true\"></i>\n            </span>\n          </div>\n          <div class=\"acs-progress-row\">\n            <span id=\"acs-progress-copy\">0 / 30</span>\n            <span id=\"acs-progress-percent\">0%</span>\n          </div>\n          <div class=\"acs-progress-track\" aria-hidden=\"true\">\n            <span id=\"acs-progress-bar\"></span>\n          </div>\n        </div>\n\n        <nav id=\"acs-step-rail\" class=\"acs-step-rail\" aria-label=\"A.U.T.O 创作步骤\"></nav>\n\n        <button id=\"acs-new-project\" class=\"acs-quiet-action\" type=\"button\">\n          <i class=\"fa-solid fa-plus\" aria-hidden=\"true\"></i>\n          新建项目\n        </button>\n      </aside>\n\n      <main class=\"acs-stage\">\n        <div class=\"acs-stage-heading\">\n          <div>\n            <p id=\"acs-step-kicker\" class=\"acs-eyebrow\">PHASE 01</p>\n            <h2 id=\"acs-step-title\">交互范式和美学纲领</h2>\n            <p id=\"acs-step-goal\" class=\"acs-step-goal\"></p>\n          </div>\n          <div class=\"acs-stage-heading-actions\">\n            <span id=\"acs-step-state\" class=\"acs-state-chip\">未开始</span>\n            <button id=\"acs-toggle-overview\" class=\"acs-overview-toggle\" type=\"button\" aria-expanded=\"true\" aria-controls=\"acs-brief-panel\" title=\"收起创作概览\">\n              <i class=\"fa-solid fa-chevron-up\" aria-hidden=\"true\"></i>\n              <span>收起概览</span>\n            </button>\n          </div>\n        </div>\n\n        <section id=\"acs-brief-panel\" class=\"acs-brief-panel\">\n          <div class=\"acs-section-label\">\n            <span>创作母题</span>\n            <span>贯穿全部 30 个阶段</span>\n          </div>\n          <textarea id=\"acs-project-brief\" rows=\"5\" placeholder=\"描述你想创作的世界、主控角色、核心体验、边界与参考作品。无需一次写完，后续可以持续补充。\"></textarea>\n        </section>\n\n        <section class=\"acs-conversation\" aria-label=\"本阶段对话\">\n          <div id=\"acs-empty-turns\" class=\"acs-empty-turns\" aria-live=\"polite\">\n            <span class=\"acs-empty-glyph\">◎</span>\n            <span id=\"acs-empty-kicker\" class=\"acs-empty-kicker\">STATION 01 · 创作航标</span>\n            <h3 id=\"acs-empty-title\">先定下这段体验的方向</h3>\n            <p id=\"acs-empty-description\">不用一次写完整套设定。先告诉 A.U.T.O 玩家要体验什么，以及这段创作必须遵守的边界。</p>\n            <div class=\"acs-guide-panel\">\n              <span>可以从这些问题开始</span>\n              <ol id=\"acs-empty-prompts\" class=\"acs-guide-prompts\"></ol>\n            </div>\n          </div>\n          <div id=\"acs-turns\" class=\"acs-turns\" aria-live=\"polite\"></div>\n        </section>\n\n        <section class=\"acs-composer\" aria-label=\"向 A.U.T.O 补充说明\">\n          <label id=\"acs-user-input-label\" for=\"acs-user-input\">本轮补充 · 交互范式和美学纲领</label>\n          <textarea id=\"acs-user-input\" rows=\"3\" placeholder=\"可以留空直接生成；也可以指出偏好、修改方向或要求 A.U.T.O 接续未完成内容。\"></textarea>\n          <div class=\"acs-composer-actions\">\n            <p id=\"acs-generation-hint\">将使用配套预设与当前步骤提示词</p>\n            <div>\n              <button id=\"acs-stop-generation\" class=\"acs-button acs-button-danger\" type=\"button\" hidden>\n                <i class=\"fa-solid fa-stop\" aria-hidden=\"true\"></i>\n                停止\n              </button>\n              <button id=\"acs-generate\" class=\"acs-button acs-button-primary\" type=\"button\">\n                <i class=\"fa-solid fa-wand-magic-sparkles\" aria-hidden=\"true\"></i>\n                生成阶段草案\n              </button>\n              <button id=\"acs-accept-step\" class=\"acs-button acs-button-confirm\" type=\"button\" disabled>\n                确认并前往下一站\n                <i class=\"fa-solid fa-arrow-right\" aria-hidden=\"true\"></i>\n              </button>\n            </div>\n          </div>\n        </section>\n      </main>\n\n      <aside class=\"acs-inspector\" aria-label=\"项目检查器\">\n        <div class=\"acs-tabs\" role=\"tablist\" aria-label=\"检查器标签\">\n          <button class=\"acs-tab is-active\" type=\"button\" role=\"tab\" aria-selected=\"true\" data-acs-tab=\"structure\">产物</button>\n          <button class=\"acs-tab\" type=\"button\" role=\"tab\" aria-selected=\"false\" data-acs-tab=\"settings\">设置</button>\n          <button class=\"acs-tab\" type=\"button\" role=\"tab\" aria-selected=\"false\" data-acs-tab=\"publish\">发布</button>\n        </div>\n\n        <div class=\"acs-tab-panel is-active\" data-acs-panel=\"structure\">\n          <div class=\"acs-inspector-intro\">\n            <div>\n              <span>结构解析</span>\n              <strong id=\"acs-block-count\">0 个区块</strong>\n            </div>\n            <button id=\"acs-expand-artifacts\" class=\"acs-inspector-action\" type=\"button\" title=\"放大产物工作区\" aria-pressed=\"false\">\n              <i class=\"fa-solid fa-expand\" aria-hidden=\"true\"></i>\n              <span>放大</span>\n            </button>\n          </div>\n          <p class=\"acs-inspector-help\">从回复中提取 `WORLD_*`、变量与开场模块。展开区块即可编辑或复制，修改会自动保存。</p>\n          <div id=\"acs-artifact-list\" class=\"acs-artifact-list\"></div>\n        </div>\n\n        <div class=\"acs-tab-panel\" data-acs-panel=\"settings\" hidden>\n          <section class=\"acs-connection-section\" aria-labelledby=\"acs-connection-title\">\n            <div class=\"acs-settings-heading\">\n              <div>\n                <span id=\"acs-connection-title\">模型连接</span>\n                <small>决定创作台从哪里调用 AI</small>\n              </div>\n              <strong id=\"acs-connection-summary\">跟随 SillyTavern</strong>\n            </div>\n\n            <div class=\"acs-connection-options\" role=\"radiogroup\" aria-label=\"模型连接方式\">\n              <label class=\"acs-connection-choice\">\n                <input type=\"radio\" name=\"acs-connection-mode\" value=\"current\" checked>\n                <span>\n                  <strong>使用当前连接</strong>\n                  <small>跟随 SillyTavern 当前选择的接口和模型</small>\n                </span>\n              </label>\n              <label class=\"acs-connection-choice\">\n                <input type=\"radio\" name=\"acs-connection-mode\" value=\"custom\">\n                <span>\n                  <strong>单独配置</strong>\n                  <small>只让这个创作台使用另一套接口和模型</small>\n                </span>\n              </label>\n            </div>\n\n            <div id=\"acs-custom-connection\" class=\"acs-custom-connection\" hidden>\n              <div class=\"acs-field-stack\">\n                <label>\n                  <span>接口类型</span>\n                  <select id=\"acs-custom-source\">\n                    <option value=\"openai\">OpenAI / OpenAI 兼容接口</option>\n                    <option value=\"openrouter\">OpenRouter</option>\n                    <option value=\"claude\">Anthropic Claude</option>\n                    <option value=\"makersuite\">Google AI Studio / Gemini</option>\n                    <option value=\"deepseek\">DeepSeek</option>\n                    <option value=\"mistralai\">Mistral AI</option>\n                    <option value=\"groq\">Groq</option>\n                    <option value=\"xai\">xAI</option>\n                    <option value=\"custom\">SillyTavern Custom</option>\n                  </select>\n                </label>\n                <label>\n                  <span>接口地址</span>\n                  <input id=\"acs-custom-api-url\" type=\"url\" inputmode=\"url\" spellcheck=\"false\" placeholder=\"例如：https://api.example.com/v1\">\n                </label>\n                <label>\n                  <span>API 密钥（可以留空）</span>\n                  <input id=\"acs-custom-api-key\" type=\"password\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"仅在当前页面中保留\">\n                </label>\n                <div class=\"acs-model-field\">\n                  <label for=\"acs-custom-model\">模型名称</label>\n                  <div class=\"acs-model-picker\">\n                    <input id=\"acs-custom-model\" type=\"text\" list=\"acs-custom-model-options\" spellcheck=\"false\" placeholder=\"例如：gpt-4.1-mini\">\n                    <button id=\"acs-fetch-models\" class=\"acs-button acs-button-compact\" type=\"button\">\n                      <i class=\"fa-solid fa-rotate\" aria-hidden=\"true\"></i>\n                      获取模型\n                    </button>\n                  </div>\n                  <datalist id=\"acs-custom-model-options\"></datalist>\n                </div>\n              </div>\n              <p class=\"acs-security-note\">\n                <i class=\"fa-solid fa-shield-halved\" aria-hidden=\"true\"></i>\n                密钥不会写入项目、导出文件或长期存储；刷新页面后需要重新填写。\n              </p>\n            </div>\n          </section>\n\n          <p class=\"acs-settings-section-label\">创作流程</p>\n          <div class=\"acs-field-stack\">\n            <div id=\"acs-preset-lock\" class=\"acs-fixed-resource\" aria-live=\"polite\">\n              <div class=\"acs-fixed-resource-icon\" aria-hidden=\"true\">\n                <i class=\"fa-solid fa-lock\"></i>\n              </div>\n              <div class=\"acs-fixed-resource-copy\">\n                <span>固定预设</span>\n                <strong id=\"acs-preset-name\">正在查找 A.U.T.O v2.0</strong>\n                <small>创作台始终读取这份预设，不跟随主界面当前选择。</small>\n              </div>\n              <span class=\"acs-fixed-resource-badge\">已锁定</span>\n            </div>\n            <label>\n              <span>世界书模板</span>\n              <select id=\"acs-worldbook-select\"></select>\n            </label>\n            <div class=\"acs-field-grid\">\n              <label>\n                <span>助手称呼</span>\n                <input id=\"acs-ai-role\" type=\"text\" value=\"A.U.T.O.\">\n              </label>\n              <label>\n                <span>创作者</span>\n                <input id=\"acs-creator-role\" type=\"text\" value=\"创作者\">\n              </label>\n              <label>\n                <span>目标字数</span>\n                <input id=\"acs-word-count\" type=\"text\" value=\"3000\">\n              </label>\n              <label>\n                <span>输出语言</span>\n                <input id=\"acs-language\" type=\"text\" value=\"中文\">\n              </label>\n            </div>\n            <label>\n              <span>叙事人称</span>\n              <select id=\"acs-person\">\n                <option value=\"第三人称\">第三人称</option>\n                <option value=\"第一人称\">第一人称</option>\n                <option value=\"第二人称\">第二人称</option>\n              </select>\n            </label>\n          </div>\n        </div>\n\n        <div class=\"acs-tab-panel\" data-acs-panel=\"publish\" hidden>\n          <div class=\"acs-publish-copy\">\n            <p class=\"acs-eyebrow\">HANDOFF</p>\n            <h3>交付到 SillyTavern</h3>\n            <p>创建一份项目世界书，并把它绑定到角色卡。若名称已存在，会在最终确认后更新。</p>\n          </div>\n          <div class=\"acs-field-stack\">\n            <label>\n              <span>角色卡名称</span>\n              <input id=\"acs-character-name\" type=\"text\" placeholder=\"例如：雾港来客\">\n            </label>\n            <label>\n              <span>世界书名称</span>\n              <input id=\"acs-output-worldbook\" type=\"text\" placeholder=\"自动跟随项目名称\">\n            </label>\n          </div>\n          <button id=\"acs-publish\" class=\"acs-button acs-button-publish\" type=\"button\">\n            <i class=\"fa-solid fa-feather-pointed\" aria-hidden=\"true\"></i>\n            创建角色卡与世界书\n          </button>\n          <button id=\"acs-download-dossier\" class=\"acs-button acs-button-secondary\" type=\"button\">\n            <i class=\"fa-solid fa-file-arrow-down\" aria-hidden=\"true\"></i>\n            下载创作档案\n          </button>\n          <p id=\"acs-publish-note\" class=\"acs-publish-note\">建议至少完成 Step 1、Step 5 与 Step 30 后发布。</p>\n        </div>\n      </aside>\n    </div>\n  </section>\n\n  <div id=\"acs-tour-overlay\" class=\"acs-tour-overlay\" aria-hidden=\"true\" hidden>\n    <div id=\"acs-tour-spotlight\" class=\"acs-tour-spotlight\" aria-hidden=\"true\"></div>\n    <section id=\"acs-tour-card\" class=\"acs-tour-card\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"acs-tour-title\">\n      <header class=\"acs-tour-card-head\">\n        <span id=\"acs-tour-progress\" class=\"acs-tour-progress\">1 / 6</span>\n        <button id=\"acs-tour-skip\" class=\"acs-tour-skip\" type=\"button\">跳过引导</button>\n      </header>\n      <p id=\"acs-tour-eyebrow\" class=\"acs-tour-eyebrow\">PROJECT 01</p>\n      <h2 id=\"acs-tour-title\">从一个项目开始</h2>\n      <p id=\"acs-tour-description\" class=\"acs-tour-description\"></p>\n      <div id=\"acs-tour-dots\" class=\"acs-tour-dots\" aria-hidden=\"true\"></div>\n      <footer class=\"acs-tour-actions\">\n        <button id=\"acs-tour-previous\" class=\"acs-tour-nav acs-tour-previous\" type=\"button\">\n          <i class=\"fa-solid fa-arrow-left\" aria-hidden=\"true\"></i>\n          上一步\n        </button>\n        <button id=\"acs-tour-next\" class=\"acs-tour-nav acs-tour-next\" type=\"button\">\n          <span>下一步</span>\n          <i class=\"fa-solid fa-arrow-right\" aria-hidden=\"true\"></i>\n        </button>\n      </footer>\n    </section>\n  </div>\n</div>\n\n<input id=\"acs-import-project\" type=\"file\" accept=\"application/json,.json\" hidden>\n";
+const STUDIO_HTML = "<div id=\"auto-card-studio\" class=\"acs-shell\" aria-hidden=\"true\">\n  <div class=\"acs-backdrop\" data-acs-close></div>\n\n  <section class=\"acs-window\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"acs-title\">\n    <header class=\"acs-topbar\">\n      <div class=\"acs-brand\">\n        <span class=\"acs-brand-mark\" aria-hidden=\"true\">\n          <span class=\"acs-orbit\"></span>\n          <span class=\"acs-core\"></span>\n        </span>\n        <div>\n          <p class=\"acs-eyebrow\">L3 / CHARACTER FORGE</p>\n          <h1 id=\"acs-title\">A.U.T.O 角色卡创作台</h1>\n        </div>\n        <button id=\"acs-tour-launch\" class=\"acs-tour-launch\" type=\"button\" title=\"打开新手引导\">\n          <i class=\"fa-solid fa-compass\" aria-hidden=\"true\"></i>\n          <span>新手引导</span>\n        </button>\n      </div>\n\n      <div class=\"acs-topbar-actions\">\n        <div id=\"acs-dependency-status\" class=\"acs-dependency\" aria-live=\"polite\">\n          <span class=\"acs-status-dot\"></span>\n          <span>正在检查创作环境</span>\n        </div>\n        <div class=\"acs-update-control\">\n          <button id=\"acs-check-update\" class=\"acs-icon-button acs-update-button\" type=\"button\" title=\"检查更新（当前 v0.5.6）\" aria-label=\"检查更新\">\n            <i class=\"fa-solid fa-rotate\" aria-hidden=\"true\"></i>\n          </button>\n          <span id=\"acs-update-feedback\" class=\"acs-update-feedback\" role=\"status\" aria-live=\"polite\" hidden></span>\n        </div>\n        <button id=\"acs-save-project\" class=\"acs-icon-button\" type=\"button\" title=\"导出项目\">\n          <i class=\"fa-solid fa-box-archive\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">导出项目</span>\n        </button>\n        <button id=\"acs-inspector-toggle\" class=\"acs-icon-button\" type=\"button\" title=\"打开项目检查器\" aria-expanded=\"false\">\n          <i class=\"fa-solid fa-table-columns\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">打开项目检查器</span>\n        </button>\n        <button class=\"acs-icon-button\" type=\"button\" data-acs-close title=\"关闭创作台\">\n          <i class=\"fa-solid fa-xmark\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">关闭创作台</span>\n        </button>\n      </div>\n    </header>\n\n    <div class=\"acs-workspace\">\n      <aside class=\"acs-rail\" aria-label=\"创作流程\">\n        <div class=\"acs-project-identity\">\n          <div class=\"acs-project-title-field\">\n            <label for=\"acs-project-name\">当前项目</label>\n            <span class=\"acs-project-name-control\">\n              <span class=\"acs-project-title-icon\" aria-hidden=\"true\">\n                <i class=\"fa-solid fa-folder-open\"></i>\n              </span>\n              <input id=\"acs-project-name\" type=\"text\" maxlength=\"80\" placeholder=\"未命名世界\">\n              <i class=\"fa-solid fa-pen\" aria-hidden=\"true\"></i>\n            </span>\n          </div>\n          <div class=\"acs-progress-row\">\n            <span id=\"acs-progress-copy\">0 / 30</span>\n            <span id=\"acs-progress-percent\">0%</span>\n          </div>\n          <div class=\"acs-progress-track\" aria-hidden=\"true\">\n            <span id=\"acs-progress-bar\"></span>\n          </div>\n        </div>\n\n        <nav id=\"acs-step-rail\" class=\"acs-step-rail\" aria-label=\"A.U.T.O 创作步骤\"></nav>\n\n        <button id=\"acs-new-project\" class=\"acs-quiet-action\" type=\"button\">\n          <i class=\"fa-solid fa-plus\" aria-hidden=\"true\"></i>\n          新建项目\n        </button>\n      </aside>\n\n      <main class=\"acs-stage\">\n        <div class=\"acs-stage-heading\">\n          <div>\n            <p id=\"acs-step-kicker\" class=\"acs-eyebrow\">PHASE 01</p>\n            <h2 id=\"acs-step-title\">交互范式和美学纲领</h2>\n            <p id=\"acs-step-goal\" class=\"acs-step-goal\"></p>\n          </div>\n          <div class=\"acs-stage-heading-actions\">\n            <span id=\"acs-step-state\" class=\"acs-state-chip\">未开始</span>\n            <button id=\"acs-toggle-overview\" class=\"acs-overview-toggle\" type=\"button\" aria-expanded=\"true\" aria-controls=\"acs-brief-panel\" title=\"收起创作概览\">\n              <i class=\"fa-solid fa-chevron-up\" aria-hidden=\"true\"></i>\n              <span>收起概览</span>\n            </button>\n          </div>\n        </div>\n\n        <section id=\"acs-brief-panel\" class=\"acs-brief-panel\">\n          <div class=\"acs-section-label\">\n            <span>创作母题</span>\n            <span>贯穿全部 30 个阶段</span>\n          </div>\n          <textarea id=\"acs-project-brief\" rows=\"5\" placeholder=\"描述你想创作的世界、主控角色、核心体验、边界与参考作品。无需一次写完，后续可以持续补充。\"></textarea>\n        </section>\n\n        <section class=\"acs-conversation\" aria-label=\"本阶段对话\">\n          <div id=\"acs-empty-turns\" class=\"acs-empty-turns\" aria-live=\"polite\">\n            <span class=\"acs-empty-glyph\">◎</span>\n            <span id=\"acs-empty-kicker\" class=\"acs-empty-kicker\">STATION 01 · 创作航标</span>\n            <h3 id=\"acs-empty-title\">先定下这段体验的方向</h3>\n            <p id=\"acs-empty-description\">不用一次写完整套设定。先告诉 A.U.T.O 玩家要体验什么，以及这段创作必须遵守的边界。</p>\n            <div class=\"acs-guide-panel\">\n              <span>可以从这些问题开始</span>\n              <ol id=\"acs-empty-prompts\" class=\"acs-guide-prompts\"></ol>\n            </div>\n          </div>\n          <div id=\"acs-turns\" class=\"acs-turns\" aria-live=\"polite\"></div>\n        </section>\n\n        <section class=\"acs-composer\" aria-label=\"向 A.U.T.O 补充说明\">\n          <label id=\"acs-user-input-label\" for=\"acs-user-input\">本轮补充 · 交互范式和美学纲领</label>\n          <textarea id=\"acs-user-input\" rows=\"3\" placeholder=\"可以留空直接生成；也可以指出偏好、修改方向或要求 A.U.T.O 接续未完成内容。\"></textarea>\n          <div class=\"acs-composer-actions\">\n            <p id=\"acs-generation-hint\">将使用配套预设与当前步骤提示词</p>\n            <div>\n              <button id=\"acs-stop-generation\" class=\"acs-button acs-button-danger\" type=\"button\" hidden>\n                <i class=\"fa-solid fa-stop\" aria-hidden=\"true\"></i>\n                停止\n              </button>\n              <button id=\"acs-generate\" class=\"acs-button acs-button-primary\" type=\"button\">\n                <i class=\"fa-solid fa-wand-magic-sparkles\" aria-hidden=\"true\"></i>\n                生成阶段草案\n              </button>\n              <button id=\"acs-accept-step\" class=\"acs-button acs-button-confirm\" type=\"button\" disabled>\n                确认并前往下一站\n                <i class=\"fa-solid fa-arrow-right\" aria-hidden=\"true\"></i>\n              </button>\n            </div>\n          </div>\n        </section>\n      </main>\n\n      <aside class=\"acs-inspector\" aria-label=\"项目检查器\">\n        <div class=\"acs-tabs\" role=\"tablist\" aria-label=\"检查器标签\">\n          <button class=\"acs-tab is-active\" type=\"button\" role=\"tab\" aria-selected=\"true\" data-acs-tab=\"structure\">产物</button>\n          <button class=\"acs-tab\" type=\"button\" role=\"tab\" aria-selected=\"false\" data-acs-tab=\"settings\">设置</button>\n          <button class=\"acs-tab\" type=\"button\" role=\"tab\" aria-selected=\"false\" data-acs-tab=\"publish\">发布</button>\n        </div>\n\n        <div class=\"acs-tab-panel is-active\" data-acs-panel=\"structure\">\n          <div class=\"acs-inspector-intro\">\n            <div>\n              <span>结构解析</span>\n              <strong id=\"acs-block-count\">0 个区块</strong>\n            </div>\n            <button id=\"acs-expand-artifacts\" class=\"acs-inspector-action\" type=\"button\" title=\"放大产物工作区\" aria-pressed=\"false\">\n              <i class=\"fa-solid fa-expand\" aria-hidden=\"true\"></i>\n              <span>放大</span>\n            </button>\n          </div>\n          <p class=\"acs-inspector-help\">同名产物默认显示最新版；可切换历史版本并恢复。展开后可编辑或复制，修改会自动保存。</p>\n          <div id=\"acs-artifact-list\" class=\"acs-artifact-list\"></div>\n        </div>\n\n        <div class=\"acs-tab-panel\" data-acs-panel=\"settings\" hidden>\n          <section class=\"acs-connection-section\" aria-labelledby=\"acs-connection-title\">\n            <div class=\"acs-settings-heading\">\n              <div>\n                <span id=\"acs-connection-title\">模型连接</span>\n                <small>决定创作台从哪里调用 AI</small>\n              </div>\n              <strong id=\"acs-connection-summary\">跟随 SillyTavern</strong>\n            </div>\n\n            <div class=\"acs-connection-options\" role=\"radiogroup\" aria-label=\"模型连接方式\">\n              <label class=\"acs-connection-choice\">\n                <input type=\"radio\" name=\"acs-connection-mode\" value=\"current\" checked>\n                <span>\n                  <strong>使用当前连接</strong>\n                  <small>跟随 SillyTavern 当前选择的接口和模型</small>\n                </span>\n              </label>\n              <label class=\"acs-connection-choice\">\n                <input type=\"radio\" name=\"acs-connection-mode\" value=\"custom\">\n                <span>\n                  <strong>单独配置</strong>\n                  <small>只让这个创作台使用另一套接口和模型</small>\n                </span>\n              </label>\n            </div>\n\n            <div id=\"acs-custom-connection\" class=\"acs-custom-connection\" hidden>\n              <div class=\"acs-field-stack\">\n                <label>\n                  <span>接口类型</span>\n                  <select id=\"acs-custom-source\">\n                    <option value=\"openai\">OpenAI / OpenAI 兼容接口</option>\n                    <option value=\"openrouter\">OpenRouter</option>\n                    <option value=\"claude\">Anthropic Claude</option>\n                    <option value=\"makersuite\">Google AI Studio / Gemini</option>\n                    <option value=\"deepseek\">DeepSeek</option>\n                    <option value=\"mistralai\">Mistral AI</option>\n                    <option value=\"groq\">Groq</option>\n                    <option value=\"xai\">xAI</option>\n                    <option value=\"custom\">SillyTavern Custom</option>\n                  </select>\n                </label>\n                <label>\n                  <span>接口地址</span>\n                  <input id=\"acs-custom-api-url\" type=\"url\" inputmode=\"url\" spellcheck=\"false\" placeholder=\"例如：https://api.example.com/v1\">\n                </label>\n                <label>\n                  <span>API 密钥（可以留空）</span>\n                  <input id=\"acs-custom-api-key\" type=\"password\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"仅在当前页面中保留\">\n                </label>\n                <div class=\"acs-model-field\">\n                  <label for=\"acs-custom-model\">模型名称</label>\n                  <div class=\"acs-model-picker\">\n                    <input id=\"acs-custom-model\" type=\"text\" list=\"acs-custom-model-options\" spellcheck=\"false\" placeholder=\"例如：gpt-4.1-mini\">\n                    <button id=\"acs-fetch-models\" class=\"acs-button acs-button-compact\" type=\"button\">\n                      <i class=\"fa-solid fa-rotate\" aria-hidden=\"true\"></i>\n                      获取模型\n                    </button>\n                  </div>\n                  <datalist id=\"acs-custom-model-options\"></datalist>\n                </div>\n              </div>\n              <p class=\"acs-security-note\">\n                <i class=\"fa-solid fa-shield-halved\" aria-hidden=\"true\"></i>\n                密钥不会写入项目、导出文件或长期存储；刷新页面后需要重新填写。\n              </p>\n            </div>\n          </section>\n\n          <p class=\"acs-settings-section-label\">创作流程</p>\n          <div class=\"acs-field-stack\">\n            <div id=\"acs-preset-lock\" class=\"acs-fixed-resource\" aria-live=\"polite\">\n              <div class=\"acs-fixed-resource-icon\" aria-hidden=\"true\">\n                <i class=\"fa-solid fa-lock\"></i>\n              </div>\n              <div class=\"acs-fixed-resource-copy\">\n                <span>固定预设</span>\n                <strong id=\"acs-preset-name\">正在查找 A.U.T.O v2.0</strong>\n                <small>创作台始终读取这份预设，不跟随主界面当前选择。</small>\n              </div>\n              <span class=\"acs-fixed-resource-badge\">已锁定</span>\n            </div>\n            <label>\n              <span>世界书模板</span>\n              <select id=\"acs-worldbook-select\"></select>\n            </label>\n            <div class=\"acs-field-grid\">\n              <label>\n                <span>助手称呼</span>\n                <input id=\"acs-ai-role\" type=\"text\" value=\"A.U.T.O.\">\n              </label>\n              <label>\n                <span>创作者</span>\n                <input id=\"acs-creator-role\" type=\"text\" value=\"创作者\">\n              </label>\n              <label>\n                <span>目标字数</span>\n                <input id=\"acs-word-count\" type=\"text\" value=\"3000\">\n              </label>\n              <label>\n                <span>输出语言</span>\n                <input id=\"acs-language\" type=\"text\" value=\"中文\">\n              </label>\n            </div>\n            <label>\n              <span>叙事人称</span>\n              <select id=\"acs-person\">\n                <option value=\"第三人称\">第三人称</option>\n                <option value=\"第一人称\">第一人称</option>\n                <option value=\"第二人称\">第二人称</option>\n              </select>\n            </label>\n          </div>\n        </div>\n\n        <div class=\"acs-tab-panel\" data-acs-panel=\"publish\" hidden>\n          <div class=\"acs-publish-copy\">\n            <p class=\"acs-eyebrow\">HANDOFF</p>\n            <h3>交付到 SillyTavern</h3>\n            <p>创建一份项目世界书，并把它绑定到角色卡。若名称已存在，会在最终确认后更新。</p>\n          </div>\n          <div class=\"acs-field-stack\">\n            <label>\n              <span>角色卡名称</span>\n              <input id=\"acs-character-name\" type=\"text\" placeholder=\"例如：雾港来客\">\n            </label>\n            <label>\n              <span>世界书名称</span>\n              <input id=\"acs-output-worldbook\" type=\"text\" placeholder=\"自动跟随项目名称\">\n            </label>\n          </div>\n          <button id=\"acs-publish\" class=\"acs-button acs-button-publish\" type=\"button\">\n            <i class=\"fa-solid fa-feather-pointed\" aria-hidden=\"true\"></i>\n            创建角色卡与世界书\n          </button>\n          <button id=\"acs-download-dossier\" class=\"acs-button acs-button-secondary\" type=\"button\">\n            <i class=\"fa-solid fa-file-arrow-down\" aria-hidden=\"true\"></i>\n            下载创作档案\n          </button>\n          <p id=\"acs-publish-note\" class=\"acs-publish-note\">建议至少完成 Step 1、Step 5 与 Step 30 后发布。</p>\n        </div>\n      </aside>\n    </div>\n  </section>\n\n  <div id=\"acs-tour-overlay\" class=\"acs-tour-overlay\" aria-hidden=\"true\" hidden>\n    <div id=\"acs-tour-spotlight\" class=\"acs-tour-spotlight\" aria-hidden=\"true\"></div>\n    <section id=\"acs-tour-card\" class=\"acs-tour-card\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"acs-tour-title\">\n      <header class=\"acs-tour-card-head\">\n        <span id=\"acs-tour-progress\" class=\"acs-tour-progress\">1 / 6</span>\n        <button id=\"acs-tour-skip\" class=\"acs-tour-skip\" type=\"button\">跳过引导</button>\n      </header>\n      <p id=\"acs-tour-eyebrow\" class=\"acs-tour-eyebrow\">PROJECT 01</p>\n      <h2 id=\"acs-tour-title\">从一个项目开始</h2>\n      <p id=\"acs-tour-description\" class=\"acs-tour-description\"></p>\n      <div id=\"acs-tour-dots\" class=\"acs-tour-dots\" aria-hidden=\"true\"></div>\n      <footer class=\"acs-tour-actions\">\n        <button id=\"acs-tour-previous\" class=\"acs-tour-nav acs-tour-previous\" type=\"button\">\n          <i class=\"fa-solid fa-arrow-left\" aria-hidden=\"true\"></i>\n          上一步\n        </button>\n        <button id=\"acs-tour-next\" class=\"acs-tour-nav acs-tour-next\" type=\"button\">\n          <span>下一步</span>\n          <i class=\"fa-solid fa-arrow-right\" aria-hidden=\"true\"></i>\n        </button>\n      </footer>\n    </section>\n  </div>\n</div>\n\n<input id=\"acs-import-project\" type=\"file\" accept=\"application/json,.json\" hidden>\n";
 const STUDIO_CSS = ":root {\n  --acs-void: #1e1c19;\n  --acs-ink: #2b2925;\n  --acs-panel: #302e29;\n  --acs-panel-raised: #38352f;\n  --acs-line: #59534b;\n  --acs-line-soft: rgba(232, 224, 212, 0.12);\n  --acs-text: #e8e2d8;\n  --acs-text-soft: #d0c8bd;\n  --acs-muted: #aba297;\n  --acs-cyan: #d97757;\n  --acs-cyan-soft: rgba(217, 119, 87, 0.14);\n  --acs-violet: #b7a3cf;\n  --acs-gold: #d3ad72;\n  --acs-green: #93bd91;\n  --acs-red: #d9847f;\n  --acs-shadow: 0 28px 80px rgba(10, 9, 8, 0.42);\n  --acs-display: \"Iowan Old Style\", \"Noto Serif SC\", \"Songti SC\", Georgia, serif;\n  --acs-body: Inter, \"Noto Sans SC\", \"Microsoft YaHei\", system-ui, sans-serif;\n  --acs-mono: \"JetBrains Mono\", \"Cascadia Code\", Consolas, monospace;\n}\n\n#auto-card-studio,\n#auto-card-studio * {\n  box-sizing: border-box;\n}\n\n.acs-shell {\n  position: fixed;\n  inset: 0;\n  z-index: 10001;\n  display: none;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  isolation: isolate;\n}\n\n.acs-shell.is-open {\n  display: block;\n}\n\n.acs-shell [hidden] {\n  display: none !important;\n}\n\n.acs-backdrop {\n  position: absolute;\n  inset: 0;\n  background: rgba(17, 15, 13, 0.72);\n  backdrop-filter: blur(14px);\n}\n\n.acs-window {\n  position: absolute;\n  inset: 2.2vh 1.6vw;\n  display: grid;\n  grid-template-rows: 72px minmax(0, 1fr);\n  overflow: hidden;\n  border: 1px solid rgba(217, 202, 182, 0.22);\n  border-radius: 22px;\n  background:\n    radial-gradient(circle at 88% 8%, rgba(183, 163, 207, 0.08), transparent 27%),\n    radial-gradient(circle at 10% 84%, rgba(217, 119, 87, 0.07), transparent 25%),\n    var(--acs-ink);\n  box-shadow: var(--acs-shadow);\n}\n\n.acs-window::before {\n  position: absolute;\n  inset: 0;\n  z-index: -1;\n  background-image:\n    linear-gradient(rgba(232, 224, 212, 0.025) 1px, transparent 1px),\n    linear-gradient(90deg, rgba(232, 224, 212, 0.025) 1px, transparent 1px);\n  background-size: 42px 42px;\n  content: \"\";\n  mask-image: linear-gradient(to bottom, black, transparent 72%);\n  pointer-events: none;\n}\n\n.acs-topbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-width: 0;\n  padding: 0 22px 0 26px;\n  border-bottom: 1px solid var(--acs-line-soft);\n  background: rgba(43, 41, 37, 0.96);\n  box-shadow: 0 5px 22px rgba(10, 9, 8, 0.14);\n}\n\n.acs-brand,\n.acs-topbar-actions,\n.acs-progress-row,\n.acs-stage-heading,\n.acs-composer-actions,\n.acs-composer-actions > div,\n.acs-inspector-intro,\n.acs-artifact-head {\n  display: flex;\n  align-items: center;\n}\n\n.acs-brand {\n  min-width: 0;\n  gap: 15px;\n}\n\n.acs-brand h1 {\n  margin: 1px 0 0;\n  overflow: hidden;\n  color: var(--acs-text);\n  font-family: var(--acs-display);\n  font-size: clamp(20px, 2vw, 27px);\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  line-height: 1.05;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-tour-launch {\n  display: inline-flex;\n  align-items: center;\n  gap: 7px;\n  min-height: 31px;\n  padding: 6px 11px;\n  border: 1px solid rgba(211, 173, 114, 0.3);\n  border-radius: 999px;\n  background: rgba(211, 173, 114, 0.07);\n  color: #d6bd95;\n  cursor: pointer;\n  font-size: 10px;\n  font-weight: 650;\n  white-space: nowrap;\n  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;\n}\n\n.acs-tour-launch:hover {\n  border-color: rgba(211, 173, 114, 0.58);\n  background: rgba(211, 173, 114, 0.13);\n  color: #ecd4ae;\n  transform: translateY(-1px);\n}\n\n.acs-tour-launch i {\n  color: var(--acs-gold);\n  font-size: 11px;\n}\n\n.acs-tour-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 10060;\n  overflow: hidden;\n  pointer-events: auto;\n}\n\n.acs-tour-spotlight {\n  position: fixed;\n  z-index: 0;\n  border: 1px solid rgba(229, 174, 111, 0.9);\n  border-radius: 13px;\n  background: transparent;\n  box-shadow: 0 0 0 9999px rgba(18, 16, 13, 0.76), 0 0 0 5px rgba(217, 119, 87, 0.12), 0 0 28px rgba(229, 174, 111, 0.28);\n  pointer-events: none;\n  transition: left 340ms cubic-bezier(0.22, 1, 0.36, 1), top 340ms cubic-bezier(0.22, 1, 0.36, 1), width 340ms cubic-bezier(0.22, 1, 0.36, 1), height 340ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.acs-tour-spotlight::after {\n  position: absolute;\n  inset: -6px;\n  border: 1px solid rgba(229, 174, 111, 0.38);\n  border-radius: 17px;\n  content: \"\";\n  animation: acs-tour-breathe 1.8s ease-in-out infinite;\n}\n\n.acs-tour-card {\n  position: fixed;\n  z-index: 1;\n  width: min(344px, calc(100vw - 32px));\n  padding: 18px;\n  border: 1px solid rgba(217, 176, 124, 0.34);\n  border-radius: 15px;\n  background: linear-gradient(145deg, #3b3730, #302d28 72%);\n  box-shadow: 0 22px 60px rgba(8, 7, 6, 0.48);\n  color: var(--acs-text);\n  transition: left 320ms cubic-bezier(0.22, 1, 0.36, 1), top 320ms cubic-bezier(0.22, 1, 0.36, 1);\n}\n\n.acs-tour-card.is-refreshing {\n  animation: acs-tour-card-in 260ms ease-out;\n}\n\n.acs-tour-card-head,\n.acs-tour-actions {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n}\n\n.acs-tour-progress {\n  color: var(--acs-gold);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.12em;\n}\n\n.acs-tour-skip {\n  padding: 3px 0;\n  border: 0;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  font-size: 10px;\n}\n\n.acs-tour-skip:hover {\n  color: var(--acs-text);\n}\n\n.acs-tour-eyebrow {\n  margin: 18px 0 5px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.17em;\n}\n\n.acs-tour-card h2 {\n  margin: 0;\n  font-family: var(--acs-display);\n  font-size: 22px;\n  font-weight: 550;\n  line-height: 1.25;\n}\n\n.acs-tour-description {\n  min-height: 68px;\n  margin: 10px 0 15px;\n  color: var(--acs-text-soft);\n  font-size: 11px;\n  line-height: 1.75;\n}\n\n.acs-tour-dots {\n  display: flex;\n  gap: 5px;\n  margin-bottom: 15px;\n}\n\n.acs-tour-dot {\n  width: 16px;\n  height: 3px;\n  border-radius: 999px;\n  background: rgba(232, 224, 212, 0.16);\n  transition: width 180ms ease, background 180ms ease;\n}\n\n.acs-tour-dot.is-past {\n  background: rgba(211, 173, 114, 0.42);\n}\n\n.acs-tour-dot.is-active {\n  width: 28px;\n  background: var(--acs-cyan);\n}\n\n.acs-tour-actions {\n  gap: 10px;\n  padding-top: 13px;\n  border-top: 1px solid var(--acs-line-soft);\n}\n\n.acs-tour-nav {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 7px;\n  min-height: 34px;\n  padding: 7px 11px;\n  border: 1px solid var(--acs-line);\n  border-radius: 8px;\n  background: #3b3832;\n  color: var(--acs-text-soft);\n  cursor: pointer;\n  font-size: 10px;\n  font-weight: 650;\n}\n\n.acs-tour-nav:disabled {\n  cursor: default;\n  opacity: 0.32;\n}\n\n.acs-tour-next {\n  margin-left: auto;\n  border-color: rgba(217, 119, 87, 0.48);\n  background: rgba(217, 119, 87, 0.14);\n  color: #f0d8cd;\n}\n\n@keyframes acs-tour-breathe {\n  0%, 100% { opacity: 0.45; transform: scale(0.995); }\n  50% { opacity: 1; transform: scale(1.012); }\n}\n\n@keyframes acs-tour-card-in {\n  from { opacity: 0.55; transform: translateY(6px); }\n  to { opacity: 1; transform: translateY(0); }\n}\n\n.acs-eyebrow {\n  margin: 0;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n  font-weight: 700;\n  letter-spacing: 0.18em;\n  line-height: 1.4;\n  text-transform: uppercase;\n}\n\n.acs-brand-mark {\n  position: relative;\n  flex: 0 0 auto;\n  width: 38px;\n  height: 38px;\n}\n\n.acs-orbit,\n.acs-orbit::before {\n  position: absolute;\n  inset: 4px;\n  border: 1px solid var(--acs-cyan);\n  border-radius: 50%;\n  content: \"\";\n  transform: rotate(-26deg) scaleY(0.52);\n}\n\n.acs-orbit::before {\n  inset: -5px;\n  border-color: rgba(183, 163, 207, 0.62);\n  transform: rotate(68deg) scaleY(0.65);\n}\n\n.acs-core {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--acs-gold);\n  box-shadow: 0 0 16px rgba(211, 173, 114, 0.34);\n  transform: translate(-50%, -50%);\n}\n\n.acs-topbar-actions {\n  gap: 10px;\n}\n\n.acs-update-control {\n  position: relative;\n  flex: 0 0 auto;\n}\n\n.acs-update-button {\n  color: var(--acs-muted);\n}\n\n.acs-update-button:hover,\n.acs-update-button.is-current {\n  color: var(--acs-green);\n}\n\n.acs-update-button.is-error {\n  color: var(--acs-red);\n}\n\n.acs-update-button.is-checking i {\n  animation: acs-update-spin 760ms linear infinite;\n}\n\n.acs-update-feedback {\n  position: absolute;\n  top: calc(100% + 9px);\n  right: 0;\n  z-index: 12;\n  width: max-content;\n  max-width: min(260px, 70vw);\n  padding: 7px 10px;\n  border: 1px solid var(--acs-line);\n  border-radius: 9px;\n  color: var(--acs-text-soft);\n  background: #35322d;\n  box-shadow: 0 10px 28px rgba(10, 9, 8, 0.32);\n  font-size: 11px;\n  line-height: 1.4;\n  white-space: nowrap;\n}\n\n.acs-update-feedback::before {\n  position: absolute;\n  top: -5px;\n  right: 12px;\n  width: 8px;\n  height: 8px;\n  border-top: 1px solid var(--acs-line);\n  border-left: 1px solid var(--acs-line);\n  background: #35322d;\n  content: \"\";\n  transform: rotate(45deg);\n}\n\n@keyframes acs-update-spin {\n  to { transform: rotate(360deg); }\n}\n\n.acs-dependency {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  max-width: 280px;\n  padding: 7px 11px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 999px;\n  color: var(--acs-muted);\n  background: rgba(56, 53, 47, 0.72);\n  font-size: 12px;\n  white-space: nowrap;\n}\n\n.acs-status-dot {\n  flex: 0 0 auto;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--acs-gold);\n  box-shadow: 0 0 10px currentColor;\n}\n\n.acs-dependency.is-ready .acs-status-dot {\n  background: var(--acs-green);\n}\n\n.acs-dependency.is-error .acs-status-dot {\n  background: var(--acs-red);\n}\n\n.acs-icon-button,\n.acs-button,\n.acs-tab,\n.acs-quiet-action,\n.acs-step-button {\n  color: inherit;\n  font: inherit;\n}\n\n.acs-icon-button {\n  display: grid;\n  width: 36px;\n  height: 36px;\n  padding: 0;\n  border: 1px solid transparent;\n  border-radius: 50%;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  place-items: center;\n}\n\n.acs-icon-button:hover,\n.acs-icon-button:focus-visible {\n  border-color: var(--acs-line);\n  background: var(--acs-panel-raised);\n  color: var(--acs-text);\n}\n\n.acs-workspace {\n  display: grid;\n  grid-template-columns: minmax(220px, 16vw) minmax(440px, 1fr) minmax(300px, 21vw);\n  min-height: 0;\n}\n\n.acs-rail,\n.acs-stage,\n.acs-inspector {\n  min-width: 0;\n  min-height: 0;\n}\n\n.acs-rail {\n  display: flex;\n  flex-direction: column;\n  border-right: 1px solid var(--acs-line-soft);\n  background: #292722;\n}\n\n.acs-project-identity {\n  padding: 16px 14px 15px;\n  border-bottom: 1px solid var(--acs-line-soft);\n}\n\n.acs-composer > label,\n.acs-field-stack label > span {\n  display: block;\n  margin-bottom: 7px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n  font-weight: 700;\n  letter-spacing: 0.1em;\n  text-transform: uppercase;\n}\n\n.acs-project-title-field {\n  display: block;\n}\n\n.acs-project-title-icon {\n  display: grid;\n  width: 32px;\n  height: 32px;\n  border: 0;\n  border-radius: 11px;\n  background: rgba(217, 119, 87, 0.13);\n  color: var(--acs-cyan);\n  font-size: 11px;\n  place-items: center;\n}\n\n.acs-project-title-field label {\n  display: block;\n  margin: 0 0 7px 4px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.11em;\n  text-transform: uppercase;\n}\n\n.acs-project-name-control {\n  display: grid;\n  grid-template-columns: 32px minmax(0, 1fr) 28px;\n  gap: 4px;\n  align-items: center;\n  min-height: 48px;\n  padding: 6px 7px;\n  border: 1px solid rgba(232, 224, 212, 0.14);\n  border-radius: 16px;\n  background: #38352f;\n  box-shadow: 0 7px 20px rgba(10, 9, 8, 0.18);\n  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;\n}\n\n.acs-project-name-control input {\n  width: 100%;\n  min-width: 0;\n  padding: 4px 8px;\n  border: 0;\n  border-radius: 10px;\n  outline: 0;\n  background: transparent !important;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  font-size: 15px;\n  font-weight: 700;\n}\n\n.acs-project-name-control > i {\n  display: grid;\n  width: 28px;\n  height: 28px;\n  border-radius: 50%;\n  background: #45413a;\n  color: var(--acs-muted);\n  font-size: 9px;\n  opacity: 0.8;\n  place-items: center;\n}\n\n.acs-project-name-control:focus-within {\n  border-color: rgba(217, 119, 87, 0.58);\n  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1), 0 9px 24px rgba(10, 9, 8, 0.22);\n  transform: translateY(-1px);\n}\n\n.acs-project-title-field:focus-within .acs-project-name-control > i {\n  color: var(--acs-cyan);\n  opacity: 1;\n}\n\n.acs-progress-row {\n  justify-content: space-between;\n  margin-top: 12px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n}\n\n.acs-progress-track {\n  height: 2px;\n  margin-top: 7px;\n  overflow: hidden;\n  background: var(--acs-line);\n}\n\n.acs-progress-track span {\n  display: block;\n  width: 0;\n  height: 100%;\n  background: linear-gradient(90deg, var(--acs-cyan), var(--acs-violet));\n  transition: width 260ms ease;\n}\n\n.acs-step-rail {\n  flex: 1 1 auto;\n  overflow: auto;\n  padding: 12px 8px 24px;\n  scrollbar-color: var(--acs-line) transparent;\n  scrollbar-width: thin;\n}\n\n.acs-phase-group + .acs-phase-group {\n  margin-top: 7px;\n}\n\n.acs-phase-toggle {\n  position: relative;\n  z-index: 1;\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto 13px;\n  gap: 7px;\n  align-items: center;\n  width: 100%;\n  min-height: 32px;\n  padding: 6px 8px 6px 12px;\n  border: 1px solid transparent;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  text-align: left;\n}\n\n.acs-phase-toggle:hover,\n.acs-phase-toggle:focus-visible {\n  border-color: var(--acs-line-soft);\n  background: rgba(56, 53, 47, 0.82);\n  color: var(--acs-text);\n}\n\n.acs-phase-title {\n  overflow: hidden;\n  letter-spacing: 0.1em;\n  text-overflow: ellipsis;\n  text-transform: uppercase;\n  white-space: nowrap;\n}\n\n.acs-phase-progress {\n  padding: 2px 5px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 999px;\n  font-size: 7px;\n  letter-spacing: 0;\n}\n\n.acs-phase-toggle i {\n  font-size: 8px;\n  text-align: center;\n  transition: transform 160ms ease;\n}\n\n.acs-phase-group.is-collapsed .acs-phase-toggle i {\n  transform: rotate(-90deg);\n}\n\n.acs-phase-steps {\n  position: relative;\n  padding: 2px 0 4px 10px;\n}\n\n.acs-phase-steps::before {\n  position: absolute;\n  top: 3px;\n  bottom: 5px;\n  left: 20px;\n  width: 1px;\n  background: linear-gradient(var(--acs-cyan), var(--acs-line) 28%, var(--acs-line) 78%, var(--acs-violet));\n  content: \"\";\n  opacity: 0.38;\n}\n\n.acs-step-button {\n  position: relative;\n  z-index: 1;\n  display: grid;\n  grid-template-columns: 27px minmax(0, 1fr) 15px;\n  align-items: center;\n  width: 100%;\n  min-height: 37px;\n  padding: 4px 7px 4px 0;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  text-align: left;\n}\n\n.acs-step-button:hover {\n  color: var(--acs-text);\n}\n\n.acs-step-button.is-active {\n  background: linear-gradient(90deg, rgba(217, 119, 87, 0.18), rgba(56, 53, 47, 0.28));\n  color: var(--acs-text);\n}\n\n.acs-step-node {\n  display: grid;\n  width: 15px;\n  height: 15px;\n  margin-left: 6px;\n  border: 1px solid var(--acs-line);\n  border-radius: 50%;\n  background: var(--acs-ink);\n  color: transparent;\n  font-size: 7px;\n  place-items: center;\n}\n\n.acs-step-button.is-active .acs-step-node {\n  border-color: var(--acs-cyan);\n  background: var(--acs-cyan);\n  box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.1), 0 4px 12px rgba(217, 119, 87, 0.22);\n}\n\n.acs-step-button.is-complete .acs-step-node {\n  border-color: var(--acs-green);\n  background: var(--acs-green);\n  color: var(--acs-void);\n}\n\n.acs-step-button.is-draft .acs-step-node {\n  border-color: var(--acs-gold);\n  background: var(--acs-gold);\n}\n\n.acs-step-name {\n  overflow: hidden;\n  font-size: 12px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-step-number {\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  text-align: right;\n}\n\n.acs-quiet-action {\n  flex: 0 0 auto;\n  margin: 8px 14px 14px;\n  padding: 10px;\n  border: 1px dashed var(--acs-line);\n  border-radius: 10px;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  font-size: 12px;\n}\n\n.acs-quiet-action:hover {\n  border-color: var(--acs-cyan);\n  color: var(--acs-text);\n}\n\n.acs-stage {\n  display: flex;\n  flex-direction: column;\n  overflow: hidden;\n  background: #302e29;\n}\n\n.acs-stage-heading {\n  flex: 0 0 auto;\n  justify-content: space-between;\n  gap: 20px;\n  padding: 25px 28px 18px;\n  transition: padding 160ms ease, background 160ms ease;\n}\n\n.acs-stage-heading h2 {\n  margin: 4px 0 5px;\n  font-family: var(--acs-display);\n  font-size: clamp(24px, 2.4vw, 34px);\n  font-weight: 500;\n  line-height: 1.18;\n}\n\n.acs-step-goal {\n  max-width: 760px;\n  margin: 0;\n  color: var(--acs-muted);\n  font-size: 13px;\n  line-height: 1.65;\n}\n\n.acs-stage-heading-actions {\n  display: flex;\n  flex: 0 0 auto;\n  align-items: center;\n  gap: 8px;\n}\n\n.acs-overview-toggle {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 7px;\n  min-height: 30px;\n  padding: 5px 10px;\n  border: 1px solid var(--acs-line);\n  border-radius: 999px;\n  outline: 0;\n  background: #38352f;\n  color: var(--acs-muted);\n  font-family: var(--acs-body);\n  font-size: 10px;\n  cursor: pointer;\n  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;\n}\n\n.acs-overview-toggle:hover,\n.acs-overview-toggle:focus-visible {\n  border-color: rgba(217, 119, 87, 0.5);\n  background: #413d36;\n  color: var(--acs-cyan);\n}\n\n.acs-overview-toggle i {\n  font-size: 9px;\n}\n\n/* 收起后保留一条“飞行条”，仍可确认当前步骤与状态。 */\n.acs-stage.is-overview-collapsed .acs-stage-heading {\n  min-height: 48px;\n  align-items: center;\n  padding: 8px 20px;\n  border-bottom: 1px solid var(--acs-line-soft);\n  background: #2b2925;\n}\n\n.acs-stage.is-overview-collapsed .acs-stage-heading > div:first-child {\n  display: grid;\n  min-width: 0;\n  grid-template-columns: auto minmax(0, 1fr);\n  align-items: center;\n  gap: 10px;\n}\n\n.acs-stage.is-overview-collapsed .acs-stage-heading .acs-eyebrow {\n  margin: 0;\n  white-space: nowrap;\n}\n\n.acs-stage.is-overview-collapsed .acs-stage-heading h2 {\n  overflow: hidden;\n  margin: 0;\n  font-family: var(--acs-body);\n  font-size: 14px;\n  font-weight: 650;\n  line-height: 1.3;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-stage.is-overview-collapsed .acs-step-goal {\n  display: none;\n}\n\n.acs-state-chip {\n  flex: 0 0 auto;\n  padding: 6px 10px;\n  border: 1px solid var(--acs-line);\n  border-radius: 999px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n}\n\n.acs-state-chip.is-draft {\n  border-color: rgba(211, 173, 114, 0.45);\n  color: var(--acs-gold);\n}\n\n.acs-state-chip.is-complete {\n  border-color: rgba(147, 189, 145, 0.45);\n  color: var(--acs-green);\n}\n\n.acs-brief-panel {\n  flex: 0 0 auto;\n  margin: 0 28px 16px;\n  padding: 14px 16px 12px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 14px;\n  background: #38352f;\n  box-shadow: 0 6px 20px rgba(10, 9, 8, 0.12);\n}\n\n.acs-section-label {\n  display: flex;\n  justify-content: space-between;\n  margin-bottom: 8px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.acs-section-label span:last-child {\n  color: var(--acs-muted);\n  letter-spacing: 0;\n  text-transform: none;\n}\n\n.acs-brief-panel textarea,\n.acs-composer textarea,\n.acs-field-stack input,\n.acs-field-stack select {\n  width: 100%;\n  border: 1px solid var(--acs-line);\n  outline: 0;\n  background: #34312c !important;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n}\n\n.acs-brief-panel textarea {\n  min-height: 72px;\n  padding: 0;\n  border: 0;\n  background: transparent !important;\n  font-size: 13px;\n  line-height: 1.65;\n  resize: vertical;\n}\n\n.acs-brief-panel textarea:focus,\n.acs-composer textarea:focus,\n.acs-field-stack input:focus,\n.acs-field-stack select:focus {\n  border-color: var(--acs-cyan);\n  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);\n}\n\n.acs-conversation {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 120px;\n  overflow: auto;\n  padding: 10px 28px 24px;\n  scrollbar-color: var(--acs-line) transparent;\n  scrollbar-width: thin;\n}\n\n.acs-empty-turns {\n  display: grid;\n  min-height: 100%;\n  padding: 30px;\n  color: var(--acs-muted);\n  text-align: center;\n  justify-items: center;\n  place-content: center;\n}\n\n.acs-empty-turns[hidden] {\n  display: none;\n}\n\n.acs-empty-glyph {\n  color: var(--acs-cyan);\n  font-size: 44px;\n  font-weight: 200;\n  line-height: 1;\n  opacity: 0.7;\n}\n\n.acs-empty-kicker {\n  margin-top: 12px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.16em;\n  text-transform: uppercase;\n}\n\n.acs-empty-turns h3 {\n  margin: 7px 0 6px;\n  color: var(--acs-text);\n  font-family: var(--acs-display);\n  font-size: 21px;\n  font-weight: 500;\n}\n\n.acs-empty-turns p {\n  max-width: 620px;\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.65;\n}\n\n.acs-guide-panel {\n  width: min(100%, 680px);\n  margin-top: 22px;\n  padding-top: 14px;\n  border-top: 1px solid var(--acs-line-soft);\n  text-align: left;\n}\n\n.acs-guide-panel > span {\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.12em;\n}\n\n.acs-guide-prompts {\n  display: grid;\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  gap: 8px;\n  margin: 9px 0 0;\n  padding: 0;\n  list-style: none;\n  counter-reset: guide-prompt;\n}\n\n.acs-guide-prompts li {\n  position: relative;\n  min-height: 64px;\n  padding: 10px 10px 10px 31px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 9px;\n  background: #38352f;\n  color: var(--acs-muted);\n  font-size: 11px;\n  line-height: 1.55;\n  counter-increment: guide-prompt;\n}\n\n.acs-guide-prompts li::before {\n  position: absolute;\n  top: 10px;\n  left: 10px;\n  color: var(--acs-cyan);\n  content: counter(guide-prompt, decimal-leading-zero);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n  font-weight: 700;\n  letter-spacing: 0.05em;\n  opacity: 0.78;\n}\n\n.acs-turns {\n  display: grid;\n  gap: 14px;\n}\n\n.acs-turn {\n  position: relative;\n  max-width: min(92%, 900px);\n  padding: 14px 16px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 14px;\n  background: #38352f;\n  box-shadow: 0 6px 22px rgba(10, 9, 8, 0.12);\n}\n\n.acs-turn.is-user {\n  margin-left: auto;\n  border-color: rgba(217, 119, 87, 0.24);\n  background: #3a3330;\n}\n\n.acs-turn-label {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 8px;\n  margin-bottom: 8px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.12em;\n  text-transform: uppercase;\n}\n\n.acs-turn.is-user .acs-turn-label {\n  justify-content: flex-end;\n  color: var(--acs-violet);\n  text-align: right;\n}\n\n.acs-turn-retry {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 5px;\n  min-height: 23px;\n  padding: 2px 7px;\n  border: 1px solid transparent;\n  border-radius: 999px;\n  outline: 0;\n  background: transparent;\n  color: inherit;\n  font: 600 9px/1 var(--acs-body);\n  cursor: pointer;\n  opacity: 0.68;\n  transition: border-color 140ms ease, background 140ms ease, opacity 140ms ease;\n}\n\n.acs-turn-retry:hover,\n.acs-turn-retry:focus-visible {\n  border-color: rgba(217, 119, 87, 0.32);\n  background: rgba(217, 119, 87, 0.1);\n  opacity: 1;\n}\n\n.acs-turn-retry:disabled {\n  cursor: not-allowed;\n  opacity: 0.35;\n}\n\n.acs-turn-content {\n  margin: 0;\n  overflow: visible;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  font-size: 12px;\n  line-height: 1.72;\n  word-break: break-word;\n}\n\npre.acs-turn-content {\n  white-space: pre-wrap;\n}\n\n.acs-turn-content > :first-child {\n  margin-top: 0;\n}\n\n.acs-turn-content > :last-child {\n  margin-bottom: 0;\n}\n\n.acs-turn-content details {\n  margin: 8px 0;\n  overflow: hidden;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 9px;\n  background: #2f2c28;\n}\n\n.acs-turn-content summary {\n  padding: 8px 10px;\n  cursor: pointer;\n}\n\n.acs-turn-content details:not(.acs-code-block) > :not(summary) {\n  margin-right: 10px;\n  margin-left: 10px;\n}\n\n.acs-turn-content pre {\n  position: relative;\n  max-width: 100%;\n  overflow: auto;\n  margin: 12px 0;\n  padding: 34px 12px 12px;\n  border: 1px solid rgba(232, 224, 212, 0.2);\n  border-radius: 9px;\n  background: transparent;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  font-size: 11px;\n  line-height: 1.75;\n  white-space: pre-wrap;\n}\n\n.acs-turn-content .acs-code-block {\n  margin: 12px 0;\n  overflow: hidden;\n  border: 1px solid rgba(232, 224, 212, 0.2);\n  border-radius: 9px;\n  background: transparent;\n}\n\n.acs-turn-content .acs-code-block summary {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 30px;\n  padding: 6px 10px;\n  border: 0;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.12em;\n  list-style: none;\n  text-transform: uppercase;\n  transition: background 140ms ease;\n}\n\n.acs-turn-content .acs-code-block summary::-webkit-details-marker {\n  display: none;\n}\n\n.acs-turn-content .acs-code-block summary:hover,\n.acs-turn-content .acs-code-block summary:focus-visible {\n  background: rgba(217, 119, 87, 0.08);\n}\n\n.acs-turn-content .acs-code-block[open] summary {\n  border-bottom: 1px solid var(--acs-line-soft);\n}\n\n.acs-turn-content .acs-code-block summary i {\n  font-size: 8px;\n  transform: rotate(-90deg);\n  transition: transform 150ms ease;\n}\n\n.acs-turn-content .acs-code-block[open] summary i {\n  transform: rotate(0deg);\n}\n\n.acs-turn-content .acs-code-block > pre.acs-code-content {\n  margin: 0;\n  padding: 12px;\n  border: 0;\n  border-radius: 0;\n  background: transparent;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  font-size: 11px;\n  line-height: 1.75;\n}\n\n.acs-turn-content pre > code {\n  display: block;\n  padding: 0;\n  border: 0;\n  background: transparent !important;\n  color: inherit;\n  font: inherit;\n  white-space: pre-wrap;\n}\n\n/* AUTO 的“说明和建议”原本使用代码围栏；此处按说明文字展示，避免全局 code 样式形成逐行黑底。 */\n.acs-turn-content details:not(.acs-code-block) > pre {\n  margin: 0 10px 10px;\n  padding: 10px 2px 2px;\n  border: 0;\n  border-top: 1px solid var(--acs-line-soft);\n  border-radius: 0;\n  background: transparent;\n  color: var(--acs-muted);\n  font-family: var(--acs-body);\n  font-size: 11px;\n  line-height: 1.75;\n}\n\n.acs-turn-content details > pre > code {\n  white-space: pre-wrap;\n}\n\n.acs-composer {\n  flex: 0 0 auto;\n  padding: 15px 28px 20px;\n  border-top: 1px solid var(--acs-line-soft);\n  background: #292722;\n  box-shadow: 0 -5px 20px rgba(10, 9, 8, 0.12);\n}\n\n.acs-composer textarea {\n  min-height: 58px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.acs-composer-actions {\n  justify-content: space-between;\n  gap: 14px;\n  margin-top: 10px;\n}\n\n.acs-composer-actions > div {\n  gap: 8px;\n}\n\n.acs-composer-actions p {\n  margin: 0;\n  color: var(--acs-muted);\n  font-size: 10px;\n}\n\n.acs-button {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  min-height: 36px;\n  padding: 8px 13px;\n  border: 1px solid var(--acs-line);\n  border-radius: 9px;\n  background: var(--acs-panel-raised);\n  color: var(--acs-text);\n  cursor: pointer;\n  font-size: 11px;\n  font-weight: 650;\n  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;\n}\n\n.acs-button:hover:not(:disabled) {\n  border-color: var(--acs-cyan);\n  transform: translateY(-1px);\n}\n\n.acs-button:disabled {\n  cursor: not-allowed;\n  opacity: 0.38;\n}\n\n.acs-button-primary {\n  border-color: rgba(217, 119, 87, 0.46);\n  background: var(--acs-cyan-soft);\n}\n\n.acs-button-confirm {\n  border-color: rgba(147, 189, 145, 0.42);\n  background: rgba(147, 189, 145, 0.11);\n  color: #b9d7b7;\n}\n\n.acs-button-danger {\n  border-color: rgba(217, 132, 127, 0.44);\n  background: rgba(217, 132, 127, 0.11);\n  color: #edaaa6;\n}\n\n.acs-inspector {\n  position: relative;\n  overflow: auto;\n  border-left: 1px solid var(--acs-line-soft);\n  background: #292722;\n  scrollbar-color: var(--acs-line) transparent;\n  scrollbar-width: thin;\n}\n\n.acs-inspector.is-expanded {\n  position: absolute;\n  top: 72px;\n  right: 0;\n  bottom: 0;\n  z-index: 8;\n  width: min(72vw, 1080px);\n  border-left-color: rgba(217, 119, 87, 0.24);\n  background: #2b2925;\n  box-shadow: -28px 0 70px rgba(10, 9, 8, 0.34);\n}\n\n.acs-tabs {\n  position: sticky;\n  top: 0;\n  z-index: 3;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  padding: 11px 14px 0;\n  background: rgba(41, 39, 34, 0.96);\n  backdrop-filter: blur(8px);\n}\n\n.acs-tab {\n  padding: 10px 5px;\n  border: 0;\n  border-bottom: 2px solid transparent;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  font-size: 11px;\n}\n\n.acs-tab.is-active {\n  border-color: var(--acs-cyan);\n  color: var(--acs-text);\n}\n\n.acs-tab-panel {\n  padding: 20px 18px 28px;\n}\n\n.acs-tab-panel[hidden] {\n  display: none;\n}\n\n#acs-inspector-toggle {\n  display: none;\n}\n\n.acs-inspector-intro {\n  justify-content: space-between;\n  gap: 12px;\n  color: var(--acs-muted);\n  font-size: 11px;\n}\n\n.acs-inspector-intro > div {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.acs-inspector-intro strong {\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n}\n\n.acs-inspector-action,\n.acs-artifact-action {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  min-height: 28px;\n  padding: 5px 8px;\n  border: 1px solid var(--acs-line);\n  border-radius: 7px;\n  background: rgba(56, 53, 47, 0.86);\n  color: var(--acs-muted);\n  cursor: pointer;\n  font: 600 9px/1 var(--acs-body);\n}\n\n.acs-inspector-action:hover,\n.acs-inspector-action.is-active,\n.acs-artifact-action:hover {\n  border-color: rgba(217, 119, 87, 0.5);\n  color: var(--acs-cyan);\n}\n\n.acs-inspector-help,\n.acs-publish-copy p,\n.acs-publish-note {\n  color: var(--acs-muted);\n  font-size: 11px;\n  line-height: 1.6;\n}\n\n.acs-artifact-list {\n  display: grid;\n  gap: 8px;\n  margin-top: 17px;\n}\n\n.acs-artifact-empty {\n  padding: 22px 10px;\n  border-top: 1px solid var(--acs-line-soft);\n  border-bottom: 1px solid var(--acs-line-soft);\n  color: var(--acs-muted);\n  font-size: 11px;\n  line-height: 1.6;\n  text-align: center;\n}\n\n.acs-artifact {\n  overflow: hidden;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 10px;\n  background: #35322d;\n}\n\n.acs-artifact summary {\n  padding: 10px 11px;\n  cursor: pointer;\n  list-style: none;\n}\n\n.acs-artifact summary::-webkit-details-marker {\n  display: none;\n}\n\n.acs-artifact-head {\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.acs-artifact-name {\n  overflow: hidden;\n  color: var(--acs-text);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-artifact-step {\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n}\n\n.acs-artifact-editor {\n  border-top: 1px solid var(--acs-line-soft);\n  background: #2d2b27;\n}\n\n.acs-artifact-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 8px 9px;\n  border-bottom: 1px solid var(--acs-line-soft);\n}\n\n.acs-artifact-save-state {\n  color: var(--acs-green);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n}\n\n.acs-artifact-save-state.is-pending {\n  color: var(--acs-gold);\n}\n\n.acs-artifact-editor textarea.acs-artifact-content {\n  display: block;\n  width: 100%;\n  min-height: 260px;\n  max-height: 56vh;\n  margin: 0;\n  overflow: auto;\n  padding: 15px 16px;\n  border: 0;\n  outline: 0;\n  resize: vertical;\n  background: #302e29 !important;\n  color: #f0e9df !important;\n  caret-color: var(--acs-cyan);\n  font-family: var(--acs-body);\n  font-size: 12px;\n  font-weight: 450;\n  line-height: 1.78;\n  letter-spacing: 0.008em;\n  white-space: pre-wrap;\n  word-break: break-word;\n  tab-size: 2;\n  text-rendering: optimizeLegibility;\n  -webkit-font-smoothing: antialiased;\n}\n\n.acs-artifact-editor textarea.acs-artifact-content:focus {\n  background: #34312c !important;\n  box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.72);\n}\n\n.acs-artifact-editor textarea.acs-artifact-content::selection {\n  background: rgba(217, 119, 87, 0.3);\n  color: #fff8ee;\n}\n\n.acs-inspector.is-expanded .acs-artifact-content {\n  min-height: 360px;\n  max-height: 68vh;\n  font-size: 13px;\n  line-height: 1.82;\n}\n\n.acs-field-stack {\n  display: grid;\n  gap: 15px;\n}\n\n.acs-fixed-resource {\n  display: grid;\n  grid-template-columns: 34px minmax(0, 1fr) auto;\n  gap: 10px;\n  align-items: center;\n  padding: 11px;\n  border: 1px solid rgba(217, 119, 87, 0.28);\n  border-radius: 9px;\n  background: linear-gradient(110deg, rgba(217, 119, 87, 0.1), rgba(56, 53, 47, 0.82));\n}\n\n.acs-fixed-resource-icon {\n  display: grid;\n  width: 32px;\n  height: 32px;\n  place-items: center;\n  border: 1px solid rgba(217, 119, 87, 0.24);\n  border-radius: 8px;\n  color: var(--acs-cyan);\n  background: rgba(217, 119, 87, 0.1);\n  font-size: 11px;\n}\n\n.acs-fixed-resource-copy {\n  min-width: 0;\n}\n\n.acs-fixed-resource-copy > span,\n.acs-fixed-resource-copy > strong,\n.acs-fixed-resource-copy > small {\n  display: block;\n}\n\n.acs-fixed-resource-copy > span {\n  margin-bottom: 3px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n  font-weight: 700;\n  letter-spacing: 0.1em;\n}\n\n.acs-fixed-resource-copy > strong {\n  overflow: hidden;\n  color: var(--acs-text-soft);\n  font-size: 11px;\n  font-weight: 650;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-fixed-resource-copy > small {\n  margin-top: 3px;\n  color: var(--acs-muted);\n  font-size: 9px;\n  line-height: 1.45;\n}\n\n.acs-fixed-resource-badge {\n  padding: 4px 7px;\n  border: 1px solid rgba(217, 119, 87, 0.26);\n  border-radius: 999px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n  font-weight: 700;\n  white-space: nowrap;\n}\n\n.acs-fixed-resource.is-missing {\n  border-color: rgba(217, 132, 127, 0.42);\n  background: rgba(217, 132, 127, 0.08);\n}\n\n.acs-fixed-resource.is-missing .acs-fixed-resource-icon,\n.acs-fixed-resource.is-missing .acs-fixed-resource-badge {\n  border-color: rgba(217, 132, 127, 0.3);\n  color: var(--acs-red);\n}\n\n.acs-connection-section {\n  margin-bottom: 20px;\n  padding-bottom: 18px;\n  border-bottom: 1px solid var(--acs-line-soft);\n}\n\n.acs-settings-heading {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 12px;\n  margin-bottom: 12px;\n}\n\n.acs-settings-heading span,\n.acs-settings-section-label {\n  color: var(--acs-text);\n  font-family: var(--acs-display);\n  font-size: 15px;\n  font-weight: 500;\n}\n\n.acs-settings-heading small {\n  display: block;\n  margin-top: 3px;\n  color: var(--acs-muted);\n  font-size: 10px;\n}\n\n.acs-settings-heading > strong {\n  max-width: 48%;\n  overflow: hidden;\n  padding: 5px 8px;\n  border: 1px solid var(--acs-line);\n  border-radius: 999px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n  font-weight: 700;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-settings-heading > strong.is-custom {\n  border-color: rgba(183, 163, 207, 0.38);\n  background: rgba(183, 163, 207, 0.1);\n  color: #cbb9dd;\n}\n\n.acs-connection-options {\n  display: grid;\n  gap: 8px;\n}\n\n.acs-connection-choice {\n  display: grid;\n  grid-template-columns: 18px minmax(0, 1fr);\n  gap: 9px;\n  align-items: start;\n  padding: 10px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 9px;\n  background: #35322d;\n  cursor: pointer;\n}\n\n.acs-connection-choice:has(input:checked) {\n  border-color: rgba(217, 119, 87, 0.4);\n  background: rgba(217, 119, 87, 0.1);\n}\n\n.acs-field-stack .acs-connection-choice input,\n.acs-connection-choice input {\n  width: 14px;\n  min-height: 14px;\n  margin: 2px 0 0;\n  accent-color: var(--acs-cyan);\n}\n\n.acs-field-stack .acs-connection-choice > span,\n.acs-connection-choice > span {\n  margin: 0;\n}\n\n.acs-connection-choice strong,\n.acs-connection-choice small {\n  display: block;\n}\n\n.acs-connection-choice strong {\n  color: var(--acs-text-soft);\n  font-size: 11px;\n  font-weight: 650;\n}\n\n.acs-connection-choice small {\n  margin-top: 3px;\n  color: var(--acs-muted);\n  font-size: 9px;\n  line-height: 1.45;\n}\n\n.acs-custom-connection {\n  margin-top: 10px;\n  padding: 13px;\n  border-left: 2px solid rgba(183, 163, 207, 0.5);\n  border-radius: 0 10px 10px 0;\n  background: rgba(183, 163, 207, 0.08);\n}\n\n.acs-custom-connection[hidden] {\n  display: none;\n}\n\n.acs-model-picker {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;\n  gap: 7px;\n}\n\n.acs-model-field > label {\n  display: block;\n  margin-bottom: 7px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.acs-button-compact {\n  min-height: 38px;\n  padding: 7px 10px;\n  border-color: var(--acs-line);\n  background: rgba(217, 119, 87, 0.08);\n  white-space: nowrap;\n}\n\n.acs-security-note {\n  display: flex;\n  gap: 7px;\n  margin: 12px 0 0;\n  color: var(--acs-muted);\n  font-size: 9px;\n  line-height: 1.55;\n}\n\n.acs-security-note i {\n  margin-top: 2px;\n  color: var(--acs-violet);\n}\n\n.acs-settings-section-label {\n  margin: 0 0 13px;\n}\n\n.acs-field-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 12px;\n}\n\n.acs-field-stack input,\n.acs-field-stack select {\n  min-height: 38px;\n  padding: 8px 9px;\n  border-radius: 8px;\n  font-size: 11px;\n}\n\n.acs-field-stack select {\n  padding-right: 36px;\n  appearance: none;\n  color-scheme: dark;\n  background-color: #34312c !important;\n  background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23d97757' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5'/%3E%3C/svg%3E\") !important;\n  background-repeat: no-repeat !important;\n  background-position: right 12px center !important;\n  background-size: 11px 7px !important;\n  cursor: pointer;\n  transition: border-color 140ms ease, background-color 140ms ease;\n}\n\n.acs-field-stack select:hover {\n  border-color: rgba(217, 119, 87, 0.46);\n  background-color: #3b3832 !important;\n}\n\n.acs-field-stack select option {\n  background: #2d2b27;\n  color: var(--acs-text);\n}\n\n.acs-publish-copy h3 {\n  margin: 5px 0 8px;\n  font-family: var(--acs-display);\n  font-size: 22px;\n  font-weight: 500;\n}\n\n.acs-button-publish,\n.acs-button-secondary {\n  width: 100%;\n  margin-top: 16px;\n}\n\n.acs-button-publish {\n  min-height: 43px;\n  border-color: rgba(211, 173, 114, 0.48);\n  background: rgba(211, 173, 114, 0.11);\n  color: #e2c28f;\n}\n\n.acs-button-secondary {\n  margin-top: 8px;\n  background: transparent;\n}\n\n.acs-publish-note {\n  margin-top: 14px;\n  padding-left: 10px;\n  border-left: 2px solid var(--acs-gold);\n}\n\n.acs-visually-hidden {\n  position: absolute !important;\n  width: 1px !important;\n  height: 1px !important;\n  padding: 0 !important;\n  overflow: hidden !important;\n  clip: rect(0, 0, 0, 0) !important;\n  white-space: nowrap !important;\n  border: 0 !important;\n}\n\n.acs-shell button:focus-visible,\n.acs-shell input:focus-visible,\n.acs-shell textarea:focus-visible,\n.acs-shell select:focus-visible {\n  outline: 2px solid var(--acs-cyan);\n  outline-offset: 2px;\n}\n\nbody.acs-no-scroll {\n  overflow: hidden !important;\n}\n\n@media (max-width: 1120px) {\n  .acs-tour-launch {\n    width: 32px;\n    padding: 6px;\n    justify-content: center;\n  }\n\n  .acs-tour-launch span {\n    display: none;\n  }\n\n  .acs-window {\n    inset: 1vh 1vw;\n  }\n\n  .acs-workspace {\n    grid-template-columns: 205px minmax(0, 1fr) 280px;\n  }\n\n  .acs-composer-actions {\n    align-items: flex-end;\n  }\n\n  .acs-composer-actions p {\n    display: none;\n  }\n}\n\n@media (max-width: 860px) {\n  .acs-window {\n    inset: 0;\n    grid-template-rows: 64px minmax(0, 1fr);\n    border: 0;\n    border-radius: 0;\n  }\n\n  .acs-dependency {\n    display: none;\n  }\n\n  .acs-workspace {\n    grid-template-columns: 68px minmax(0, 1fr);\n  }\n\n  .acs-rail {\n    grid-column: 1;\n  }\n\n  .acs-stage {\n    grid-column: 2;\n  }\n\n  .acs-inspector {\n    position: absolute;\n    top: 64px;\n    right: 0;\n    bottom: 0;\n    z-index: 5;\n    display: none;\n    width: min(88vw, 340px);\n    box-shadow: -18px 0 50px rgba(0, 0, 0, 0.4);\n  }\n\n  .acs-inspector.is-mobile-open {\n    display: block;\n  }\n\n  .acs-inspector.is-expanded {\n    top: 64px;\n    width: min(96vw, 860px);\n  }\n\n  #acs-inspector-toggle {\n    display: grid;\n  }\n\n  .acs-project-identity {\n    padding: 12px 7px;\n  }\n\n  .acs-project-title-field,\n  .acs-progress-row,\n  .acs-step-name,\n  .acs-step-number,\n  .acs-quiet-action {\n    display: none;\n  }\n\n  .acs-progress-track {\n    margin: 0;\n  }\n\n  .acs-step-rail {\n    padding-right: 7px;\n    padding-left: 7px;\n  }\n\n  .acs-phase-toggle {\n    display: grid;\n    grid-template-columns: 1fr;\n    width: 39px;\n    min-height: 28px;\n    margin: 0 auto;\n    padding: 6px;\n  }\n\n  .acs-phase-title,\n  .acs-phase-progress {\n    display: none;\n  }\n\n  .acs-phase-steps {\n    padding-left: 0;\n  }\n\n  .acs-phase-steps::before {\n    left: 13px;\n  }\n\n  .acs-step-button {\n    grid-template-columns: 27px;\n    width: 39px;\n  }\n\n  .acs-stage-heading,\n  .acs-composer {\n    padding-right: 17px;\n    padding-left: 17px;\n  }\n\n  .acs-brief-panel {\n    margin-right: 17px;\n    margin-left: 17px;\n  }\n\n  .acs-conversation {\n    padding-right: 17px;\n    padding-left: 17px;\n  }\n\n  .acs-guide-prompts {\n    grid-template-columns: 1fr;\n  }\n\n  .acs-guide-prompts li {\n    min-height: 0;\n  }\n\n  .acs-composer-actions {\n    display: block;\n  }\n\n  .acs-composer-actions > div {\n    display: grid;\n    grid-template-columns: auto 1fr;\n  }\n\n  .acs-button-confirm {\n    grid-column: 1 / -1;\n  }\n}\n\n@media (max-width: 560px) {\n  .acs-brand h1 {\n    font-size: 17px;\n  }\n\n  .acs-brand .acs-eyebrow,\n  #acs-save-project {\n    display: none;\n  }\n\n  .acs-brand-mark {\n    width: 30px;\n    height: 30px;\n  }\n\n  .acs-topbar {\n    padding: 0 12px;\n  }\n\n  .acs-stage-heading {\n    align-items: flex-start;\n  }\n\n  .acs-state-chip {\n    display: none;\n  }\n\n  .acs-overview-toggle span {\n    display: none;\n  }\n\n  .acs-overview-toggle {\n    width: 30px;\n    padding: 5px;\n  }\n\n  .acs-stage-heading h2 {\n    font-size: 25px;\n  }\n\n  .acs-section-label span:last-child {\n    display: none;\n  }\n\n  .acs-turn {\n    max-width: 100%;\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .acs-progress-track span,\n  .acs-button,\n  .acs-stage-heading,\n  .acs-overview-toggle,\n  .acs-update-button i,\n  .acs-tour-launch,\n  .acs-tour-spotlight,\n  .acs-tour-spotlight::after,\n  .acs-tour-card,\n  .acs-tour-card.is-refreshing {\n    transition: none;\n    animation: none;\n  }\n}\n";
 const PROJECT_LIBRARY_CSS = `
 .acs-project-identity {
@@ -351,9 +351,57 @@ const PROJECT_LIBRARY_CSS = `
 }
 `;
 
+const ARTIFACT_HISTORY_CSS = `
+.acs-artifact-toolbar-actions,
+.acs-artifact-history {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acs-artifact-history {
+  color: var(--acs-muted);
+  font-family: var(--acs-mono);
+  font-size: 8px;
+}
+
+.acs-artifact-history-button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--acs-line);
+  border-radius: 7px;
+  background: #38352f;
+  color: var(--acs-muted);
+  cursor: pointer;
+  place-items: center;
+}
+
+.acs-artifact-history-button:hover:not(:disabled) {
+  border-color: rgba(217, 119, 87, 0.5);
+  color: var(--acs-cyan);
+}
+
+.acs-artifact-history-button:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.acs-artifact-restore {
+  border-color: rgba(211, 173, 114, 0.42);
+  color: var(--acs-gold);
+}
+
+.acs-artifact-content[readonly] {
+  color: var(--acs-text-soft) !important;
+  background: #2d2b27 !important;
+}
+`;
+
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.5.5';
+const AUTO_CARD_STUDIO_VERSION = '0.5.6';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -716,6 +764,7 @@ let isCheckingForUpdate = false;
 let tourActive = false;
 let tourStepIndex = 0;
 let tourAnimationFrame = null;
+let renderedArtifactGroups = [];
 const artifactSaveTimers = new Map();
 let environment = {
     checked: false,
@@ -1449,25 +1498,61 @@ function renderProgress() {
     shell.querySelector('#acs-progress-bar').style.width = `${percent}%`;
 }
 
+function collectArtifactGroups() {
+    const groups = new Map();
+    for (const step of STEPS) {
+        const turns = project.steps[step.number]?.turns || [];
+        for (const [turnIndex, turn] of turns.entries()) {
+            if (turn.role !== 'assistant') continue;
+            extractArtifactBlocks(turn.content).forEach((block, blockIndex) => {
+                if (!groups.has(block.tag)) groups.set(block.tag, { tag: block.tag, versions: [] });
+                groups.get(block.tag).versions.push({
+                    ...block,
+                    blockIndex,
+                    turnIndex,
+                    step: step.number,
+                    accepted: project.steps[step.number].status === 'accepted',
+                    createdAt: turn.createdAt || project.steps[step.number].updatedAt || '',
+                });
+            });
+        }
+    }
+    return [...groups.values()];
+}
+
+function showArtifactVersion(details, requestedIndex) {
+    const group = renderedArtifactGroups[Number(details.dataset.artifactGroup)];
+    if (!group) return;
+    const index = Math.max(0, Math.min(Number(requestedIndex), group.versions.length - 1));
+    const version = group.versions[index];
+    const isLatest = index === group.versions.length - 1;
+    const content = details.querySelector('.acs-artifact-content');
+    const step = details.querySelector('.acs-artifact-step');
+    const saveState = details.querySelector('.acs-artifact-save-state');
+
+    content.value = version.content;
+    content.readOnly = !isLatest;
+    content.dataset.artifactVersion = String(index);
+    content.dataset.artifactStep = String(version.step);
+    content.dataset.artifactTurn = String(version.turnIndex);
+    content.dataset.artifactIndex = String(version.blockIndex);
+    content.dataset.savedContent = version.content;
+    step.textContent = `S${String(version.step).padStart(2, '0')}${version.accepted ? ' · 已确认' : ' · 草案'}`;
+    saveState.textContent = isLatest ? '当前版本 · 可编辑' : '历史版本 · 只读';
+    saveState.classList.remove('is-pending');
+    details.querySelector('[data-artifact-version-label]').textContent = `${index + 1} / ${group.versions.length}`;
+    details.querySelector('[data-artifact-history="previous"]').disabled = index <= 0;
+    details.querySelector('[data-artifact-history="next"]').disabled = index >= group.versions.length - 1;
+    details.querySelector('[data-restore-artifact]').hidden = isLatest;
+}
+
 function renderArtifacts() {
     const list = shell.querySelector('#acs-artifact-list');
-    const artifacts = [];
-    for (const step of STEPS) {
-        const response = latestAssistantResponse(step.number);
-        if (!response) continue;
-        extractArtifactBlocks(response).forEach((block, blockIndex) => {
-            artifacts.push({
-                ...block,
-                blockIndex,
-                step: step.number,
-                accepted: project.steps[step.number].status === 'accepted',
-            });
-        });
-    }
+    renderedArtifactGroups = collectArtifactGroups();
 
     list.replaceChildren();
-    shell.querySelector('#acs-block-count').textContent = `${artifacts.length} 个区块`;
-    if (!artifacts.length) {
+    shell.querySelector('#acs-block-count').textContent = `${renderedArtifactGroups.length} 个区块`;
+    if (!renderedArtifactGroups.length) {
         const empty = document.createElement('div');
         empty.className = 'acs-artifact-empty';
         empty.textContent = '生成并确认阶段草案后，结构化产物会在这里出现。';
@@ -1475,16 +1560,18 @@ function renderArtifacts() {
         return;
     }
 
-    for (const artifact of artifacts) {
+    for (const [groupIndex, group] of renderedArtifactGroups.entries()) {
+        const artifact = group.versions.at(-1);
         const details = document.createElement('details');
         details.className = 'acs-artifact';
-        if (artifacts.length === 1) details.open = true;
+        details.dataset.artifactGroup = String(groupIndex);
+        if (renderedArtifactGroups.length === 1) details.open = true;
         const summary = document.createElement('summary');
         const head = document.createElement('span');
         head.className = 'acs-artifact-head';
         const name = document.createElement('span');
         name.className = 'acs-artifact-name';
-        name.textContent = artifact.tag;
+        name.textContent = group.tag;
         const step = document.createElement('span');
         step.className = 'acs-artifact-step';
         step.textContent = `S${String(artifact.step).padStart(2, '0')}${artifact.accepted ? ' · 已确认' : ' · 草案'}`;
@@ -1497,20 +1584,42 @@ function renderArtifacts() {
         toolbar.className = 'acs-artifact-toolbar';
         const saveState = document.createElement('span');
         saveState.className = 'acs-artifact-save-state';
-        saveState.textContent = '可编辑 · 自动保存';
+        saveState.textContent = '当前版本 · 可编辑';
+        const actions = document.createElement('span');
+        actions.className = 'acs-artifact-toolbar-actions';
+        const history = document.createElement('span');
+        history.className = 'acs-artifact-history';
+        history.innerHTML = `
+            <button class="acs-artifact-history-button" type="button" data-artifact-history="previous" title="查看上一版本">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <span data-artifact-version-label>${group.versions.length} / ${group.versions.length}</span>
+            <button class="acs-artifact-history-button" type="button" data-artifact-history="next" title="查看下一版本" disabled>
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </button>`;
+        const restore = document.createElement('button');
+        restore.type = 'button';
+        restore.className = 'acs-artifact-action acs-artifact-restore';
+        restore.dataset.restoreArtifact = '';
+        restore.hidden = true;
+        restore.innerHTML = '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>恢复此版</span>';
         const copy = document.createElement('button');
         copy.type = 'button';
         copy.className = 'acs-artifact-action';
         copy.dataset.copyArtifact = '';
         copy.title = '复制这个区块';
         copy.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i><span>复制</span>';
-        toolbar.append(saveState, copy);
+        actions.append(history, restore, copy);
+        toolbar.append(saveState, actions);
 
         const content = document.createElement('textarea');
         content.className = 'acs-artifact-content';
         content.value = artifact.content;
         content.spellcheck = false;
+        content.dataset.artifactGroup = String(groupIndex);
+        content.dataset.artifactVersion = String(group.versions.length - 1);
         content.dataset.artifactStep = String(artifact.step);
+        content.dataset.artifactTurn = String(artifact.turnIndex);
         content.dataset.artifactIndex = String(artifact.blockIndex);
         content.dataset.savedContent = artifact.content;
         content.setAttribute('aria-label', `${artifact.tag} 区块内容`);
@@ -1521,29 +1630,27 @@ function renderArtifacts() {
 }
 
 function saveArtifactEdit(textarea) {
+    if (textarea.readOnly) return false;
     const stepNumber = Number(textarea.dataset.artifactStep);
+    const turnIndex = Number(textarea.dataset.artifactTurn);
     const blockIndex = Number(textarea.dataset.artifactIndex);
-    const timerKey = `${stepNumber}:${blockIndex}`;
+    const timerKey = `${stepNumber}:${turnIndex}:${blockIndex}`;
     clearTimeout(artifactSaveTimers.get(timerKey));
     artifactSaveTimers.delete(timerKey);
-    const latest = latestAssistantTurn(stepNumber);
-    if (!latest) return false;
+    const turn = project.steps[stepNumber]?.turns?.[turnIndex];
+    if (!turn || turn.role !== 'assistant') return false;
 
-    const source = latest.turn.content;
-    const previous = textarea.dataset.savedContent || '';
-    let start = previous ? source.indexOf(previous) : -1;
-    let end = start >= 0 ? start + previous.length : -1;
-    if (start < 0) {
-        const currentBlock = extractArtifactBlocks(source)[blockIndex];
-        if (!currentBlock) return false;
-        start = currentBlock.start;
-        end = currentBlock.end;
-    }
+    const source = turn.content;
+    const currentBlock = extractArtifactBlocks(source)[blockIndex];
+    if (!currentBlock) return false;
 
-    latest.turn.content = `${source.slice(0, start)}${textarea.value}${source.slice(end)}`;
-    latest.turn.editedAt = new Date().toISOString();
-    project.steps[stepNumber].updatedAt = latest.turn.editedAt;
+    turn.content = `${source.slice(0, currentBlock.start)}${textarea.value}${source.slice(currentBlock.end)}`;
+    turn.editedAt = new Date().toISOString();
+    project.steps[stepNumber].updatedAt = turn.editedAt;
     textarea.dataset.savedContent = textarea.value;
+    const group = renderedArtifactGroups[Number(textarea.dataset.artifactGroup)];
+    const version = group?.versions?.[Number(textarea.dataset.artifactVersion)];
+    if (version) version.content = textarea.value;
     saveProject();
 
     const state = textarea.closest('.acs-artifact-editor')?.querySelector('.acs-artifact-save-state');
@@ -1555,7 +1662,8 @@ function saveArtifactEdit(textarea) {
 }
 
 function scheduleArtifactSave(textarea) {
-    const key = `${textarea.dataset.artifactStep}:${textarea.dataset.artifactIndex}`;
+    if (textarea.readOnly) return;
+    const key = `${textarea.dataset.artifactStep}:${textarea.dataset.artifactTurn}:${textarea.dataset.artifactIndex}`;
     clearTimeout(artifactSaveTimers.get(key));
     const state = textarea.closest('.acs-artifact-editor')?.querySelector('.acs-artifact-save-state');
     if (state) {
@@ -1571,13 +1679,56 @@ function scheduleArtifactSave(textarea) {
 function flushPendingProjectEdits() {
     if (shell) {
         for (const textarea of shell.querySelectorAll('.acs-artifact-content')) {
-            const key = `${textarea.dataset.artifactStep}:${textarea.dataset.artifactIndex}`;
+            const key = `${textarea.dataset.artifactStep}:${textarea.dataset.artifactTurn}:${textarea.dataset.artifactIndex}`;
             if (artifactSaveTimers.has(key)) saveArtifactEdit(textarea);
         }
     }
     for (const timer of artifactSaveTimers.values()) hostWindow.clearTimeout(timer);
     artifactSaveTimers.clear();
     saveProject();
+}
+
+function moveArtifactHistory(button) {
+    const details = button.closest('.acs-artifact');
+    const content = details?.querySelector('.acs-artifact-content');
+    if (!details || !content) return;
+    const current = Number(content.dataset.artifactVersion);
+    const direction = button.dataset.artifactHistory === 'previous' ? -1 : 1;
+    showArtifactVersion(details, current + direction);
+}
+
+function restoreArtifactVersion(button) {
+    const details = button.closest('.acs-artifact');
+    const group = renderedArtifactGroups[Number(details?.dataset.artifactGroup)];
+    const content = details?.querySelector('.acs-artifact-content');
+    const selectedIndex = Number(content?.dataset.artifactVersion);
+    const selected = group?.versions?.[selectedIndex];
+    const current = group?.versions?.at(-1);
+    if (!selected || !current || selected === current) return;
+
+    flushPendingProjectEdits();
+    const state = project.steps[current.step];
+    const sourceTurn = state?.turns?.[current.turnIndex];
+    const currentBlock = sourceTurn ? extractArtifactBlocks(sourceTurn.content)[current.blockIndex] : null;
+    if (!sourceTurn || !currentBlock) {
+        notify('error', '无法定位当前产物，未执行版本恢复。');
+        return;
+    }
+
+    // 复制当前完整回复并替换指定区块，既保留其他产物，也让回退本身成为一个新的历史版本。
+    const restoredResponse = `${sourceTurn.content.slice(0, currentBlock.start)}${selected.content}${sourceTurn.content.slice(currentBlock.end)}`;
+    const now = new Date().toISOString();
+    state.turns.push({
+        role: 'assistant',
+        content: restoredResponse,
+        createdAt: now,
+        artifactRestore: { tag: group.tag, fromVersion: selectedIndex + 1 },
+    });
+    state.status = 'draft';
+    state.updatedAt = now;
+    saveProject();
+    renderAll();
+    notify('success', `${group.tag} 已恢复为历史版本 ${selectedIndex + 1}，原版本仍保留。`);
 }
 
 async function copyText(text) {
@@ -1912,7 +2063,7 @@ function buildProjectContext(currentStep, preset) {
 
     for (const step of STEPS) {
         if (step.number >= currentStep.number) break;
-        const response = latestAssistantResponse(step.number);
+        const response = effectiveStepResponse(step.number);
         if (!response) continue;
         const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
         const promptResponse = responseForPrompt(response, preset);
@@ -2195,43 +2346,85 @@ function acceptCurrentStep() {
 }
 
 function extractXmlBlocks(text) {
+    const source = String(text || '');
     const blocks = [];
-    const pattern = /<([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)(?:\s[^>]*)?>[\s\S]*?<\/\1>/g;
+    const stacks = new Map();
+    const pattern = /<(\/)?([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)(?:\s[^>]*)?>/g;
     let match;
-    while ((match = pattern.exec(text)) !== null) {
-        blocks.push({
-            tag: match[1],
-            content: match[0],
-            start: match.index,
-            end: match.index + match[0].length,
-        });
+    while ((match = pattern.exec(source)) !== null) {
+        const closing = Boolean(match[1]);
+        const tag = match[2];
+        if (!closing) {
+            if (!stacks.has(tag)) stacks.set(tag, []);
+            stacks.get(tag).push(match.index);
+            continue;
+        }
+        const starts = stacks.get(tag);
+        if (!starts?.length) continue;
+        const start = starts.pop();
+        const end = match.index + match[0].length;
+        blocks.push({ tag, content: source.slice(start, end), start, end });
     }
-    return blocks;
+    // 同时保留外层与内层结构化标签，避免容器标签把真正产物遮住。
+    return blocks.sort((left, right) => left.start - right.start || left.end - right.end);
 }
 
 function extractArtifactBlocks(text) {
     return extractXmlBlocks(text).filter(block => (
         block.tag.startsWith('WORLD_')
-        || block.tag === 'NARRATIVE'
+        || block.tag.startsWith('SYS_')
+        || block.tag.startsWith('SOURCE_')
+        || block.tag.startsWith('CONTEXT_')
+        || block.tag.startsWith('NARRATIVE')
         || block.tag === 'UpdateVariable'
         || block.tag === 'initvar'
         || block.tag === 'STATUSBAR_DATA'
-        || block.tag.startsWith('SOURCE_statusbar')
-        || (block.tag.startsWith('SOURCE_main_characters_') && block.tag.endsWith('_状态'))
     ));
+}
+
+function blockMatchesMapping(block, mapping) {
+    if (mapping.tags?.includes(block.tag)) return true;
+    if (mapping.prefixes?.some(prefix => block.tag.startsWith(prefix))) return true;
+    if (mapping.suffixes?.some(suffix => block.tag.endsWith(suffix))) return true;
+    if (mapping.sourcePrefixes?.some(prefix => block.tag.startsWith(prefix) && block.tag.endsWith('_状态'))) return true;
+    return false;
 }
 
 function extractMappedContent(response, mapping) {
     if (!response) return '';
     const blocks = extractXmlBlocks(response);
-    const selected = blocks.filter(block => {
-        if (mapping.tags?.includes(block.tag)) return true;
-        if (mapping.prefixes?.some(prefix => block.tag.startsWith(prefix))) return true;
-        if (mapping.suffixes?.some(suffix => block.tag.endsWith(suffix))) return true;
-        if (mapping.sourcePrefixes?.some(prefix => block.tag.startsWith(prefix) && block.tag.endsWith('_状态'))) return true;
-        return false;
-    });
+    const selected = blocks.filter(block => blockMatchesMapping(block, mapping));
     return selected.length ? selected.map(block => block.content).join('\n\n') : response;
+}
+
+function latestMappedContent(stepNumber, mapping) {
+    const hasSelectors = Boolean(mapping.tags || mapping.prefixes || mapping.suffixes || mapping.sourcePrefixes);
+    if (!hasSelectors) return latestAssistantResponse(stepNumber);
+
+    // 同一标签只保留最后一次出现；不同标签仍按首次出现顺序组合。
+    const latestByTag = new Map();
+    for (const turn of project.steps[stepNumber]?.turns || []) {
+        if (turn.role !== 'assistant') continue;
+        for (const block of extractXmlBlocks(turn.content)) {
+            if (blockMatchesMapping(block, mapping)) latestByTag.set(block.tag, block.content);
+        }
+    }
+    return [...latestByTag.values()].join('\n\n');
+}
+
+function effectiveStepResponse(stepNumber) {
+    const latest = latestAssistantResponse(stepNumber);
+    if (!latest) return '';
+    const latestTags = new Set(extractArtifactBlocks(latest).map(block => block.tag));
+    const latestArtifacts = new Map();
+    for (const turn of project.steps[stepNumber]?.turns || []) {
+        if (turn.role !== 'assistant') continue;
+        for (const block of extractArtifactBlocks(turn.content)) latestArtifacts.set(block.tag, block.content);
+    }
+    const missing = [...latestArtifacts.entries()]
+        .filter(([tag]) => !latestTags.has(tag))
+        .map(([, content]) => content);
+    return missing.length ? `${latest}\n\n${missing.join('\n\n')}` : latest;
 }
 
 function entryDisplayName(entry) {
@@ -2245,7 +2438,7 @@ function buildOutputWorldbook(template) {
 
     for (const mapping of WORLD_ENTRY_MAPPINGS) {
         if (project.steps[mapping.step]?.status !== 'accepted') continue;
-        const response = latestAssistantResponse(mapping.step);
+        const response = latestMappedContent(mapping.step, mapping);
         if (!response) continue;
         const entry = worldbook.find(item => entryDisplayName(item).includes(mapping.needle));
         if (!entry) {
@@ -2263,7 +2456,7 @@ function buildOutputWorldbook(template) {
 }
 
 function extractOpeningMessage() {
-    const response = latestAssistantResponse(30);
+    const response = effectiveStepResponse(30);
     if (!response) return `欢迎来到「${project.name}」。`;
     const wanted = extractXmlBlocks(response).filter(block => [
         'NARRATIVE',
@@ -2373,7 +2566,7 @@ function projectDossier() {
         `- 叙事人称：${project.preferences.person}`,
     ];
     for (const step of STEPS) {
-        const response = latestAssistantResponse(step.number);
+        const response = effectiveStepResponse(step.number);
         if (!response) continue;
         const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
         lines.push('', `## Step ${step.number} · ${step.name}（${status}）`, '', response);
@@ -2669,6 +2862,16 @@ function bindStudioEvents() {
 
     const artifactList = shell.querySelector('#acs-artifact-list');
     artifactList.addEventListener('click', event => {
+        const historyButton = event.target.closest('[data-artifact-history]');
+        if (historyButton) {
+            moveArtifactHistory(historyButton);
+            return;
+        }
+        const restoreButton = event.target.closest('[data-restore-artifact]');
+        if (restoreButton) {
+            restoreArtifactVersion(restoreButton);
+            return;
+        }
         const copyButton = event.target.closest('[data-copy-artifact]');
         if (copyButton) copyArtifact(copyButton);
     });
@@ -2771,7 +2974,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${PROJECT_LIBRARY_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}`;
     document.head.append(style);
 }
 
