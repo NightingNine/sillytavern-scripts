@@ -16,7 +16,7 @@
 3. 启用脚本，然后点击“打开 A.U.T.O 创作台”。
 
 ```javascript
-import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v2/dist/character-creation/auto-card-studio/index.js';
+import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v3/dist/character-creation/auto-card-studio/index.js';
 ```
 
 ## 数据与更新
@@ -35,7 +35,7 @@ import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-s
 - 设置页下拉菜单使用与创作台一致的自定义样式，不再显示系统原生白色菜单。
 - 缺少 `A.U.T.O预设_v2.0` 时仍可查看和编辑项目，但生成按钮会禁用，也不会改用其他预设。
 - 项目内容保存在浏览器本地存储中，更新远程脚本不会主动清空项目。
-- 酒馆助手使用固定的 `auto-card-studio-bootstrap-v2` 入口，后续更新无需再修改导入地址。
+- 酒馆助手使用固定的 `auto-card-studio-bootstrap-v3` 入口。v3 直接包含手动更新与新手引导，后续更新无需再修改导入地址。
 - 更新器最多每 6 小时检查一次 GitHub 内容索引，以避免频繁请求；刷新页面时若检查间隔已到便会执行检查。
 - 不要同时启用旧的 SillyTavern 插件版，以免出现重复按钮或界面冲突。
 
