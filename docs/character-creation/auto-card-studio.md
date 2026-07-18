@@ -21,7 +21,10 @@ import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-s
 
 ## 数据与更新
 
-- 当前发布版本：`0.6.10`
+- 当前发布版本：`0.6.11`
+- 独立正则改用与 SillyTavern 正则扩展一致的宽松解析规则，同时兼容 `/表达式/flags` 和无外层分隔符的表达式；解析不再依赖酒馆助手 iframe 是否暴露严格解析器。
+- 预设导入只保留当前 `prompt_order` 实际引用的条目，不再把 JSON 的整个 prompts 资源池当成当前预设；旧版已导入的夹带条目会在刷新后自动清理。
+- “回顶 / 回底”定位按钮上移到补充输入区外边缘，不再遮挡对话区与输入区的分隔位置。
 - 酒馆助手工具栏按钮名称现直接使用 `🔨` 图标字符，不再先显示“打开 A.U.T.O 创作台”后由脚本替换；旧按钮名称会在首次加载新版时自动迁移。
 - 修复导入预设后渲染条目 token 估算时出现 `estimateTokens is not defined` 的问题。
 - 导入预设时会自动提取并同步其中由“【SoliUmbra】预设内置正则 v2”等工具写入的 `extensions.regex_scripts`；只有预设本身不含正则时，才保留此前单独导入的正则。

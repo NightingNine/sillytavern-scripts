@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.10 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.11 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -219,7 +219,7 @@ const CONVERSATION_NAV_CSS = `
   background: rgba(43, 41, 37, 0.94);
   box-shadow: 0 8px 22px rgba(10, 9, 8, 0.28);
   backdrop-filter: blur(8px);
-  transform: translateY(-50%);
+  transform: translateY(calc(-100% - 6px));
 }
 
 .acs-conversation-nav-button {
@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.10';
+const AUTO_CARD_STUDIO_VERSION = '0.6.11';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -2244,10 +2244,26 @@ async function writeResourceRecord(key, value) {
 }
 
 async function loadStudioResources() {
-    const [preset, regexes] = await Promise.all([
+    const [storedPreset, regexes] = await Promise.all([
         readResourceRecord('preset'),
         readResourceRecord('regexes'),
     ]);
+    let preset = storedPreset;
+    if (preset && !preset.importFormatVersion && Array.isArray(preset.prompts)) {
+        // v0.6.8-v0.6.10 曾把 prompts 资源池全部保存。旧记录中的有效
+        // prompt_order 条目拥有从 0 开始的连续顺序，可据此无损清除尾部夹带项。
+        const orders = new Set(preset.prompts.map(prompt => Number(prompt.order)).filter(Number.isInteger));
+        let activePromptCount = 0;
+        while (orders.has(activePromptCount)) activePromptCount += 1;
+        if (activePromptCount >= ALL_PRESET_STEP_PROMPT_IDS.size && activePromptCount < preset.prompts.length) {
+            preset = {
+                ...preset,
+                importFormatVersion: 2,
+                prompts: preset.prompts.filter(prompt => Number(prompt.order) < activePromptCount),
+            };
+            await writeResourceRecord('preset', preset);
+        }
+    }
     studioResources = {
         loaded: true,
         preset: preset && Array.isArray(preset.prompts) ? preset : null,
@@ -2259,8 +2275,11 @@ function normalizeImportedPreset(raw, fileName = '') {
     if (!raw || !Array.isArray(raw.prompts)) throw new Error('文件中没有找到 SillyTavern 预设 prompts。');
     const orders = Array.isArray(raw.prompt_order) ? raw.prompt_order.map(item => item?.order).filter(Array.isArray) : [];
     const activeOrder = orders.sort((a, b) => b.length - a.length)[0] || [];
+    if (!activeOrder.length) throw new Error('预设中没有找到当前使用的 prompt_order。');
     const orderState = new Map(activeOrder.map((item, index) => [item.identifier, { enabled: item.enabled !== false, index }]));
-    const prompts = raw.prompts.map((prompt, sourceIndex) => {
+    // prompts 是整个编辑器资源池，可能夹带其他预设遗留的未使用条目；
+    // 只有 prompt_order 实际引用的条目才属于当前导入的 A.U.T.O 预设。
+    const prompts = raw.prompts.filter(prompt => orderState.has(String(prompt.identifier || prompt.id || ''))).map((prompt, sourceIndex) => {
         const id = String(prompt.identifier || prompt.id || '');
         const state = orderState.get(id);
         return {
@@ -2268,8 +2287,8 @@ function normalizeImportedPreset(raw, fileName = '') {
             name: String(prompt.name || id || `条目 ${sourceIndex + 1}`),
             role: String(prompt.role || 'system'),
             content: String(prompt.content || ''),
-            enabled: state?.enabled ?? prompt.enabled !== false,
-            order: state?.index ?? activeOrder.length + sourceIndex,
+            enabled: state.enabled,
+            order: state.index,
         };
     }).sort((a, b) => a.order - b.order);
     const promptIds = new Set(prompts.map(prompt => prompt.id));
@@ -2278,6 +2297,7 @@ function normalizeImportedPreset(raw, fileName = '') {
     return {
         name: String(raw.name || fileName.replace(/\.json$/i, '') || 'A.U.T.O 预设'),
         importedAt: new Date().toISOString(),
+        importFormatVersion: 2,
         prompts,
         settings: {
             max_completion_tokens: Number(raw.openai_max_tokens) || undefined,
@@ -2866,12 +2886,35 @@ function shouldRunResponseRegex(script, mode) {
     return !script.markdownOnly && !script.promptOnly;
 }
 
+function compileResponseRegex(source) {
+    const input = String(source || '');
+    // 优先兼容酒馆助手提供的解析器；不可用或格式较宽松时，按
+    // SillyTavern 正则扩展的 regexFromString 规则在创作台内解析。
+    const parsed = globalThis.builtin?.parseRegexFromString?.(input);
+    if (parsed) {
+        parsed.lastIndex = 0;
+        return parsed;
+    }
+    try {
+        const match = input.match(/(\/?)([\s\S]+)\1([a-z]*)/i);
+        if (!match) return null;
+        const flags = match[3];
+        const regex = flags && !/^(?!.*?(.).*?\1)[gmixXsuUAJ]+$/.test(flags)
+            ? new RegExp(input)
+            : new RegExp(match[2], flags);
+        regex.lastIndex = 0;
+        return regex;
+    } catch {
+        return null;
+    }
+}
+
 function runSingleResponseRegex(script, text) {
     let result = String(text || '');
     for (const trimString of script.trimStrings || []) {
         result = result.replaceAll(trimString, '');
     }
-    const regex = globalThis.builtin?.parseRegexFromString?.(script.findRegex);
+    const regex = compileResponseRegex(script.findRegex);
     if (!regex) throw new Error(`无法解析正则：${script.findRegex}`);
     return result.replace(regex, script.replaceString ?? '');
 }
