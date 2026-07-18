@@ -5,13 +5,12 @@
       {
         "id": "auto-card-studio",
         "name": "A.U.T.O 角色卡创作台",
-        "version": "0.6.7",
+        "version": "0.6.8",
         "entry": "dist/character-creation/auto-card-studio/index.js",
         "documentation": "docs/character-creation/auto-card-studio.md",
         "requires": [
           "SillyTavern",
-          "TavernHelper",
-          "A.U.T.O 预设_v2.0"
+          "TavernHelper"
         ]
       }
     ]

@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.7';
+const AUTO_CARD_STUDIO_VERSION = '0.6.8';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1394,9 +1394,11 @@ const STORAGE_KEY = 'auto-card-studio:project:v1';
 const PROJECT_LIBRARY_KEY = 'auto-card-studio:projects:v1';
 const PROJECT_LIBRARY_VERSION = 1;
 const CONNECTION_STORAGE_KEY = 'auto-card-studio:connection:v1';
+const RESOURCE_DATABASE_NAME = 'auto-card-studio-resources';
+const RESOURCE_DATABASE_VERSION = 1;
+const RESOURCE_STORE_NAME = 'resources';
 const PROJECT_VERSION = 1;
 const MAX_CONTEXT_CHARS = 420000;
-const FIXED_PRESET_NAME = 'A.U.T.O预设_v2.0';
 const TEMPLATE_MACRO_SENTINELS = Object.freeze({
     char: '__AUTO_LITERAL_CHAR_MACRO_7F3A__',
     user: '__AUTO_LITERAL_USER_MACRO_7F3A__',
@@ -1446,7 +1448,6 @@ const STEP_TUTORIAL_NOTES = Object.freeze([
     ['世界书任务', '为需要新增或改写聊天世界书条目的副 AI 任务编写专用提示词。', '严格限定参考条目、事实来源、写回标签和允许修改的范围。', '一个或多个世界书任务提示词。', '副 AI 会读取它被允许看到的条目；同一条目中的条件内容可能无法再被细分隔离。'],
     ['变量任务', '为一个或一组变量编写独立更新提示词，使变量更新可以拆分运行。', '要求只依据已发生剧情、校验字段类型，并输出最小合法变更。', '一个或多个变量更新任务提示词。', '选择普通周期任务还是专用变量任务，取决于是否需要加入任务周期计算。'],
     ['交付结构', '设计最终世界书有哪些条目、每个条目包含哪些 XML，以及关键字和读取关系。', '同时考虑主 AI 与各副任务各自应该看到什么，避免所有内容常驻。', '条目规划与 AutoTask 配置。', '这是重组前的设计稿；条目边界应服务读取与维护，而不是照搬旧模板。'],
-    ['可执行重组', '把 Step 28 的设计转为程序可执行的内容块映射和条目属性方案。', '核对每个源内容块的目标、顺序、合并方式与遗漏项。', '世界书重组方案。发布时会自动执行。', '这一步不再改写设定；若存在未映射或重复内容，应先修正再发布。'],
     ['启动场景', '生成独立开局，用第一幕启动前面设计的世界、角色、变量和核心体验。', '确定时间地点、即时矛盾、玩家可知信息，并让完整变量初值与开场事实一致。', '正式开场白与变量初始值。', '它是单独开局而非通用设定；不同开局可以重复生成并保留版本。'],
 ].map(([stage, purpose, workflow, deliverable, caution]) => ({ stage, purpose, workflow, deliverable, caution })));
 
@@ -1470,11 +1471,36 @@ const STEP_HELP_CSS = `
 @media (max-width:560px) { .acs-step-help-overlay{padding:0}.acs-step-help-dialog{width:100%;max-height:100%;border-radius:0}.acs-step-help-head,.acs-step-help-body{padding-left:17px;padding-right:17px}.acs-step-title-line{gap:7px}.acs-step-help-button{width:25px;height:25px} }
 `;
 
+const RESOURCE_MANAGER_CSS = `
+.acs-resource-import-card { display:grid; gap:10px; padding:12px; border:1px solid var(--acs-line-soft); border-radius:10px; background:#35322d; }
+.acs-resource-import-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.acs-resource-import-head strong { color:var(--acs-text); font-size:11px; }
+.acs-resource-import-head small { color:var(--acs-muted); font:700 8px/1 var(--acs-mono); }
+.acs-resource-import-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.acs-resource-import-actions .acs-button { min-height:34px; padding:6px 9px; font-size:9px; }
+.acs-resource-dock-tab { position:absolute; top:48%; right:0; z-index:17; display:none; width:25px; min-height:104px; padding:9px 5px; border:1px solid rgba(217,119,87,.42); border-right:0; border-radius:9px 0 0 9px; background:#38352f; color:var(--acs-cyan); cursor:pointer; font:700 9px/1.45 var(--acs-body); writing-mode:vertical-rl; letter-spacing:.08em; box-shadow:-8px 8px 24px rgba(10,9,8,.24); }
+.acs-shell.is-settings-view .acs-resource-dock-tab { display:block; }
+.acs-resource-drawer { position:absolute; top:72px; right:0; bottom:0; z-index:18; display:grid; grid-template-rows:auto auto minmax(0,1fr); width:min(430px,88vw); border-left:1px solid rgba(217,119,87,.32); background:#2b2925; box-shadow:-24px 0 60px rgba(10,9,8,.45); transform:translateX(102%); transition:transform 220ms ease; }
+.acs-resource-drawer.is-open { transform:translateX(0); }
+.acs-resource-drawer-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:18px 19px 14px; border-bottom:1px solid var(--acs-line-soft); }
+.acs-resource-drawer-head p,.acs-resource-drawer-head h2 { margin:0; }.acs-resource-drawer-head p{color:var(--acs-cyan);font:700 8px/1 var(--acs-mono);letter-spacing:.15em}.acs-resource-drawer-head h2{margin-top:6px;font:500 21px/1.2 var(--acs-display)}
+.acs-resource-drawer-close { display:grid; width:31px; height:31px; place-items:center; border:1px solid var(--acs-line); border-radius:8px; background:transparent; color:var(--acs-muted); cursor:pointer; }
+.acs-resource-drawer-tabs { display:grid; grid-template-columns:1fr 1fr; padding:0 16px; border-bottom:1px solid var(--acs-line-soft); }
+.acs-resource-drawer-tab { padding:11px 8px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--acs-muted); cursor:pointer; font-size:10px; }.acs-resource-drawer-tab.is-active{border-color:var(--acs-cyan);color:var(--acs-text)}
+.acs-resource-list { min-height:0; overflow:auto; padding:13px 16px 20px; scrollbar-width:thin; scrollbar-color:var(--acs-line) transparent; }
+.acs-resource-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 11px; border:1px solid var(--acs-line-soft); border-radius:9px; background:#34312c; }.acs-resource-item+.acs-resource-item{margin-top:7px}
+.acs-resource-item-copy{min-width:0}.acs-resource-item-copy strong,.acs-resource-item-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.acs-resource-item-copy strong{color:var(--acs-text-soft);font-size:10px}.acs-resource-item-copy small{margin-top:4px;color:var(--acs-muted);font:700 8px/1 var(--acs-mono)}
+.acs-resource-switch { position:relative; width:34px; height:18px; }.acs-resource-switch input{position:absolute;opacity:0}.acs-resource-switch span{position:absolute;inset:0;border:1px solid var(--acs-line);border-radius:999px;background:#2b2925;cursor:pointer}.acs-resource-switch span::after{position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:50%;background:var(--acs-muted);content:"";transition:transform 140ms ease,background 140ms ease}.acs-resource-switch input:checked+span{border-color:rgba(147,189,145,.48);background:rgba(147,189,145,.1)}.acs-resource-switch input:checked+span::after{transform:translateX(16px);background:var(--acs-green)}
+.acs-resource-empty { padding:24px 12px; color:var(--acs-muted); font-size:10px; line-height:1.65; text-align:center; }
+@media(max-width:860px){.acs-resource-drawer{top:64px;width:min(420px,94vw)}.acs-resource-dock-tab{top:44%}}
+@media(prefers-reduced-motion:reduce){.acs-resource-drawer,.acs-resource-switch span::after{transition:none}}
+`;
+
 const PHASES = [
     { id: 'foundation', label: 'I · 核心与世界', range: [1, 9] },
     { id: 'narrative', label: 'II · 叙事与体验', range: [10, 15] },
     { id: 'variables', label: 'III · 变量化系统', range: [16, 21] },
-    { id: 'production', label: 'IV · 装配与交付', range: [22, 30] },
+    { id: 'production', label: 'IV · 装配与交付', range: [22, 29] },
 ];
 
 const DELIVERY_DIALOG_CSS = `
@@ -1732,7 +1758,7 @@ const TOUR_STEPS = Object.freeze([
         eyebrow: 'PROJECT 02',
         title: '一个角色卡对应一个项目',
         description: '文件夹会展开项目库。你可以同时保存多个角色卡方案，并在这里新建、切换或删除项目。',
-        points: ['项目名、母题、30 步进度和全部产物会一起切换。', '删除项目前会再次确认；导出的项目文件可用于备份和迁移。'],
+        points: ['项目名、母题、29 步进度和全部产物会一起切换。', '删除项目前会再次确认；导出的项目文件可用于备份和迁移。'],
         actionNote: '已自动展开项目库。',
     },
     {
@@ -1741,7 +1767,7 @@ const TOUR_STEPS = Object.freeze([
         scene: 'brief',
         eyebrow: 'THESIS 03',
         title: '用创作母题守住全局方向',
-        description: '这里写的是整张角色卡都要遵守的总纲，而不是某一步的临时要求。后续 30 个步骤都会读取它。',
+        description: '这里写的是整张角色卡都要遵守的总纲，而不是某一步的临时要求。后续 29 个步骤都会读取它。',
         points: ['建议写明核心体验、主角定位、审美方向与内容边界。', '母题可以随时补充；标题区的“收起概览”能为对话腾出空间。'],
         actionNote: '已自动展开创作概览。',
     },
@@ -1750,7 +1776,7 @@ const TOUR_STEPS = Object.freeze([
         placement: 'right',
         scene: 'route',
         eyebrow: 'ROUTE 04',
-        title: '30 步组成一条分层设计路线',
+        title: '29 步组成一条分层设计路线',
         description: '左侧四个折叠区用于导航，实际逻辑依次覆盖概念、实体、状态机、描写、变量、目录、输出、异步任务、重组和开局。',
         points: ['新手通常按顺序推进，确认后的最新产物会成为后续步骤的上下文。', 'Step 3 等步骤可以跳过；返工时直接返回，历史版本不会丢失。'],
         actionNote: '已自动展开第一大类并定位 Step 1。',
@@ -1803,8 +1829,8 @@ const TOUR_STEPS = Object.freeze([
         scene: 'settings',
         eyebrow: 'CONNECTION 09',
         title: '决定创作台使用哪个模型',
-        description: '默认跟随 SillyTavern 当前连接；也可以为创作台单独填写兼容接口、密钥和模型，不影响主聊天。',
-        points: ['A.U.T.O v2.0 预设始终固定，不跟随主界面临时切换。', '独立连接的密钥只保留在当前页面，刷新后需要重新填写。'],
+        description: '模型可以跟随 SillyTavern 当前连接，也可以独立配置；A.U.T.O 预设和回复正则则由创作台自行导入并独立运行。',
+        points: ['右侧停靠页签可逐项控制非步骤预设条目和正则。', '创作台不会读取 SillyTavern 的全局、预设或角色正则。'],
         actionNote: '已自动切换到“设置”页。',
     },
     {
@@ -1859,7 +1885,6 @@ const STEPS = [
     ['3a430168-7280-44ed-ab33-a0e8e4bbaf35', '世界书提示词', '为副 AI 编写读取和维护世界书内容的任务提示词。'],
     ['ca6d2266-d37f-4596-bd2b-b61ac0f7ba49', '变量提示词', '编写遵循 MVU 语法的变量更新任务提示词。'],
     ['4c520657-a4b7-460f-95cf-96c1931c4cdc', '配置与条目设计', '规划最终世界书条目、激活策略、位置与读取关系。'],
-    ['bdc8f3a0-37a3-415a-b01d-b91359b79104', '世界书重组方案', '生成可供重组器执行的条目映射与属性方案。'],
     ['0b166044-370f-428d-ba4c-35531287b921', '开场白和变量初始值', '用已完成的世界设定生成正式开场，并给出完整变量初始树。'],
 ].map(([promptId, name, goal], index) => ({
     number: index + 1,
@@ -2040,12 +2065,6 @@ const STEP_GUIDES = [
         placeholder: '例如：核心规则常驻；角色细节按名字触发；条件内容由变量控制；列出条目名、内容来源与激活方式。',
     },
     {
-        title: '生成可以执行的重组方案',
-        description: '把源世界书内容映射到最终条目，并补全重组器需要的属性。这里重在准确，不再改写设定本身。',
-        prompts: ['每个源内容块应该进入哪个目标条目？', '需要合并、拆分、追加还是保持原样？', '是否存在无法识别、重复或缺失的内容块？'],
-        placeholder: '例如：确认源条目与目标条目的映射；标记合并方式、条目属性，以及需要人工复核的异常项。',
-    },
-    {
         title: '用开场把整个世界启动起来',
         description: '调用前面完成的世界、角色、叙事和变量设计，写出可直接开始游玩的开场与完整初始状态。',
         prompts: ['玩家在第一句话前身处何时何地、面对什么？', '哪个人物、动作或事件最适合立刻建立核心体验？', '所有变量的初值是否与开场事实完全一致？'],
@@ -2053,7 +2072,9 @@ const STEP_GUIDES = [
     },
 ];
 
+const REORG_PROMPT_ID = 'bdc8f3a0-37a3-415a-b01d-b91359b79104';
 const STEP_PROMPT_IDS = new Set(STEPS.map(step => step.promptId));
+const ALL_PRESET_STEP_PROMPT_IDS = new Set([...STEP_PROMPT_IDS, REORG_PROMPT_ID]);
 const PLACEHOLDER_IDS = new Set([
     'worldInfoBefore',
     'personaDescription',
@@ -2098,8 +2119,8 @@ const STEP_ARTIFACT_RULES = Object.freeze({
     26: { prefixes: ['SYS_task_'] },
     27: { prefixes: ['SYS_task_'] },
     28: { tags: ['SOURCE_entry_plan'], fences: ['autotask_config'] },
-    29: { fences: ['reorg_plan'] },
-    30: { fences: ['opening'] },
+    29: { fences: ['opening'] },
+    30: { fences: ['reorg_plan'] },
 });
 
 // 产物分类独立于左侧四阶段：更贴合创作者查找设定的方式。
@@ -2109,7 +2130,7 @@ const ARTIFACT_CATEGORY_STEPS = Object.freeze({
     world: [4, 7, 8, 9],
     narrative: [10, 11, 12, 13, 14, 15],
     variables: [16, 17, 18, 19, 20, 21, 22],
-    production: [23, 24, 25, 26, 27, 28, 29, 30],
+    production: [23, 24, 25, 26, 27, 28, 29],
 });
 
 const ARTIFACT_EXACT_DISPLAY_NAMES = Object.freeze({
@@ -2179,9 +2200,117 @@ let artifactFilterQuery = '';
 const artifactSaveTimers = new Map();
 let environment = {
     checked: false,
-    presetNames: [],
-    presetName: project.presetName || '',
+    presetName: '',
 };
+let studioResources = { loaded: false, preset: null, regexes: [] };
+
+function openResourceDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = (hostWindow.indexedDB || indexedDB).open(RESOURCE_DATABASE_NAME, RESOURCE_DATABASE_VERSION);
+        request.onupgradeneeded = () => {
+            const database = request.result;
+            if (!database.objectStoreNames.contains(RESOURCE_STORE_NAME)) database.createObjectStore(RESOURCE_STORE_NAME);
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('资源数据库打开失败'));
+    });
+}
+
+async function readResourceRecord(key) {
+    const database = await openResourceDatabase();
+    try {
+        return await new Promise((resolve, reject) => {
+            const request = database.transaction(RESOURCE_STORE_NAME, 'readonly').objectStore(RESOURCE_STORE_NAME).get(key);
+            request.onsuccess = () => resolve(request.result ?? null);
+            request.onerror = () => reject(request.error);
+        });
+    } finally {
+        database.close();
+    }
+}
+
+async function writeResourceRecord(key, value) {
+    const database = await openResourceDatabase();
+    try {
+        await new Promise((resolve, reject) => {
+            const transaction = database.transaction(RESOURCE_STORE_NAME, 'readwrite');
+            transaction.objectStore(RESOURCE_STORE_NAME).put(value, key);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error);
+        });
+    } finally {
+        database.close();
+    }
+}
+
+async function loadStudioResources() {
+    const [preset, regexes] = await Promise.all([
+        readResourceRecord('preset'),
+        readResourceRecord('regexes'),
+    ]);
+    studioResources = {
+        loaded: true,
+        preset: preset && Array.isArray(preset.prompts) ? preset : null,
+        regexes: Array.isArray(regexes) ? regexes : [],
+    };
+}
+
+function normalizeImportedPreset(raw, fileName = '') {
+    if (!raw || !Array.isArray(raw.prompts)) throw new Error('文件中没有找到 SillyTavern 预设 prompts。');
+    const orders = Array.isArray(raw.prompt_order) ? raw.prompt_order.map(item => item?.order).filter(Array.isArray) : [];
+    const activeOrder = orders.sort((a, b) => b.length - a.length)[0] || [];
+    const orderState = new Map(activeOrder.map((item, index) => [item.identifier, { enabled: item.enabled !== false, index }]));
+    const prompts = raw.prompts.map((prompt, sourceIndex) => {
+        const id = String(prompt.identifier || prompt.id || '');
+        const state = orderState.get(id);
+        return {
+            id,
+            name: String(prompt.name || id || `条目 ${sourceIndex + 1}`),
+            role: String(prompt.role || 'system'),
+            content: String(prompt.content || ''),
+            enabled: state?.enabled ?? prompt.enabled !== false,
+            order: state?.index ?? activeOrder.length + sourceIndex,
+        };
+    }).sort((a, b) => a.order - b.order);
+    const promptIds = new Set(prompts.map(prompt => prompt.id));
+    const missing = [...ALL_PRESET_STEP_PROMPT_IDS].filter(id => !promptIds.has(id));
+    if (missing.length) throw new Error(`该文件不是完整的 A.U.T.O 预设：缺少 ${missing.length} 个步骤条目。`);
+    return {
+        name: String(raw.name || fileName.replace(/\.json$/i, '') || 'A.U.T.O 预设'),
+        importedAt: new Date().toISOString(),
+        prompts,
+        settings: {
+            max_completion_tokens: Number(raw.openai_max_tokens) || undefined,
+            temperature: Number(raw.temperature),
+            frequency_penalty: Number(raw.frequency_penalty),
+            presence_penalty: Number(raw.presence_penalty),
+            top_p: Number(raw.top_p),
+            top_k: Number(raw.top_k),
+        },
+    };
+}
+
+function normalizeImportedRegexes(raw) {
+    const source = Array.isArray(raw)
+        ? raw
+        : Array.isArray(raw?.extensions?.regex_scripts)
+            ? raw.extensions.regex_scripts
+            : Array.isArray(raw?.regex_scripts)
+                ? raw.regex_scripts
+                : (raw?.findRegex !== undefined || raw?.find_regex !== undefined)
+                    ? [raw]
+                    : [];
+    if (!Array.isArray(source) || !source.length) throw new Error('文件中没有找到可导入的正则条目。');
+    return source.map((script, index) => {
+        const normalized = normalizeResponseRegex(script);
+        return {
+            ...normalized,
+            id: normalized.id || `acs-imported-regex-${Date.now()}-${index}`,
+            scriptName: normalized.scriptName || `正则 ${index + 1}`,
+            disabled: Boolean(normalized.disabled),
+        };
+    });
+}
 
 function createDefaultProject() {
     const steps = {};
@@ -2208,6 +2337,7 @@ function createDefaultProject() {
             characterName: '',
             worldbookName: '',
         },
+        autoReorg: { response: '', plan: null, updatedAt: null },
         ui: {
             collapsedPhases: [],
             overviewCollapsed: true,
@@ -2230,7 +2360,12 @@ function normalizeProject(saved) {
         output: { ...clean.output, ...(saved.output || {}) },
         ui: { ...clean.ui, ...(saved.ui || {}) },
         steps: { ...clean.steps, ...(saved.steps || {}) },
+        autoReorg: { ...clean.autoReorg, ...(saved.autoReorg || {}) },
     };
+    // v0.6.x 的 Step30 是开场白；新版隐藏重组步骤后迁移为 Step29。
+    if (saved.steps?.[30]) normalized.steps[29] = saved.steps[30];
+    delete normalized.steps[30];
+    normalized.currentStep = Math.min(Number(normalized.currentStep) || 1, STEPS.length);
     repairProjectTemplateMacros(normalized);
     return normalized;
 }
@@ -2322,27 +2457,10 @@ function notify(type, message, title = 'A.U.T.O 角色卡创作台') {
     console[type === 'error' ? 'error' : 'info'](`[${title}] ${message}`);
 }
 
-function normalizeName(value) {
-    return String(value || '')
-        .normalize('NFKC')
-        .toLowerCase()
-        .replace(/[\s._·\-—()（）\[\]【】]/g, '');
-}
-
-function choosePresetName(names) {
-    // 创作台只认 A.U.T.O v2.0，避免项目记录或主界面选择把流程切到其他预设。
-    const exact = names.find(name => normalizeName(name) === normalizeName(FIXED_PRESET_NAME));
-    if (exact) return exact;
-    return names.find(name => {
-        const normalized = normalizeName(name);
-        return normalized.includes('auto') && normalized.includes('预设') && normalized.includes('20');
-    }) || '';
-}
-
 async function waitForTavernHelper(timeout = 12000) {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeout) {
-        if (globalThis.TavernHelper?.generateRaw && globalThis.TavernHelper?.getPreset) {
+        if (globalThis.TavernHelper?.generateRaw) {
             return globalThis.TavernHelper;
         }
         await new Promise(resolve => setTimeout(resolve, 250));
@@ -2355,6 +2473,16 @@ async function inspectEnvironment() {
     status.classList.remove('is-ready', 'is-error');
     status.querySelector('span:last-child').textContent = '正在检查创作环境';
 
+    try {
+        await loadStudioResources();
+        environment.presetName = studioResources.preset?.name || '';
+        renderEnvironmentSelectors();
+        renderResourceDrawer();
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 独立资源读取失败', error);
+        notify('error', '创作台独立资源读取失败，请检查浏览器是否允许本地数据库。');
+    }
+
     helper = await waitForTavernHelper();
     if (!helper) {
         environment.checked = true;
@@ -2362,27 +2490,25 @@ async function inspectEnvironment() {
         status.querySelector('span:last-child').textContent = '未检测到酒馆助手';
         notify('error', '请先启用“酒馆助手”扩展，然后刷新 SillyTavern。');
         renderEnvironmentSelectors();
+        renderResourceDrawer();
         renderCurrentStep();
         return;
     }
 
     try {
-        environment.presetNames = helper.getPresetNames?.() || [];
-        environment.presetName = choosePresetName(environment.presetNames);
-        project.presetName = environment.presetName;
         environment.checked = true;
-        saveProject();
         renderEnvironmentSelectors();
+        renderResourceDrawer();
         renderCurrentStep();
 
         if (!environment.presetName) {
             status.classList.add('is-error');
-            status.querySelector('span:last-child').textContent = `缺少：${FIXED_PRESET_NAME}`;
+            status.querySelector('span:last-child').textContent = '请导入 A.U.T.O 预设';
             return;
         }
 
         status.classList.add('is-ready');
-        status.querySelector('span:last-child').textContent = '预设与酒馆助手已就绪';
+        status.querySelector('span:last-child').textContent = `独立预设与正则已就绪`;
     } catch (error) {
         environment.checked = true;
         console.error('[A.U.T.O Card Studio] 环境检查失败', error);
@@ -2397,11 +2523,16 @@ function renderEnvironmentSelectors() {
     const presetName = shell.querySelector('#acs-preset-name');
     const presetReady = Boolean(environment.presetName);
     presetLock.classList.toggle('is-missing', !presetReady);
-    presetName.textContent = presetReady ? environment.presetName : `未找到 ${FIXED_PRESET_NAME}`;
-    presetLock.querySelector('.acs-fixed-resource-badge').textContent = presetReady ? '已锁定' : '需要导入';
+    presetName.textContent = presetReady ? environment.presetName : '尚未导入 A.U.T.O 预设';
+    presetLock.querySelector('.acs-fixed-resource-badge').textContent = presetReady ? '已导入' : '需要导入';
     presetLock.querySelector('.acs-fixed-resource-copy small').textContent = presetReady
-        ? '创作台始终读取这份预设，不跟随主界面当前选择。'
-        : `请先在 SillyTavern 导入 ${FIXED_PRESET_NAME}，然后重新打开创作台。`;
+        ? `创作台独立保存；已识别 ${STEPS.length} 个创作步骤。`
+        : '请在本设置页导入 SillyTavern 格式的 A.U.T.O 预设 JSON。';
+    const regexSummary = shell.querySelector('#acs-regex-summary');
+    if (regexSummary) {
+        const enabled = studioResources.regexes.filter(script => !script.disabled).length;
+        regexSummary.textContent = studioResources.regexes.length ? `${enabled} / ${studioResources.regexes.length} 已启用` : '尚未导入';
+    }
 }
 
 function fillSelect(select, items, selected, emptyLabel) {
@@ -2708,12 +2839,7 @@ function revealStepPhase(stepNumber) {
 }
 
 function getAutoPresetSafe() {
-    try {
-        return helper && environment.presetName ? helper.getPreset(environment.presetName) : null;
-    } catch (error) {
-        console.warn('[A.U.T.O Card Studio] 无法读取用于回复渲染的预设。', error);
-        return null;
-    }
+    return studioResources.preset;
 }
 
 function normalizeResponseRegex(script) {
@@ -2751,14 +2877,7 @@ function runSingleResponseRegex(script, text) {
 }
 
 function getResponseRegexes() {
-    const regexGetter = globalThis.getTavernRegexes || hostWindow.getTavernRegexes;
-    if (typeof regexGetter !== 'function') return [];
-    const globalScripts = regexGetter({ type: 'global' }) || [];
-    const characterScripts = regexGetter({ type: 'character', name: 'current' }) || [];
-    const presetScripts = environment.presetName
-        ? regexGetter({ type: 'preset', name: environment.presetName }) || []
-        : [];
-    return [...globalScripts, ...characterScripts, ...presetScripts].map(normalizeResponseRegex);
+    return studioResources.regexes.map(normalizeResponseRegex);
 }
 
 function runResponseRegexPass(text, _preset, mode) {
@@ -2775,16 +2894,7 @@ function runResponseRegexPass(text, _preset, mode) {
 }
 
 function formatResponseWithTavernRegex(rawResponse, destination, preset) {
-    const formatter = globalThis.formatAsTavernRegexedString || hostWindow.formatAsTavernRegexedString;
-    if (typeof formatter === 'function') {
-        try {
-            // 使用酒馆助手的官方处理链，自动遵循全局、角色与当前预设的正则范围设置。
-            return formatter(String(rawResponse || ''), 'ai_output', destination);
-        } catch (error) {
-            console.warn('[A.U.T.O Card Studio] 官方正则接口执行失败，改用兼容处理流程。', error);
-        }
-    }
-
+    // 仅执行创作台自行导入的正则，完全忽略 SillyTavern 的全局、预设和角色正则。
     const outputProcessed = runResponseRegexPass(rawResponse, preset, 'output');
     const fallbackMode = destination === 'display' ? 'markdown' : 'prompt';
     return runResponseRegexPass(outputProcessed, preset, fallbackMode);
@@ -2979,7 +3089,7 @@ function renderCurrentStep() {
     const step = STEPS[project.currentStep - 1];
     const guide = STEP_GUIDES[step.number - 1];
     const state = project.steps[step.number];
-    shell.querySelector('#acs-step-kicker').textContent = `PHASE ${String(step.number).padStart(2, '0')} / 30`;
+    shell.querySelector('#acs-step-kicker').textContent = `PHASE ${String(step.number).padStart(2, '0')} / ${STEPS.length}`;
     shell.querySelector('#acs-step-title').textContent = step.name;
     shell.querySelector('#acs-step-goal').textContent = step.goal;
 
@@ -3764,8 +3874,7 @@ function toggleProjectMenu(force) {
 }
 
 function syncEnvironmentToProject() {
-    environment.presetName = project.presetName || choosePresetName(environment.presetNames);
-    project.presetName = environment.presetName;
+    environment.presetName = studioResources.preset?.name || '';
 }
 
 function switchProject(projectId) {
@@ -3829,7 +3938,7 @@ function connectionDisplayName() {
 function generationDependencyMessage() {
     if (!environment.checked) return '';
     if (!helper) return '未检测到酒馆助手，暂时不能调用 AI。';
-    if (!environment.presetName) return `缺少 ${FIXED_PRESET_NAME}，请先在 SillyTavern 导入该预设，然后重新打开创作台。`;
+    if (!studioResources.preset) return '尚未向创作台导入 A.U.T.O 预设。';
     return '';
 }
 
@@ -4043,7 +4152,8 @@ function buildProjectContext(currentStep, preset, options = {}) {
         sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse.slice(0, 22000)}`);
     }
 
-    const currentTurns = project.steps[currentStep.number].turns || [];
+    // 发布时的自动重组使用隐藏的内部 Step 30，不会出现在 project.steps 中。
+    const currentTurns = project.steps[currentStep.number]?.turns || [];
     // 最新一条用户输入会通过 user_input 单独发送；这里只保留此前的修改要求，不再回传 AI 的整段说明或思考。
     const contextualTurns = currentTurns.at(-1)?.role === 'user' ? currentTurns.slice(0, -1) : currentTurns;
     const priorUserRequests = contextualTurns.filter(turn => turn.role === 'user').slice(-6);
@@ -4059,9 +4169,9 @@ function buildProjectContext(currentStep, preset, options = {}) {
         sections.push(`\n# 当前阶段正式产物（各产物最新版）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
     }
 
-    if (currentStep.number === 29) {
-        // Step29 的 blockId 必须来自与发布流程一致的结构报告，否则生成的重组方案无法自动执行。
-        sections.push(`\n# 创作台虚拟世界书结构报告（供 Step29 使用）\n${buildReorgStructureReport(options.reorgArtifacts)}`);
+    if (Array.isArray(options.reorgArtifacts)) {
+        // 自动重组的 blockId 必须来自与发布流程一致的结构报告。
+        sections.push(`\n# 创作台虚拟世界书结构报告（供发布时自动重组使用）\n${buildReorgStructureReport(options.reorgArtifacts)}`);
     }
     sections.push('\n</STUDIO_PROJECT_CONTEXT>');
 
@@ -4077,7 +4187,7 @@ function buildOrderedPrompts(preset, currentStep, options = {}) {
     const ordered = [];
     for (const prompt of preset.prompts || []) {
         if (PLACEHOLDER_IDS.has(prompt.id)) continue;
-        const isWorkflowStep = STEP_PROMPT_IDS.has(prompt.id);
+        const isWorkflowStep = ALL_PRESET_STEP_PROMPT_IDS.has(prompt.id);
         if (isWorkflowStep && prompt.id !== currentStep.promptId) continue;
         if (!isWorkflowStep && !prompt.enabled) continue;
         if (!prompt.content?.trim()) continue;
@@ -4357,8 +4467,8 @@ function prepareGeneration() {
         notify('error', '未检测到酒馆助手，无法调用 A.U.T.O 生成。');
         return null;
     }
-    if (!environment.presetName) {
-        notify('error', `没有找到 ${FIXED_PRESET_NAME}。请先在 SillyTavern 导入该预设，然后重新打开创作台。`);
+    if (!studioResources.preset) {
+        notify('error', '请先在创作台设置页导入 A.U.T.O 预设 JSON。');
         switchInspectorTab('settings');
         return null;
     }
@@ -4398,7 +4508,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
 
     let succeeded = false;
     try {
-        const preset = helper.getPreset(environment.presetName);
+        const preset = studioResources.preset;
         activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
         const result = await helper.generateRaw({
             generation_id: activeGenerationId,
@@ -4792,8 +4902,9 @@ function parseJsonArtifact(content) {
 }
 
 function latestReorgPlanResult() {
-    const group = collectArtifactGroups().find(item => item.tag === 'reorg_plan');
-    const artifact = group?.versions?.at(-1);
+    const artifact = project.autoReorg?.plan
+        ? { content: JSON.stringify(project.autoReorg.plan), response: project.autoReorg.response }
+        : null;
     if (!artifact) return { status: 'none', plan: null, artifact: null };
     try {
         const plan = parseJsonArtifact(artifact.content);
@@ -4808,7 +4919,7 @@ function latestReorgPlanResult() {
 
 function latestReorgBlockTagHints() {
     const hints = new Map();
-    const latest = latestAssistantTurn(29)?.turn?.content || '';
+    const latest = project.autoReorg?.response || '';
     for (const line of String(latest).split(/\r?\n/)) {
         const tag = line.match(/\[([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)\]/)?.[1];
         const blockIds = line.match(/uid_\d+_block_\d+/g) || [];
@@ -4981,7 +5092,7 @@ function isCompleteReorgBuild(build, selectedArtifacts) {
 }
 
 function reorgPlanFromResponse(response) {
-    const block = extractArtifactBlocks(response, 29).find(item => item.tag === 'reorg_plan');
+    const block = extractArtifactBlocks(response, 30).find(item => item.tag === 'reorg_plan');
     if (!block) throw new Error('A.U.T.O 没有返回 reorg_plan 代码块');
     const plan = parseJsonArtifact(block.content);
     if (!Array.isArray(plan?.mappings) || !plan.mappings.length) {
@@ -4991,17 +5102,14 @@ function reorgPlanFromResponse(response) {
 }
 
 async function generateDeliveryReorgPlan(selectedArtifacts) {
-    const step = STEPS.find(item => item.number === 29);
-    if (!step) throw new Error('找不到 Step29 世界书重组步骤');
-    if (!environment.presetName) {
-        throw new Error(`没有找到 ${FIXED_PRESET_NAME}，无法自动执行 Step29`);
-    }
+    const step = { number: 30, promptId: REORG_PROMPT_ID, name: '自动世界书重组' };
+    if (!studioResources.preset) throw new Error('尚未向创作台导入 A.U.T.O 预设，无法自动重组');
     const connectionError = customConnectionError();
     if (connectionError) throw new Error(connectionError.message);
-    const preset = helper.getPreset(environment.presetName);
-    if (!preset?.prompts?.length) throw new Error(`无法读取 ${environment.presetName} 的提示词`);
+    const preset = studioResources.preset;
+    if (!preset?.prompts?.length) throw new Error('导入的 A.U.T.O 预设没有可用提示词');
     const userInput = [
-        '请立即执行 Step29 世界书重组方案。',
+        '请立即执行预设中的世界书重组步骤（原 Step29）。',
         '只处理项目上下文中“创作台虚拟世界书结构报告”列出的本次已选产物。',
         '每个 blockId 都必须且只能在 mappings 中使用一次，不得遗漏，也不得自行编造 blockId。',
         '请严格输出 A.U.T.O 规定的 reorg_plan JSON 代码块。',
@@ -5018,15 +5126,11 @@ async function generateDeliveryReorgPlan(selectedArtifacts) {
         custom_api: presetGenerationOptions(preset),
     });
     const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-    const response = normalizeFinalArtifactUserMacros(rawResponse, 29);
+    const response = normalizeFinalArtifactUserMacros(rawResponse, 30);
     const planResult = reorgPlanFromResponse(response);
 
-    // 自动发布生成也进入 Step29 历史，方便用户之后查看、比较与手动调整。
-    const state = project.steps[29];
-    state.turns.push({ role: 'user', content: userInput, createdAt: new Date().toISOString(), automated: true });
-    state.turns.push({ role: 'assistant', content: response, createdAt: new Date().toISOString(), automated: true });
-    state.status = 'accepted';
-    state.updatedAt = new Date().toISOString();
+    // 重组是发布阶段的内部过程，不占用左侧创作步骤。
+    project.autoReorg = { response, plan: planResult.plan, updatedAt: new Date().toISOString() };
     saveProject();
     return planResult;
 }
@@ -5041,7 +5145,7 @@ async function ensureDeliveryReorg(selectedArtifacts) {
     let build = applyReorgPlan(selectedWorldbook, deliveryArtifacts, latestReorgPlanResult());
     if (isCompleteReorgBuild(build, selectedWorldbook)) return build;
 
-    notify('info', '正在根据本次勾选的产物自动执行 Step29 世界书重组…');
+    notify('info', '正在根据本次勾选的产物自动执行世界书重组…');
     const generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook);
     build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
     if (!isCompleteReorgBuild(build, selectedWorldbook)) {
@@ -5049,7 +5153,7 @@ async function ensureDeliveryReorg(selectedArtifacts) {
         if (!build.applied) reasons.push('方案没有生成可用映射');
         if (build.omittedArtifacts) reasons.push(`遗漏 ${build.omittedArtifacts} 项产物`);
         if (build.unresolvedBlockIds?.length) reasons.push(`${build.unresolvedBlockIds.length} 个 blockId 无法匹配`);
-        throw new Error(`Step29 自动重组校验失败：${reasons.join('，') || '未知错误'}。世界书尚未创建，请重试或先检查 Step29。`);
+        throw new Error(`自动重组校验失败：${reasons.join('，') || '未知错误'}。世界书尚未创建，请重试或检查已选产物。`);
     }
     renderAll();
     return build;
@@ -5120,7 +5224,7 @@ function extractOpeningMessageFromContent(response) {
 }
 
 function extractOpeningMessage() {
-    return extractOpeningMessageFromContent(effectiveStepArtifacts(30));
+    return extractOpeningMessageFromContent(effectiveStepArtifacts(29));
 }
 
 function defaultOutputWorldbookName() {
@@ -5141,12 +5245,12 @@ function renderDeliveryReorgStatus() {
     element.className = 'acs-delivery-reorg-status';
     if (result.status === 'ready') {
         element.classList.add('is-active');
-        element.textContent = `已有 Step29 方案：发布时会先校验 ${result.plan.mappings.length} 项映射，过期则自动重建`;
+        element.textContent = `已有自动重组方案：发布时会校验 ${result.plan.mappings.length} 项映射，过期则自动重建`;
     } else if (result.status === 'invalid') {
         element.classList.add('is-warning');
-        element.textContent = `现有 Step29 方案无法解析，确认创建时将自动重新生成：${result.error}`;
+        element.textContent = `现有自动重组方案无法解析，确认创建时将重新生成：${result.error}`;
     } else {
-        element.textContent = '尚无 Step29 方案：确认创建时将根据本次勾选的产物自动生成';
+        element.textContent = '确认创建时将根据本次勾选的产物自动生成重组方案';
     }
 }
 
@@ -5228,7 +5332,7 @@ async function confirmProjectDelivery() {
 
     const button = shell.querySelector('#acs-confirm-delivery');
     button.disabled = true;
-    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在执行 Step29';
+    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在自动重组';
     try {
         const worldbookBuild = await ensureDeliveryReorg(selectedArtifacts);
         const existingCharacters = helper.getCharacterNames?.() || [];
@@ -5240,7 +5344,7 @@ async function confirmProjectDelivery() {
         const message = (overwritten.length
             ? `将用已选择的 ${selectedArtifacts.length} 项产物更新${overwritten.join('和')}。已有头像与其他扩展数据会保留，是否继续？`
             : `将用已选择的 ${selectedArtifacts.length} 项产物创建角色卡“${characterName}”及世界书“${worldbookName}”，是否继续？`)
-            + `\n\nStep29 已通过校验，将重组为 ${worldbookBuild.entries.length} 个世界书条目。`
+            + `\n\n自动重组已通过校验，将创建 ${worldbookBuild.entries.length} 个世界书条目。`
             + (regexArtifacts.length ? '\n状态栏产物将写入角色卡局部正则“🕹️显示状态栏”。' : '');
         if (!hostWindow.confirm(message)) return;
 
@@ -5254,7 +5358,7 @@ async function confirmProjectDelivery() {
             `项目: ${project.name}`,
             `更新时间: ${new Date().toLocaleString('zh-CN')}`,
             `本次交付: ${selectedArtifacts.map(item => item.displayName).join('、')}`,
-            'Step29 自动重组: 已执行并通过完整性校验',
+            '发布自动重组: 已执行并通过完整性校验',
             '',
             project.brief,
         ].join('\n');
@@ -5284,9 +5388,9 @@ async function confirmProjectDelivery() {
         project.output.worldbookName = worldbookName;
         saveProject();
         const importedRegex = selectedArtifacts.some(item => item.target.kind.startsWith('character_regex_'));
-        shell.querySelector('#acs-publish-note').textContent = `已创建：${characterName} · ${worldbookName} · Step29 已执行${importedRegex ? ' · 局部正则已写入' : ''}`;
+        shell.querySelector('#acs-publish-note').textContent = `已创建：${characterName} · ${worldbookName} · 自动重组已执行${importedRegex ? ' · 局部正则已写入' : ''}`;
         closeDeliveryDialog();
-        notify('success', `角色卡与世界书已写入 SillyTavern，Step29 重组已执行${importedRegex ? '，局部正则已写入' : ''}。`);
+        notify('success', `角色卡与世界书已写入 SillyTavern，自动重组已执行${importedRegex ? '，局部正则已写入' : ''}。`);
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 发布失败', error);
         notify('error', `发布失败：${error?.message || error}`);
@@ -5306,8 +5410,9 @@ function projectDossier() {
         '',
         '## 创作设置',
         '',
-        `- A.U.T.O 预设：${environment.presetName || '未选择'}`,
-        '- 世界书生成方式：发布时自动校验或生成 Step29 重组方案',
+        `- 创作台独立预设：${environment.presetName || '未导入'}`,
+        `- 创作台独立正则：${studioResources.regexes.filter(script => !script.disabled).length}/${studioResources.regexes.length} 已启用`,
+        '- 世界书生成方式：发布时自动生成并校验重组方案',
         `- 创作者：${project.preferences.creatorRole}`,
         `- 输出语言：${project.preferences.language}`,
         `- 叙事人称：${project.preferences.person}`,
@@ -5435,6 +5540,8 @@ function switchInspectorTab(name) {
         panel.classList.toggle('is-active', active);
         panel.hidden = !active;
     }
+    shell.classList.toggle('is-settings-view', name === 'settings');
+    if (name !== 'settings') toggleResourceDrawer(false);
 }
 
 function toggleMobileInspector() {
@@ -5788,7 +5895,7 @@ function openStepHelp() {
     const note = STEP_TUTORIAL_NOTES[project.currentStep - 1];
     const overlay = shell.querySelector('#acs-step-help-overlay');
     if (!step || !note || !overlay) return;
-    shell.querySelector('#acs-step-help-kicker').textContent = `STEP ${String(step.number).padStart(2, '0')} / 30`;
+    shell.querySelector('#acs-step-help-kicker').textContent = `STEP ${String(step.number).padStart(2, '0')} / ${STEPS.length}`;
     shell.querySelector('#acs-step-help-title').textContent = step.name;
     shell.querySelector('#acs-step-help-stage').textContent = `${note.stage} · ${step.goal}`;
     shell.querySelector('#acs-step-help-purpose').textContent = note.purpose;
@@ -5806,6 +5913,164 @@ function closeStepHelp() {
     overlay.hidden = true;
     overlay.setAttribute('aria-hidden', 'true');
     shell.querySelector('#acs-step-help')?.focus({ preventScroll: true });
+}
+
+function installResourceManagerUI() {
+    const presetCard = shell.querySelector('#acs-preset-lock');
+    if (!presetCard || shell.querySelector('#acs-resource-drawer')) return;
+    const briefCount = shell.querySelector('#acs-brief-panel .acs-section-label span:last-child');
+    if (briefCount) briefCount.textContent = `贯穿全部 ${STEPS.length} 个阶段`;
+    const publishNote = shell.querySelector('#acs-publish-note');
+    if (publishNote) publishNote.textContent = `建议至少完成 Step 1、Step 5 与 Step ${STEPS.length} 后发布。`;
+    const generationHint = shell.querySelector('#acs-generation-hint');
+    if (generationHint) generationHint.textContent = '将使用创作台独立预设、独立正则与当前步骤';
+    presetCard.querySelector('.acs-fixed-resource-icon i').className = 'fa-solid fa-file-import';
+    presetCard.querySelector('.acs-fixed-resource-copy > span').textContent = '创作台独立预设';
+    const presetImport = document.createElement('button');
+    presetImport.id = 'acs-import-preset-button';
+    presetImport.className = 'acs-button acs-button-compact';
+    presetImport.type = 'button';
+    presetImport.innerHTML = '<i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> 导入 / 替换预设';
+    presetImport.style.gridColumn = '1 / -1';
+    presetCard.append(presetImport);
+
+    const worldbookSelect = shell.querySelector('#acs-worldbook-select');
+    if (worldbookSelect?.closest('label')) worldbookSelect.closest('label').hidden = true;
+
+    const regexCard = document.createElement('div');
+    regexCard.className = 'acs-resource-import-card';
+    regexCard.innerHTML = `
+      <div class="acs-resource-import-head"><strong>创作台独立正则</strong><small id="acs-regex-summary">尚未导入</small></div>
+      <p class="acs-security-note" style="margin:0">只处理创作台对话；不会读取 SillyTavern 的全局、预设或角色正则。</p>
+      <div class="acs-resource-import-actions">
+        <button id="acs-import-regex-button" class="acs-button acs-button-compact" type="button"><i class="fa-solid fa-file-arrow-up"></i> 导入 / 替换</button>
+        <button id="acs-open-resource-drawer-inline" class="acs-button acs-button-compact" type="button"><i class="fa-solid fa-sliders"></i> 管理条目</button>
+      </div>`;
+    presetCard.after(regexCard);
+
+    const presetInput = document.createElement('input');
+    presetInput.id = 'acs-import-preset-file';
+    presetInput.type = 'file';
+    presetInput.accept = 'application/json,.json';
+    presetInput.hidden = true;
+    const regexInput = presetInput.cloneNode();
+    regexInput.id = 'acs-import-regex-file';
+    shell.append(presetInput, regexInput);
+
+    const dock = document.createElement('button');
+    dock.id = 'acs-resource-dock-tab';
+    dock.className = 'acs-resource-dock-tab';
+    dock.type = 'button';
+    dock.textContent = '预设 / 正则';
+    dock.title = '管理独立预设与正则条目';
+    shell.querySelector('.acs-window').append(dock);
+
+    const drawer = document.createElement('aside');
+    drawer.id = 'acs-resource-drawer';
+    drawer.className = 'acs-resource-drawer';
+    drawer.setAttribute('aria-hidden', 'true');
+    drawer.innerHTML = `
+      <header class="acs-resource-drawer-head"><div><p>LOCAL RESOURCES</p><h2>预设与正则条目</h2></div><button class="acs-resource-drawer-close" type="button" data-resource-drawer-close aria-label="关闭"><i class="fa-solid fa-xmark"></i></button></header>
+      <div class="acs-resource-drawer-tabs"><button class="acs-resource-drawer-tab is-active" type="button" data-resource-kind="prompts">预设条目</button><button class="acs-resource-drawer-tab" type="button" data-resource-kind="regexes">正则条目</button></div>
+      <div id="acs-resource-list" class="acs-resource-list"></div>`;
+    shell.querySelector('.acs-window').append(drawer);
+}
+
+function toggleResourceDrawer(force) {
+    const drawer = shell.querySelector('#acs-resource-drawer');
+    const open = typeof force === 'boolean' ? force : !drawer.classList.contains('is-open');
+    drawer.classList.toggle('is-open', open);
+    drawer.setAttribute('aria-hidden', String(!open));
+    if (open) renderResourceDrawer();
+}
+
+function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-tab.is-active')?.dataset.resourceKind || 'prompts') {
+    if (!shell?.querySelector('#acs-resource-list')) return;
+    for (const tab of shell.querySelectorAll('.acs-resource-drawer-tab')) tab.classList.toggle('is-active', tab.dataset.resourceKind === kind);
+    const list = shell.querySelector('#acs-resource-list');
+    list.replaceChildren();
+    const items = kind === 'prompts'
+        ? (studioResources.preset?.prompts || []).filter(prompt => !ALL_PRESET_STEP_PROMPT_IDS.has(prompt.id) && !PLACEHOLDER_IDS.has(prompt.id) && prompt.content.trim())
+        : studioResources.regexes;
+    if (!items.length) {
+        const empty = document.createElement('div');
+        empty.className = 'acs-resource-empty';
+        empty.textContent = kind === 'prompts' ? '导入 A.U.T.O 预设后，这里会显示步骤之外的预设条目。' : '导入所需正则后，可以在这里逐项启用或停用。';
+        list.append(empty);
+        return;
+    }
+    for (const item of items) {
+        const row = document.createElement('div');
+        row.className = 'acs-resource-item';
+        const copy = document.createElement('div');
+        copy.className = 'acs-resource-item-copy';
+        const name = document.createElement('strong');
+        name.textContent = kind === 'prompts' ? item.name : item.scriptName;
+        const meta = document.createElement('small');
+        meta.textContent = kind === 'prompts' ? `${String(item.role || 'system').toUpperCase()} · ${estimateTokens(item.content)} tokens` : `${item.findRegex || '无查找表达式'}`;
+        copy.append(name, meta);
+        const label = document.createElement('label');
+        label.className = 'acs-resource-switch';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = kind === 'prompts' ? item.enabled !== false : !item.disabled;
+        input.addEventListener('change', async () => {
+            if (kind === 'prompts') {
+                item.enabled = input.checked;
+                await writeResourceRecord('preset', studioResources.preset);
+            } else {
+                item.disabled = !input.checked;
+                await writeResourceRecord('regexes', studioResources.regexes);
+                // 正则开关也立即作用于已经生成的对话预览。
+                renderCurrentStep();
+            }
+        });
+        label.append(input, document.createElement('span'));
+        row.append(copy, label);
+        list.append(row);
+    }
+}
+
+async function importPresetFile(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+        if (file.size > 20 * 1024 * 1024) throw new Error('预设文件超过 20 MB。');
+        const preset = normalizeImportedPreset(JSON.parse(await file.text()), file.name);
+        await writeResourceRecord('preset', preset);
+        studioResources.preset = preset;
+        environment.presetName = preset.name;
+        renderEnvironmentSelectors();
+        renderResourceDrawer('prompts');
+        renderCurrentStep();
+        notify('success', `已导入“${preset.name}”，识别到 ${STEPS.length} 个创作步骤。`);
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 预设导入失败', error);
+        notify('error', `预设导入失败：${error?.message || error}`);
+    } finally {
+        input.value = '';
+    }
+}
+
+async function importRegexFile(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+        if (file.size > 20 * 1024 * 1024) throw new Error('正则文件超过 20 MB。');
+        const regexes = normalizeImportedRegexes(JSON.parse(await file.text()));
+        await writeResourceRecord('regexes', regexes);
+        studioResources.regexes = regexes;
+        renderEnvironmentSelectors();
+        renderResourceDrawer('regexes');
+        notify('success', `已导入 ${regexes.length} 条独立正则。`);
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 正则导入失败', error);
+        notify('error', `正则导入失败：${error?.message || error}`);
+    } finally {
+        input.value = '';
+    }
 }
 
 function bindStudioEvents() {
@@ -5867,6 +6132,14 @@ function bindStudioEvents() {
         if (event.key === 'Escape') closeStepHelp();
     });
     shell.querySelector('[data-step-help-close]').addEventListener('click', closeStepHelp);
+    shell.querySelector('#acs-import-preset-button').addEventListener('click', () => shell.querySelector('#acs-import-preset-file').click());
+    shell.querySelector('#acs-import-regex-button').addEventListener('click', () => shell.querySelector('#acs-import-regex-file').click());
+    shell.querySelector('#acs-import-preset-file').addEventListener('change', importPresetFile);
+    shell.querySelector('#acs-import-regex-file').addEventListener('change', importRegexFile);
+    shell.querySelector('#acs-resource-dock-tab').addEventListener('click', () => toggleResourceDrawer());
+    shell.querySelector('#acs-open-resource-drawer-inline').addEventListener('click', () => toggleResourceDrawer(true));
+    shell.querySelector('[data-resource-drawer-close]').addEventListener('click', () => toggleResourceDrawer(false));
+    for (const tab of shell.querySelectorAll('.acs-resource-drawer-tab')) tab.addEventListener('click', () => renderResourceDrawer(tab.dataset.resourceKind));
     shell.querySelector('#acs-inspector-toggle').addEventListener('click', toggleMobileInspector);
     shell.querySelector('#acs-new-project').addEventListener('click', newProject);
     shell.querySelector('#acs-fetch-models').addEventListener('click', fetchCustomModels);
@@ -6032,7 +6305,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${DELIVERY_DIALOG_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}`;
     document.head.append(style);
 }
 
@@ -6055,6 +6328,7 @@ async function ensureStudioLoaded() {
     document.body.append(shell);
     updateStudioViewportScale();
     installStepHelpUI();
+    installResourceManagerUI();
     installProjectLibraryUI();
     installStudioToolsUI();
     installConversationNavigation();
