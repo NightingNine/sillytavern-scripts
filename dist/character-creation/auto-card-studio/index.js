@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.1 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.2 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -82,6 +82,122 @@ const HTML_PREVIEW_CSS = `
     .acs-html-preview-frame {
         height: 52vh;
     }
+}
+`;
+
+const MODEL_PICKER_CSS = `
+.acs-model-combobox {
+  position: relative;
+  min-width: 0;
+}
+
+.acs-model-combobox > input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+.acs-model-list-toggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--acs-line-soft);
+  border-radius: 0 8px 8px 0;
+  background: rgba(56, 53, 47, 0.72);
+  color: var(--acs-cyan);
+  cursor: pointer;
+  place-items: center;
+}
+
+.acs-model-list-toggle:hover,
+.acs-model-list-toggle:focus-visible,
+.acs-model-combobox.is-open .acs-model-list-toggle {
+  background: rgba(217, 119, 87, 0.12);
+  color: #f0d8cd;
+}
+
+.acs-model-list-toggle i {
+  font-size: 9px;
+  transition: transform 150ms ease;
+}
+
+.acs-model-combobox.is-open .acs-model-list-toggle i {
+  transform: rotate(180deg);
+}
+
+.acs-model-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 35;
+  display: grid;
+  gap: 3px;
+  max-height: min(260px, 42vh);
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid rgba(232, 224, 212, 0.2);
+  border-radius: 11px;
+  background: #302d28;
+  box-shadow: 0 16px 38px rgba(10, 9, 8, 0.46), 0 2px 8px rgba(10, 9, 8, 0.24);
+  scrollbar-color: var(--acs-line) transparent;
+  scrollbar-width: thin;
+}
+
+.acs-model-combobox.opens-up .acs-model-options {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.acs-model-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--acs-text-soft);
+  cursor: pointer;
+  font: 500 11px/1.45 var(--acs-body);
+  text-align: left;
+}
+
+.acs-model-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-model-option:hover,
+.acs-model-option:focus-visible,
+.acs-model-option.is-selected {
+  border-color: rgba(217, 119, 87, 0.28);
+  background: rgba(217, 119, 87, 0.1);
+  color: var(--acs-text);
+  outline: none;
+}
+
+.acs-model-option i {
+  color: var(--acs-cyan);
+  font-size: 9px;
+  text-align: center;
+}
+
+.acs-model-options-empty {
+  margin: 0;
+  padding: 13px 10px;
+  color: var(--acs-muted);
+  font-size: 10px;
+  line-height: 1.55;
+  text-align: center;
 }
 `;
 
@@ -1194,7 +1310,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.1';
+const AUTO_CARD_STUDIO_VERSION = '0.6.2';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1916,6 +2032,7 @@ let project = getActiveProject(projectLibrary);
 let connectionSettings = loadConnectionSettings();
 // 密钥只在当前页面的内存中保留，不能进入项目存档或导出文件。
 let customApiKey = '';
+let availableCustomModels = [];
 let shell = null;
 let helper = null;
 let launcherInstallTimer = null;
@@ -2278,6 +2395,119 @@ function installStyledSelects() {
         select.addEventListener('change', () => syncStyledSelect(select));
         syncStyledSelect(select);
     }
+}
+
+function renderCustomModelOptions(query = '') {
+    const panel = shell?.querySelector('#acs-model-options');
+    if (!panel) return;
+    const selected = shell.querySelector('#acs-custom-model').value.trim();
+    const needle = String(query || '').trim().toLocaleLowerCase();
+    const models = needle
+        ? availableCustomModels.filter(model => model.toLocaleLowerCase().includes(needle))
+        : availableCustomModels;
+    panel.replaceChildren();
+
+    if (!models.length) {
+        const empty = document.createElement('p');
+        empty.className = 'acs-model-options-empty';
+        empty.textContent = availableCustomModels.length
+            ? '没有匹配的模型，可以继续手动输入。'
+            : '还没有模型列表，请先点击“获取模型”。';
+        panel.append(empty);
+        return;
+    }
+
+    for (const model of models) {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = `acs-model-option${model === selected ? ' is-selected' : ''}`;
+        option.dataset.modelName = model;
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', String(model === selected));
+        const name = document.createElement('span');
+        name.textContent = model;
+        name.title = model;
+        const check = document.createElement('i');
+        check.className = model === selected ? 'fa-solid fa-check' : '';
+        check.setAttribute('aria-hidden', 'true');
+        option.append(name, check);
+        panel.append(option);
+    }
+}
+
+function toggleCustomModelOptions(force, query = '') {
+    const combo = shell?.querySelector('.acs-model-combobox');
+    if (!combo) return;
+    const opened = typeof force === 'boolean' ? force : !combo.classList.contains('is-open');
+    combo.classList.toggle('is-open', opened);
+    combo.querySelector('#acs-model-list-toggle').setAttribute('aria-expanded', String(opened));
+    combo.querySelector('#acs-custom-model').setAttribute('aria-expanded', String(opened));
+    const panel = combo.querySelector('#acs-model-options');
+    panel.hidden = !opened;
+    if (!opened) {
+        combo.classList.remove('opens-up');
+        return;
+    }
+
+    renderCustomModelOptions(query);
+    const bounds = combo.getBoundingClientRect();
+    const estimatedHeight = Math.min(panel.scrollHeight || 220, 260);
+    combo.classList.toggle('opens-up', hostWindow.innerHeight - bounds.bottom < estimatedHeight + 18 && bounds.top > estimatedHeight);
+}
+
+function installCustomModelPicker() {
+    const input = shell.querySelector('#acs-custom-model');
+    if (!input || input.closest('.acs-model-combobox')) return;
+    input.removeAttribute('list');
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-controls', 'acs-model-options');
+
+    const combo = document.createElement('div');
+    combo.className = 'acs-model-combobox';
+    input.before(combo);
+    combo.append(input);
+
+    const toggle = document.createElement('button');
+    toggle.id = 'acs-model-list-toggle';
+    toggle.className = 'acs-model-list-toggle';
+    toggle.type = 'button';
+    toggle.title = '展开模型列表';
+    toggle.setAttribute('aria-label', '展开模型列表');
+    toggle.setAttribute('aria-haspopup', 'listbox');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.innerHTML = '<i class="fa-solid fa-chevron-down" aria-hidden="true"></i>';
+
+    const panel = document.createElement('div');
+    panel.id = 'acs-model-options';
+    panel.className = 'acs-model-options';
+    panel.setAttribute('role', 'listbox');
+    panel.hidden = true;
+    combo.append(toggle, panel);
+    renderCustomModelOptions();
+
+    toggle.addEventListener('click', event => {
+        event.preventDefault();
+        toggleCustomModelOptions();
+    });
+    input.addEventListener('keydown', event => {
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            toggleCustomModelOptions(true, input.value);
+            panel.querySelector('.acs-model-option')?.focus();
+        } else if (event.key === 'Escape') {
+            toggleCustomModelOptions(false);
+        }
+    });
+    panel.addEventListener('click', event => {
+        const option = event.target.closest('[data-model-name]');
+        if (!option) return;
+        input.value = option.dataset.modelName;
+        input.dispatchEvent(new hostWindow.Event('input', { bubbles: true }));
+        toggleCustomModelOptions(false);
+        input.focus();
+    });
 }
 
 function renderStepRail() {
@@ -3931,9 +4161,16 @@ async function fetchCustomModels() {
             apiurl: apiUrl,
             ...(customApiKey.trim() ? { key: customApiKey.trim() } : {}),
         });
-        const uniqueModels = [...new Set((models || []).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        const uniqueModels = [...new Set((models || [])
+            .map(model => typeof model === 'string' ? model : model?.id || model?.name || '')
+            .map(model => String(model).trim())
+            .filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b));
+        availableCustomModels = uniqueModels;
         const options = shell.querySelector('#acs-custom-model-options');
         options.replaceChildren(...uniqueModels.map(model => new Option(model, model)));
+        renderCustomModelOptions();
+        if (uniqueModels.length) toggleCustomModelOptions(true);
         notify('success', uniqueModels.length
             ? `已获取 ${uniqueModels.length} 个模型，可以在“模型名称”中选择。`
             : '连接成功，但接口没有返回可选模型，请手动填写模型名称。');
@@ -5275,6 +5512,7 @@ function bindStudioEvents() {
     shell.addEventListener('click', event => {
         if (!event.target.closest('.acs-project-identity')) toggleProjectMenu(false);
         if (!event.target.closest('.acs-styled-select')) closeStyledSelects();
+        if (!event.target.closest('.acs-model-combobox')) toggleCustomModelOptions(false);
     });
 
     const artifactList = shell.querySelector('#acs-artifact-list');
@@ -5347,6 +5585,9 @@ function bindStudioEvents() {
         connectionSettings.model = event.target.value;
         saveConnectionSettings();
         shell.querySelector('#acs-connection-summary').textContent = event.target.value.trim() || '等待配置';
+        if (shell.querySelector('.acs-model-combobox')?.classList.contains('is-open')) {
+            renderCustomModelOptions(event.target.value);
+        }
         renderCurrentStep();
     });
 
@@ -5403,7 +5644,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${DELIVERY_DIALOG_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${DELIVERY_DIALOG_CSS}`;
     document.head.append(style);
 }
 
@@ -5429,6 +5670,7 @@ async function ensureStudioLoaded() {
     installStudioToolsUI();
     installDeliveryUI();
     installStyledSelects();
+    installCustomModelPicker();
     bindStudioEvents();
     renderAll();
     await inspectEnvironment();
@@ -5490,6 +5732,7 @@ function closeStudio() {
     if (artifactPanelExpanded) toggleArtifactPanel(false);
     toggleProjectMenu(false);
     closeStyledSelects();
+    toggleCustomModelOptions(false);
     shell.classList.remove('is-open');
     shell.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('acs-no-scroll');
@@ -5507,6 +5750,10 @@ function handleHostKeydown(event) {
     }
     if (shell.querySelector('.acs-styled-select.is-open')) {
         closeStyledSelects();
+        return;
+    }
+    if (shell.querySelector('.acs-model-combobox.is-open')) {
+        toggleCustomModelOptions(false);
         return;
     }
     if (!shell.querySelector('#acs-project-menu')?.hidden) {
