@@ -6,7 +6,7 @@
 
 | 分类 | 脚本 | 当前版本 | 使用说明 |
 | --- | --- | --- | --- |
-| 角色卡创作 | A.U.T.O 角色卡创作台 | 0.5.2 | [查看文档](docs/character-creation/auto-card-studio.md) |
+| 角色卡创作 | A.U.T.O 角色卡创作台 | 0.5.3 | [查看文档](docs/character-creation/auto-card-studio.md) |
 
 ## 酒馆助手导入
 
@@ -16,7 +16,7 @@
 import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v2/dist/character-creation/auto-card-studio/index.js';
 ```
 
-这个入口内置自动更新器。刷新 SillyTavern 时会检查 `catalog.json`，发现更高版本后自动加载对应的固定版本；检查或加载失败时继续运行入口内置版本。
+这个入口内置自动更新器。刷新 SillyTavern 时会检查 `catalog.json`，也可以在创作台标题栏中手动检查更新；发现更高版本后自动加载对应的固定版本，检查或加载失败时继续运行当前版本。
 
 ## 目录约定
 
