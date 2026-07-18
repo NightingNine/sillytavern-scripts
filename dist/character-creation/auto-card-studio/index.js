@@ -1,0 +1,1913 @@
+// A.U.T.O 角色卡创作台 v0.4.0 · 酒馆助手脚本核心包
+
+// 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
+const hostWindow = window.parent;
+const document = hostWindow.document;
+const localStorage = hostWindow.localStorage;
+const Option = hostWindow.Option;
+const STUDIO_HTML = "<div id=\"auto-card-studio\" class=\"acs-shell\" aria-hidden=\"true\">\n  <div class=\"acs-backdrop\" data-acs-close></div>\n\n  <section class=\"acs-window\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"acs-title\">\n    <header class=\"acs-topbar\">\n      <div class=\"acs-brand\">\n        <span class=\"acs-brand-mark\" aria-hidden=\"true\">\n          <span class=\"acs-orbit\"></span>\n          <span class=\"acs-core\"></span>\n        </span>\n        <div>\n          <p class=\"acs-eyebrow\">L3 / CHARACTER FORGE</p>\n          <h1 id=\"acs-title\">A.U.T.O 角色卡创作台</h1>\n        </div>\n      </div>\n\n      <div class=\"acs-topbar-actions\">\n        <div id=\"acs-dependency-status\" class=\"acs-dependency\" aria-live=\"polite\">\n          <span class=\"acs-status-dot\"></span>\n          <span>正在检查创作环境</span>\n        </div>\n        <button id=\"acs-save-project\" class=\"acs-icon-button\" type=\"button\" title=\"导出项目\">\n          <i class=\"fa-solid fa-box-archive\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">导出项目</span>\n        </button>\n        <button id=\"acs-inspector-toggle\" class=\"acs-icon-button\" type=\"button\" title=\"打开项目检查器\" aria-expanded=\"false\">\n          <i class=\"fa-solid fa-table-columns\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">打开项目检查器</span>\n        </button>\n        <button class=\"acs-icon-button\" type=\"button\" data-acs-close title=\"关闭创作台\">\n          <i class=\"fa-solid fa-xmark\" aria-hidden=\"true\"></i>\n          <span class=\"acs-visually-hidden\">关闭创作台</span>\n        </button>\n      </div>\n    </header>\n\n    <div class=\"acs-workspace\">\n      <aside class=\"acs-rail\" aria-label=\"创作流程\">\n        <div class=\"acs-project-identity\">\n          <div class=\"acs-project-title-field\">\n            <label for=\"acs-project-name\">当前项目</label>\n            <span class=\"acs-project-name-control\">\n              <span class=\"acs-project-title-icon\" aria-hidden=\"true\">\n                <i class=\"fa-solid fa-folder-open\"></i>\n              </span>\n              <input id=\"acs-project-name\" type=\"text\" maxlength=\"80\" placeholder=\"未命名世界\">\n              <i class=\"fa-solid fa-pen\" aria-hidden=\"true\"></i>\n            </span>\n          </div>\n          <div class=\"acs-progress-row\">\n            <span id=\"acs-progress-copy\">0 / 30</span>\n            <span id=\"acs-progress-percent\">0%</span>\n          </div>\n          <div class=\"acs-progress-track\" aria-hidden=\"true\">\n            <span id=\"acs-progress-bar\"></span>\n          </div>\n        </div>\n\n        <nav id=\"acs-step-rail\" class=\"acs-step-rail\" aria-label=\"A.U.T.O 创作步骤\"></nav>\n\n        <button id=\"acs-new-project\" class=\"acs-quiet-action\" type=\"button\">\n          <i class=\"fa-solid fa-plus\" aria-hidden=\"true\"></i>\n          新建项目\n        </button>\n      </aside>\n\n      <main class=\"acs-stage\">\n        <div class=\"acs-stage-heading\">\n          <div>\n            <p id=\"acs-step-kicker\" class=\"acs-eyebrow\">PHASE 01</p>\n            <h2 id=\"acs-step-title\">交互范式和美学纲领</h2>\n            <p id=\"acs-step-goal\" class=\"acs-step-goal\"></p>\n          </div>\n          <div class=\"acs-stage-heading-actions\">\n            <span id=\"acs-step-state\" class=\"acs-state-chip\">未开始</span>\n            <button id=\"acs-toggle-overview\" class=\"acs-overview-toggle\" type=\"button\" aria-expanded=\"true\" aria-controls=\"acs-brief-panel\" title=\"收起创作概览\">\n              <i class=\"fa-solid fa-chevron-up\" aria-hidden=\"true\"></i>\n              <span>收起概览</span>\n            </button>\n          </div>\n        </div>\n\n        <section id=\"acs-brief-panel\" class=\"acs-brief-panel\">\n          <div class=\"acs-section-label\">\n            <span>创作母题</span>\n            <span>贯穿全部 30 个阶段</span>\n          </div>\n          <textarea id=\"acs-project-brief\" rows=\"5\" placeholder=\"描述你想创作的世界、主控角色、核心体验、边界与参考作品。无需一次写完，后续可以持续补充。\"></textarea>\n        </section>\n\n        <section class=\"acs-conversation\" aria-label=\"本阶段对话\">\n          <div id=\"acs-empty-turns\" class=\"acs-empty-turns\" aria-live=\"polite\">\n            <span class=\"acs-empty-glyph\">◎</span>\n            <span id=\"acs-empty-kicker\" class=\"acs-empty-kicker\">STATION 01 · 创作航标</span>\n            <h3 id=\"acs-empty-title\">先定下这段体验的方向</h3>\n            <p id=\"acs-empty-description\">不用一次写完整套设定。先告诉 A.U.T.O 玩家要体验什么，以及这段创作必须遵守的边界。</p>\n            <div class=\"acs-guide-panel\">\n              <span>可以从这些问题开始</span>\n              <ol id=\"acs-empty-prompts\" class=\"acs-guide-prompts\"></ol>\n            </div>\n          </div>\n          <div id=\"acs-turns\" class=\"acs-turns\" aria-live=\"polite\"></div>\n        </section>\n\n        <section class=\"acs-composer\" aria-label=\"向 A.U.T.O 补充说明\">\n          <label id=\"acs-user-input-label\" for=\"acs-user-input\">本轮补充 · 交互范式和美学纲领</label>\n          <textarea id=\"acs-user-input\" rows=\"3\" placeholder=\"可以留空直接生成；也可以指出偏好、修改方向或要求 A.U.T.O 接续未完成内容。\"></textarea>\n          <div class=\"acs-composer-actions\">\n            <p id=\"acs-generation-hint\">将使用配套预设与当前步骤提示词</p>\n            <div>\n              <button id=\"acs-stop-generation\" class=\"acs-button acs-button-danger\" type=\"button\" hidden>\n                <i class=\"fa-solid fa-stop\" aria-hidden=\"true\"></i>\n                停止\n              </button>\n              <button id=\"acs-generate\" class=\"acs-button acs-button-primary\" type=\"button\">\n                <i class=\"fa-solid fa-wand-magic-sparkles\" aria-hidden=\"true\"></i>\n                生成阶段草案\n              </button>\n              <button id=\"acs-accept-step\" class=\"acs-button acs-button-confirm\" type=\"button\" disabled>\n                确认并前往下一站\n                <i class=\"fa-solid fa-arrow-right\" aria-hidden=\"true\"></i>\n              </button>\n            </div>\n          </div>\n        </section>\n      </main>\n\n      <aside class=\"acs-inspector\" aria-label=\"项目检查器\">\n        <div class=\"acs-tabs\" role=\"tablist\" aria-label=\"检查器标签\">\n          <button class=\"acs-tab is-active\" type=\"button\" role=\"tab\" aria-selected=\"true\" data-acs-tab=\"structure\">产物</button>\n          <button class=\"acs-tab\" type=\"button\" role=\"tab\" aria-selected=\"false\" data-acs-tab=\"settings\">设置</button>\n          <button class=\"acs-tab\" type=\"button\" role=\"tab\" aria-selected=\"false\" data-acs-tab=\"publish\">发布</button>\n        </div>\n\n        <div class=\"acs-tab-panel is-active\" data-acs-panel=\"structure\">\n          <div class=\"acs-inspector-intro\">\n            <div>\n              <span>结构解析</span>\n              <strong id=\"acs-block-count\">0 个区块</strong>\n            </div>\n            <button id=\"acs-expand-artifacts\" class=\"acs-inspector-action\" type=\"button\" title=\"放大产物工作区\" aria-pressed=\"false\">\n              <i class=\"fa-solid fa-expand\" aria-hidden=\"true\"></i>\n              <span>放大</span>\n            </button>\n          </div>\n          <p class=\"acs-inspector-help\">从回复中提取 `WORLD_*`、变量与开场模块。展开区块即可编辑或复制，修改会自动保存。</p>\n          <div id=\"acs-artifact-list\" class=\"acs-artifact-list\"></div>\n        </div>\n\n        <div class=\"acs-tab-panel\" data-acs-panel=\"settings\" hidden>\n          <section class=\"acs-connection-section\" aria-labelledby=\"acs-connection-title\">\n            <div class=\"acs-settings-heading\">\n              <div>\n                <span id=\"acs-connection-title\">模型连接</span>\n                <small>决定创作台从哪里调用 AI</small>\n              </div>\n              <strong id=\"acs-connection-summary\">跟随 SillyTavern</strong>\n            </div>\n\n            <div class=\"acs-connection-options\" role=\"radiogroup\" aria-label=\"模型连接方式\">\n              <label class=\"acs-connection-choice\">\n                <input type=\"radio\" name=\"acs-connection-mode\" value=\"current\" checked>\n                <span>\n                  <strong>使用当前连接</strong>\n                  <small>跟随 SillyTavern 当前选择的接口和模型</small>\n                </span>\n              </label>\n              <label class=\"acs-connection-choice\">\n                <input type=\"radio\" name=\"acs-connection-mode\" value=\"custom\">\n                <span>\n                  <strong>单独配置</strong>\n                  <small>只让这个创作台使用另一套接口和模型</small>\n                </span>\n              </label>\n            </div>\n\n            <div id=\"acs-custom-connection\" class=\"acs-custom-connection\" hidden>\n              <div class=\"acs-field-stack\">\n                <label>\n                  <span>接口类型</span>\n                  <select id=\"acs-custom-source\">\n                    <option value=\"openai\">OpenAI / OpenAI 兼容接口</option>\n                    <option value=\"openrouter\">OpenRouter</option>\n                    <option value=\"claude\">Anthropic Claude</option>\n                    <option value=\"makersuite\">Google AI Studio / Gemini</option>\n                    <option value=\"deepseek\">DeepSeek</option>\n                    <option value=\"mistralai\">Mistral AI</option>\n                    <option value=\"groq\">Groq</option>\n                    <option value=\"xai\">xAI</option>\n                    <option value=\"custom\">SillyTavern Custom</option>\n                  </select>\n                </label>\n                <label>\n                  <span>接口地址</span>\n                  <input id=\"acs-custom-api-url\" type=\"url\" inputmode=\"url\" spellcheck=\"false\" placeholder=\"例如：https://api.example.com/v1\">\n                </label>\n                <label>\n                  <span>API 密钥（可以留空）</span>\n                  <input id=\"acs-custom-api-key\" type=\"password\" autocomplete=\"off\" spellcheck=\"false\" placeholder=\"仅在当前页面中保留\">\n                </label>\n                <div class=\"acs-model-field\">\n                  <label for=\"acs-custom-model\">模型名称</label>\n                  <div class=\"acs-model-picker\">\n                    <input id=\"acs-custom-model\" type=\"text\" list=\"acs-custom-model-options\" spellcheck=\"false\" placeholder=\"例如：gpt-4.1-mini\">\n                    <button id=\"acs-fetch-models\" class=\"acs-button acs-button-compact\" type=\"button\">\n                      <i class=\"fa-solid fa-rotate\" aria-hidden=\"true\"></i>\n                      获取模型\n                    </button>\n                  </div>\n                  <datalist id=\"acs-custom-model-options\"></datalist>\n                </div>\n              </div>\n              <p class=\"acs-security-note\">\n                <i class=\"fa-solid fa-shield-halved\" aria-hidden=\"true\"></i>\n                密钥不会写入项目、导出文件或长期存储；刷新页面后需要重新填写。\n              </p>\n            </div>\n          </section>\n\n          <p class=\"acs-settings-section-label\">创作流程</p>\n          <div class=\"acs-field-stack\">\n            <div id=\"acs-preset-lock\" class=\"acs-fixed-resource\" aria-live=\"polite\">\n              <div class=\"acs-fixed-resource-icon\" aria-hidden=\"true\">\n                <i class=\"fa-solid fa-lock\"></i>\n              </div>\n              <div class=\"acs-fixed-resource-copy\">\n                <span>固定预设</span>\n                <strong id=\"acs-preset-name\">正在查找 A.U.T.O v2.0</strong>\n                <small>创作台始终读取这份预设，不跟随主界面当前选择。</small>\n              </div>\n              <span class=\"acs-fixed-resource-badge\">已锁定</span>\n            </div>\n            <label>\n              <span>世界书模板</span>\n              <select id=\"acs-worldbook-select\"></select>\n            </label>\n            <div class=\"acs-field-grid\">\n              <label>\n                <span>助手称呼</span>\n                <input id=\"acs-ai-role\" type=\"text\" value=\"A.U.T.O.\">\n              </label>\n              <label>\n                <span>创作者</span>\n                <input id=\"acs-creator-role\" type=\"text\" value=\"创作者\">\n              </label>\n              <label>\n                <span>目标字数</span>\n                <input id=\"acs-word-count\" type=\"text\" value=\"3000\">\n              </label>\n              <label>\n                <span>输出语言</span>\n                <input id=\"acs-language\" type=\"text\" value=\"中文\">\n              </label>\n            </div>\n            <label>\n              <span>叙事人称</span>\n              <select id=\"acs-person\">\n                <option value=\"第三人称\">第三人称</option>\n                <option value=\"第一人称\">第一人称</option>\n                <option value=\"第二人称\">第二人称</option>\n              </select>\n            </label>\n          </div>\n        </div>\n\n        <div class=\"acs-tab-panel\" data-acs-panel=\"publish\" hidden>\n          <div class=\"acs-publish-copy\">\n            <p class=\"acs-eyebrow\">HANDOFF</p>\n            <h3>交付到 SillyTavern</h3>\n            <p>创建一份项目世界书，并把它绑定到角色卡。若名称已存在，会在最终确认后更新。</p>\n          </div>\n          <div class=\"acs-field-stack\">\n            <label>\n              <span>角色卡名称</span>\n              <input id=\"acs-character-name\" type=\"text\" placeholder=\"例如：雾港来客\">\n            </label>\n            <label>\n              <span>世界书名称</span>\n              <input id=\"acs-output-worldbook\" type=\"text\" placeholder=\"自动跟随项目名称\">\n            </label>\n          </div>\n          <button id=\"acs-publish\" class=\"acs-button acs-button-publish\" type=\"button\">\n            <i class=\"fa-solid fa-feather-pointed\" aria-hidden=\"true\"></i>\n            创建角色卡与世界书\n          </button>\n          <button id=\"acs-download-dossier\" class=\"acs-button acs-button-secondary\" type=\"button\">\n            <i class=\"fa-solid fa-file-arrow-down\" aria-hidden=\"true\"></i>\n            下载创作档案\n          </button>\n          <p id=\"acs-publish-note\" class=\"acs-publish-note\">建议至少完成 Step 1、Step 5 与 Step 30 后发布。</p>\n        </div>\n      </aside>\n    </div>\n  </section>\n</div>\n\n<input id=\"acs-import-project\" type=\"file\" accept=\"application/json,.json\" hidden>\n";
+const STUDIO_CSS = ":root {\n  --acs-void: #1e1c19;\n  --acs-ink: #2b2925;\n  --acs-panel: #302e29;\n  --acs-panel-raised: #38352f;\n  --acs-line: #59534b;\n  --acs-line-soft: rgba(232, 224, 212, 0.12);\n  --acs-text: #e8e2d8;\n  --acs-text-soft: #d0c8bd;\n  --acs-muted: #aba297;\n  --acs-cyan: #d97757;\n  --acs-cyan-soft: rgba(217, 119, 87, 0.14);\n  --acs-violet: #b7a3cf;\n  --acs-gold: #d3ad72;\n  --acs-green: #93bd91;\n  --acs-red: #d9847f;\n  --acs-shadow: 0 28px 80px rgba(10, 9, 8, 0.42);\n  --acs-display: \"Iowan Old Style\", \"Noto Serif SC\", \"Songti SC\", Georgia, serif;\n  --acs-body: Inter, \"Noto Sans SC\", \"Microsoft YaHei\", system-ui, sans-serif;\n  --acs-mono: \"JetBrains Mono\", \"Cascadia Code\", Consolas, monospace;\n}\n\n#auto-card-studio,\n#auto-card-studio * {\n  box-sizing: border-box;\n}\n\n.acs-shell {\n  position: fixed;\n  inset: 0;\n  z-index: 10001;\n  display: none;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  isolation: isolate;\n}\n\n.acs-shell.is-open {\n  display: block;\n}\n\n.acs-shell [hidden] {\n  display: none !important;\n}\n\n.acs-backdrop {\n  position: absolute;\n  inset: 0;\n  background: rgba(17, 15, 13, 0.72);\n  backdrop-filter: blur(14px);\n}\n\n.acs-window {\n  position: absolute;\n  inset: 2.2vh 1.6vw;\n  display: grid;\n  grid-template-rows: 72px minmax(0, 1fr);\n  overflow: hidden;\n  border: 1px solid rgba(217, 202, 182, 0.22);\n  border-radius: 22px;\n  background:\n    radial-gradient(circle at 88% 8%, rgba(183, 163, 207, 0.08), transparent 27%),\n    radial-gradient(circle at 10% 84%, rgba(217, 119, 87, 0.07), transparent 25%),\n    var(--acs-ink);\n  box-shadow: var(--acs-shadow);\n}\n\n.acs-window::before {\n  position: absolute;\n  inset: 0;\n  z-index: -1;\n  background-image:\n    linear-gradient(rgba(232, 224, 212, 0.025) 1px, transparent 1px),\n    linear-gradient(90deg, rgba(232, 224, 212, 0.025) 1px, transparent 1px);\n  background-size: 42px 42px;\n  content: \"\";\n  mask-image: linear-gradient(to bottom, black, transparent 72%);\n  pointer-events: none;\n}\n\n.acs-topbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-width: 0;\n  padding: 0 22px 0 26px;\n  border-bottom: 1px solid var(--acs-line-soft);\n  background: rgba(43, 41, 37, 0.96);\n  box-shadow: 0 5px 22px rgba(10, 9, 8, 0.14);\n}\n\n.acs-brand,\n.acs-topbar-actions,\n.acs-progress-row,\n.acs-stage-heading,\n.acs-composer-actions,\n.acs-composer-actions > div,\n.acs-inspector-intro,\n.acs-artifact-head {\n  display: flex;\n  align-items: center;\n}\n\n.acs-brand {\n  min-width: 0;\n  gap: 15px;\n}\n\n.acs-brand h1 {\n  margin: 1px 0 0;\n  overflow: hidden;\n  color: var(--acs-text);\n  font-family: var(--acs-display);\n  font-size: clamp(20px, 2vw, 27px);\n  font-weight: 600;\n  letter-spacing: 0.02em;\n  line-height: 1.05;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-eyebrow {\n  margin: 0;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n  font-weight: 700;\n  letter-spacing: 0.18em;\n  line-height: 1.4;\n  text-transform: uppercase;\n}\n\n.acs-brand-mark {\n  position: relative;\n  flex: 0 0 auto;\n  width: 38px;\n  height: 38px;\n}\n\n.acs-orbit,\n.acs-orbit::before {\n  position: absolute;\n  inset: 4px;\n  border: 1px solid var(--acs-cyan);\n  border-radius: 50%;\n  content: \"\";\n  transform: rotate(-26deg) scaleY(0.52);\n}\n\n.acs-orbit::before {\n  inset: -5px;\n  border-color: rgba(183, 163, 207, 0.62);\n  transform: rotate(68deg) scaleY(0.65);\n}\n\n.acs-core {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--acs-gold);\n  box-shadow: 0 0 16px rgba(211, 173, 114, 0.34);\n  transform: translate(-50%, -50%);\n}\n\n.acs-topbar-actions {\n  gap: 10px;\n}\n\n.acs-dependency {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  max-width: 280px;\n  padding: 7px 11px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 999px;\n  color: var(--acs-muted);\n  background: rgba(56, 53, 47, 0.72);\n  font-size: 12px;\n  white-space: nowrap;\n}\n\n.acs-status-dot {\n  flex: 0 0 auto;\n  width: 7px;\n  height: 7px;\n  border-radius: 50%;\n  background: var(--acs-gold);\n  box-shadow: 0 0 10px currentColor;\n}\n\n.acs-dependency.is-ready .acs-status-dot {\n  background: var(--acs-green);\n}\n\n.acs-dependency.is-error .acs-status-dot {\n  background: var(--acs-red);\n}\n\n.acs-icon-button,\n.acs-button,\n.acs-tab,\n.acs-quiet-action,\n.acs-step-button {\n  color: inherit;\n  font: inherit;\n}\n\n.acs-icon-button {\n  display: grid;\n  width: 36px;\n  height: 36px;\n  padding: 0;\n  border: 1px solid transparent;\n  border-radius: 50%;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  place-items: center;\n}\n\n.acs-icon-button:hover,\n.acs-icon-button:focus-visible {\n  border-color: var(--acs-line);\n  background: var(--acs-panel-raised);\n  color: var(--acs-text);\n}\n\n.acs-workspace {\n  display: grid;\n  grid-template-columns: minmax(220px, 16vw) minmax(440px, 1fr) minmax(300px, 21vw);\n  min-height: 0;\n}\n\n.acs-rail,\n.acs-stage,\n.acs-inspector {\n  min-width: 0;\n  min-height: 0;\n}\n\n.acs-rail {\n  display: flex;\n  flex-direction: column;\n  border-right: 1px solid var(--acs-line-soft);\n  background: #292722;\n}\n\n.acs-project-identity {\n  padding: 16px 14px 15px;\n  border-bottom: 1px solid var(--acs-line-soft);\n}\n\n.acs-composer > label,\n.acs-field-stack label > span {\n  display: block;\n  margin-bottom: 7px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n  font-weight: 700;\n  letter-spacing: 0.1em;\n  text-transform: uppercase;\n}\n\n.acs-project-title-field {\n  display: block;\n}\n\n.acs-project-title-icon {\n  display: grid;\n  width: 32px;\n  height: 32px;\n  border: 0;\n  border-radius: 11px;\n  background: rgba(217, 119, 87, 0.13);\n  color: var(--acs-cyan);\n  font-size: 11px;\n  place-items: center;\n}\n\n.acs-project-title-field label {\n  display: block;\n  margin: 0 0 7px 4px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.11em;\n  text-transform: uppercase;\n}\n\n.acs-project-name-control {\n  display: grid;\n  grid-template-columns: 32px minmax(0, 1fr) 28px;\n  gap: 4px;\n  align-items: center;\n  min-height: 48px;\n  padding: 6px 7px;\n  border: 1px solid rgba(232, 224, 212, 0.14);\n  border-radius: 16px;\n  background: #38352f;\n  box-shadow: 0 7px 20px rgba(10, 9, 8, 0.18);\n  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;\n}\n\n.acs-project-name-control input {\n  width: 100%;\n  min-width: 0;\n  padding: 4px 8px;\n  border: 0;\n  border-radius: 10px;\n  outline: 0;\n  background: transparent !important;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  font-size: 15px;\n  font-weight: 700;\n}\n\n.acs-project-name-control > i {\n  display: grid;\n  width: 28px;\n  height: 28px;\n  border-radius: 50%;\n  background: #45413a;\n  color: var(--acs-muted);\n  font-size: 9px;\n  opacity: 0.8;\n  place-items: center;\n}\n\n.acs-project-name-control:focus-within {\n  border-color: rgba(217, 119, 87, 0.58);\n  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1), 0 9px 24px rgba(10, 9, 8, 0.22);\n  transform: translateY(-1px);\n}\n\n.acs-project-title-field:focus-within .acs-project-name-control > i {\n  color: var(--acs-cyan);\n  opacity: 1;\n}\n\n.acs-progress-row {\n  justify-content: space-between;\n  margin-top: 12px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n}\n\n.acs-progress-track {\n  height: 2px;\n  margin-top: 7px;\n  overflow: hidden;\n  background: var(--acs-line);\n}\n\n.acs-progress-track span {\n  display: block;\n  width: 0;\n  height: 100%;\n  background: linear-gradient(90deg, var(--acs-cyan), var(--acs-violet));\n  transition: width 260ms ease;\n}\n\n.acs-step-rail {\n  flex: 1 1 auto;\n  overflow: auto;\n  padding: 12px 8px 24px;\n  scrollbar-color: var(--acs-line) transparent;\n  scrollbar-width: thin;\n}\n\n.acs-phase-group + .acs-phase-group {\n  margin-top: 7px;\n}\n\n.acs-phase-toggle {\n  position: relative;\n  z-index: 1;\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto 13px;\n  gap: 7px;\n  align-items: center;\n  width: 100%;\n  min-height: 32px;\n  padding: 6px 8px 6px 12px;\n  border: 1px solid transparent;\n  border-radius: 8px;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  text-align: left;\n}\n\n.acs-phase-toggle:hover,\n.acs-phase-toggle:focus-visible {\n  border-color: var(--acs-line-soft);\n  background: rgba(56, 53, 47, 0.82);\n  color: var(--acs-text);\n}\n\n.acs-phase-title {\n  overflow: hidden;\n  letter-spacing: 0.1em;\n  text-overflow: ellipsis;\n  text-transform: uppercase;\n  white-space: nowrap;\n}\n\n.acs-phase-progress {\n  padding: 2px 5px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 999px;\n  font-size: 7px;\n  letter-spacing: 0;\n}\n\n.acs-phase-toggle i {\n  font-size: 8px;\n  text-align: center;\n  transition: transform 160ms ease;\n}\n\n.acs-phase-group.is-collapsed .acs-phase-toggle i {\n  transform: rotate(-90deg);\n}\n\n.acs-phase-steps {\n  position: relative;\n  padding: 2px 0 4px 10px;\n}\n\n.acs-phase-steps::before {\n  position: absolute;\n  top: 3px;\n  bottom: 5px;\n  left: 20px;\n  width: 1px;\n  background: linear-gradient(var(--acs-cyan), var(--acs-line) 28%, var(--acs-line) 78%, var(--acs-violet));\n  content: \"\";\n  opacity: 0.38;\n}\n\n.acs-step-button {\n  position: relative;\n  z-index: 1;\n  display: grid;\n  grid-template-columns: 27px minmax(0, 1fr) 15px;\n  align-items: center;\n  width: 100%;\n  min-height: 37px;\n  padding: 4px 7px 4px 0;\n  border: 0;\n  border-radius: 9px;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  text-align: left;\n}\n\n.acs-step-button:hover {\n  color: var(--acs-text);\n}\n\n.acs-step-button.is-active {\n  background: linear-gradient(90deg, rgba(217, 119, 87, 0.18), rgba(56, 53, 47, 0.28));\n  color: var(--acs-text);\n}\n\n.acs-step-node {\n  display: grid;\n  width: 15px;\n  height: 15px;\n  margin-left: 6px;\n  border: 1px solid var(--acs-line);\n  border-radius: 50%;\n  background: var(--acs-ink);\n  color: transparent;\n  font-size: 7px;\n  place-items: center;\n}\n\n.acs-step-button.is-active .acs-step-node {\n  border-color: var(--acs-cyan);\n  background: var(--acs-cyan);\n  box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.1), 0 4px 12px rgba(217, 119, 87, 0.22);\n}\n\n.acs-step-button.is-complete .acs-step-node {\n  border-color: var(--acs-green);\n  background: var(--acs-green);\n  color: var(--acs-void);\n}\n\n.acs-step-button.is-draft .acs-step-node {\n  border-color: var(--acs-gold);\n  background: var(--acs-gold);\n}\n\n.acs-step-name {\n  overflow: hidden;\n  font-size: 12px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-step-number {\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  text-align: right;\n}\n\n.acs-quiet-action {\n  flex: 0 0 auto;\n  margin: 8px 14px 14px;\n  padding: 10px;\n  border: 1px dashed var(--acs-line);\n  border-radius: 10px;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  font-size: 12px;\n}\n\n.acs-quiet-action:hover {\n  border-color: var(--acs-cyan);\n  color: var(--acs-text);\n}\n\n.acs-stage {\n  display: flex;\n  flex-direction: column;\n  overflow: hidden;\n  background: #302e29;\n}\n\n.acs-stage-heading {\n  flex: 0 0 auto;\n  justify-content: space-between;\n  gap: 20px;\n  padding: 25px 28px 18px;\n  transition: padding 160ms ease, background 160ms ease;\n}\n\n.acs-stage-heading h2 {\n  margin: 4px 0 5px;\n  font-family: var(--acs-display);\n  font-size: clamp(24px, 2.4vw, 34px);\n  font-weight: 500;\n  line-height: 1.18;\n}\n\n.acs-step-goal {\n  max-width: 760px;\n  margin: 0;\n  color: var(--acs-muted);\n  font-size: 13px;\n  line-height: 1.65;\n}\n\n.acs-stage-heading-actions {\n  display: flex;\n  flex: 0 0 auto;\n  align-items: center;\n  gap: 8px;\n}\n\n.acs-overview-toggle {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 7px;\n  min-height: 30px;\n  padding: 5px 10px;\n  border: 1px solid var(--acs-line);\n  border-radius: 999px;\n  outline: 0;\n  background: #38352f;\n  color: var(--acs-muted);\n  font-family: var(--acs-body);\n  font-size: 10px;\n  cursor: pointer;\n  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;\n}\n\n.acs-overview-toggle:hover,\n.acs-overview-toggle:focus-visible {\n  border-color: rgba(217, 119, 87, 0.5);\n  background: #413d36;\n  color: var(--acs-cyan);\n}\n\n.acs-overview-toggle i {\n  font-size: 9px;\n}\n\n/* 收起后保留一条“飞行条”，仍可确认当前步骤与状态。 */\n.acs-stage.is-overview-collapsed .acs-stage-heading {\n  min-height: 48px;\n  align-items: center;\n  padding: 8px 20px;\n  border-bottom: 1px solid var(--acs-line-soft);\n  background: #2b2925;\n}\n\n.acs-stage.is-overview-collapsed .acs-stage-heading > div:first-child {\n  display: grid;\n  min-width: 0;\n  grid-template-columns: auto minmax(0, 1fr);\n  align-items: center;\n  gap: 10px;\n}\n\n.acs-stage.is-overview-collapsed .acs-stage-heading .acs-eyebrow {\n  margin: 0;\n  white-space: nowrap;\n}\n\n.acs-stage.is-overview-collapsed .acs-stage-heading h2 {\n  overflow: hidden;\n  margin: 0;\n  font-family: var(--acs-body);\n  font-size: 14px;\n  font-weight: 650;\n  line-height: 1.3;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-stage.is-overview-collapsed .acs-step-goal {\n  display: none;\n}\n\n.acs-state-chip {\n  flex: 0 0 auto;\n  padding: 6px 10px;\n  border: 1px solid var(--acs-line);\n  border-radius: 999px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n}\n\n.acs-state-chip.is-draft {\n  border-color: rgba(211, 173, 114, 0.45);\n  color: var(--acs-gold);\n}\n\n.acs-state-chip.is-complete {\n  border-color: rgba(147, 189, 145, 0.45);\n  color: var(--acs-green);\n}\n\n.acs-brief-panel {\n  flex: 0 0 auto;\n  margin: 0 28px 16px;\n  padding: 14px 16px 12px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 14px;\n  background: #38352f;\n  box-shadow: 0 6px 20px rgba(10, 9, 8, 0.12);\n}\n\n.acs-section-label {\n  display: flex;\n  justify-content: space-between;\n  margin-bottom: 8px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.acs-section-label span:last-child {\n  color: var(--acs-muted);\n  letter-spacing: 0;\n  text-transform: none;\n}\n\n.acs-brief-panel textarea,\n.acs-composer textarea,\n.acs-field-stack input,\n.acs-field-stack select {\n  width: 100%;\n  border: 1px solid var(--acs-line);\n  outline: 0;\n  background: #34312c !important;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n}\n\n.acs-brief-panel textarea {\n  min-height: 72px;\n  padding: 0;\n  border: 0;\n  background: transparent !important;\n  font-size: 13px;\n  line-height: 1.65;\n  resize: vertical;\n}\n\n.acs-brief-panel textarea:focus,\n.acs-composer textarea:focus,\n.acs-field-stack input:focus,\n.acs-field-stack select:focus {\n  border-color: var(--acs-cyan);\n  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);\n}\n\n.acs-conversation {\n  position: relative;\n  flex: 1 1 auto;\n  min-height: 120px;\n  overflow: auto;\n  padding: 10px 28px 24px;\n  scrollbar-color: var(--acs-line) transparent;\n  scrollbar-width: thin;\n}\n\n.acs-empty-turns {\n  display: grid;\n  min-height: 100%;\n  padding: 30px;\n  color: var(--acs-muted);\n  text-align: center;\n  justify-items: center;\n  place-content: center;\n}\n\n.acs-empty-turns[hidden] {\n  display: none;\n}\n\n.acs-empty-glyph {\n  color: var(--acs-cyan);\n  font-size: 44px;\n  font-weight: 200;\n  line-height: 1;\n  opacity: 0.7;\n}\n\n.acs-empty-kicker {\n  margin-top: 12px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.16em;\n  text-transform: uppercase;\n}\n\n.acs-empty-turns h3 {\n  margin: 7px 0 6px;\n  color: var(--acs-text);\n  font-family: var(--acs-display);\n  font-size: 21px;\n  font-weight: 500;\n}\n\n.acs-empty-turns p {\n  max-width: 620px;\n  margin: 0;\n  font-size: 12px;\n  line-height: 1.65;\n}\n\n.acs-guide-panel {\n  width: min(100%, 680px);\n  margin-top: 22px;\n  padding-top: 14px;\n  border-top: 1px solid var(--acs-line-soft);\n  text-align: left;\n}\n\n.acs-guide-panel > span {\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.12em;\n}\n\n.acs-guide-prompts {\n  display: grid;\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  gap: 8px;\n  margin: 9px 0 0;\n  padding: 0;\n  list-style: none;\n  counter-reset: guide-prompt;\n}\n\n.acs-guide-prompts li {\n  position: relative;\n  min-height: 64px;\n  padding: 10px 10px 10px 31px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 9px;\n  background: #38352f;\n  color: var(--acs-muted);\n  font-size: 11px;\n  line-height: 1.55;\n  counter-increment: guide-prompt;\n}\n\n.acs-guide-prompts li::before {\n  position: absolute;\n  top: 10px;\n  left: 10px;\n  color: var(--acs-cyan);\n  content: counter(guide-prompt, decimal-leading-zero);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n  font-weight: 700;\n  letter-spacing: 0.05em;\n  opacity: 0.78;\n}\n\n.acs-turns {\n  display: grid;\n  gap: 14px;\n}\n\n.acs-turn {\n  position: relative;\n  max-width: min(92%, 900px);\n  padding: 14px 16px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 14px;\n  background: #38352f;\n  box-shadow: 0 6px 22px rgba(10, 9, 8, 0.12);\n}\n\n.acs-turn.is-user {\n  margin-left: auto;\n  border-color: rgba(217, 119, 87, 0.24);\n  background: #3a3330;\n}\n\n.acs-turn-label {\n  display: flex;\n  align-items: center;\n  justify-content: flex-start;\n  gap: 8px;\n  margin-bottom: 8px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.12em;\n  text-transform: uppercase;\n}\n\n.acs-turn.is-user .acs-turn-label {\n  justify-content: flex-end;\n  color: var(--acs-violet);\n  text-align: right;\n}\n\n.acs-turn-retry {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 5px;\n  min-height: 23px;\n  padding: 2px 7px;\n  border: 1px solid transparent;\n  border-radius: 999px;\n  outline: 0;\n  background: transparent;\n  color: inherit;\n  font: 600 9px/1 var(--acs-body);\n  cursor: pointer;\n  opacity: 0.68;\n  transition: border-color 140ms ease, background 140ms ease, opacity 140ms ease;\n}\n\n.acs-turn-retry:hover,\n.acs-turn-retry:focus-visible {\n  border-color: rgba(217, 119, 87, 0.32);\n  background: rgba(217, 119, 87, 0.1);\n  opacity: 1;\n}\n\n.acs-turn-retry:disabled {\n  cursor: not-allowed;\n  opacity: 0.35;\n}\n\n.acs-turn-content {\n  margin: 0;\n  overflow: visible;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  font-size: 12px;\n  line-height: 1.72;\n  word-break: break-word;\n}\n\npre.acs-turn-content {\n  white-space: pre-wrap;\n}\n\n.acs-turn-content > :first-child {\n  margin-top: 0;\n}\n\n.acs-turn-content > :last-child {\n  margin-bottom: 0;\n}\n\n.acs-turn-content details {\n  margin: 8px 0;\n  overflow: hidden;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 9px;\n  background: #2f2c28;\n}\n\n.acs-turn-content summary {\n  padding: 8px 10px;\n  cursor: pointer;\n}\n\n.acs-turn-content details:not(.acs-code-block) > :not(summary) {\n  margin-right: 10px;\n  margin-left: 10px;\n}\n\n.acs-turn-content pre {\n  position: relative;\n  max-width: 100%;\n  overflow: auto;\n  margin: 12px 0;\n  padding: 34px 12px 12px;\n  border: 1px solid rgba(232, 224, 212, 0.2);\n  border-radius: 9px;\n  background: transparent;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  font-size: 11px;\n  line-height: 1.75;\n  white-space: pre-wrap;\n}\n\n.acs-turn-content .acs-code-block {\n  margin: 12px 0;\n  overflow: hidden;\n  border: 1px solid rgba(232, 224, 212, 0.2);\n  border-radius: 9px;\n  background: transparent;\n}\n\n.acs-turn-content .acs-code-block summary {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  min-height: 30px;\n  padding: 6px 10px;\n  border: 0;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 9px;\n  font-weight: 700;\n  letter-spacing: 0.12em;\n  list-style: none;\n  text-transform: uppercase;\n  transition: background 140ms ease;\n}\n\n.acs-turn-content .acs-code-block summary::-webkit-details-marker {\n  display: none;\n}\n\n.acs-turn-content .acs-code-block summary:hover,\n.acs-turn-content .acs-code-block summary:focus-visible {\n  background: rgba(217, 119, 87, 0.08);\n}\n\n.acs-turn-content .acs-code-block[open] summary {\n  border-bottom: 1px solid var(--acs-line-soft);\n}\n\n.acs-turn-content .acs-code-block summary i {\n  font-size: 8px;\n  transform: rotate(-90deg);\n  transition: transform 150ms ease;\n}\n\n.acs-turn-content .acs-code-block[open] summary i {\n  transform: rotate(0deg);\n}\n\n.acs-turn-content .acs-code-block > pre.acs-code-content {\n  margin: 0;\n  padding: 12px;\n  border: 0;\n  border-radius: 0;\n  background: transparent;\n  color: var(--acs-text);\n  font-family: var(--acs-body);\n  font-size: 11px;\n  line-height: 1.75;\n}\n\n.acs-turn-content pre > code {\n  display: block;\n  padding: 0;\n  border: 0;\n  background: transparent !important;\n  color: inherit;\n  font: inherit;\n  white-space: pre-wrap;\n}\n\n/* AUTO 的“说明和建议”原本使用代码围栏；此处按说明文字展示，避免全局 code 样式形成逐行黑底。 */\n.acs-turn-content details:not(.acs-code-block) > pre {\n  margin: 0 10px 10px;\n  padding: 10px 2px 2px;\n  border: 0;\n  border-top: 1px solid var(--acs-line-soft);\n  border-radius: 0;\n  background: transparent;\n  color: var(--acs-muted);\n  font-family: var(--acs-body);\n  font-size: 11px;\n  line-height: 1.75;\n}\n\n.acs-turn-content details > pre > code {\n  white-space: pre-wrap;\n}\n\n.acs-composer {\n  flex: 0 0 auto;\n  padding: 15px 28px 20px;\n  border-top: 1px solid var(--acs-line-soft);\n  background: #292722;\n  box-shadow: 0 -5px 20px rgba(10, 9, 8, 0.12);\n}\n\n.acs-composer textarea {\n  min-height: 58px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  font-size: 12px;\n  line-height: 1.55;\n  resize: vertical;\n}\n\n.acs-composer-actions {\n  justify-content: space-between;\n  gap: 14px;\n  margin-top: 10px;\n}\n\n.acs-composer-actions > div {\n  gap: 8px;\n}\n\n.acs-composer-actions p {\n  margin: 0;\n  color: var(--acs-muted);\n  font-size: 10px;\n}\n\n.acs-button {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  min-height: 36px;\n  padding: 8px 13px;\n  border: 1px solid var(--acs-line);\n  border-radius: 9px;\n  background: var(--acs-panel-raised);\n  color: var(--acs-text);\n  cursor: pointer;\n  font-size: 11px;\n  font-weight: 650;\n  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;\n}\n\n.acs-button:hover:not(:disabled) {\n  border-color: var(--acs-cyan);\n  transform: translateY(-1px);\n}\n\n.acs-button:disabled {\n  cursor: not-allowed;\n  opacity: 0.38;\n}\n\n.acs-button-primary {\n  border-color: rgba(217, 119, 87, 0.46);\n  background: var(--acs-cyan-soft);\n}\n\n.acs-button-confirm {\n  border-color: rgba(147, 189, 145, 0.42);\n  background: rgba(147, 189, 145, 0.11);\n  color: #b9d7b7;\n}\n\n.acs-button-danger {\n  border-color: rgba(217, 132, 127, 0.44);\n  background: rgba(217, 132, 127, 0.11);\n  color: #edaaa6;\n}\n\n.acs-inspector {\n  position: relative;\n  overflow: auto;\n  border-left: 1px solid var(--acs-line-soft);\n  background: #292722;\n  scrollbar-color: var(--acs-line) transparent;\n  scrollbar-width: thin;\n}\n\n.acs-inspector.is-expanded {\n  position: absolute;\n  top: 72px;\n  right: 0;\n  bottom: 0;\n  z-index: 8;\n  width: min(72vw, 1080px);\n  border-left-color: rgba(217, 119, 87, 0.24);\n  background: #2b2925;\n  box-shadow: -28px 0 70px rgba(10, 9, 8, 0.34);\n}\n\n.acs-tabs {\n  position: sticky;\n  top: 0;\n  z-index: 3;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  padding: 11px 14px 0;\n  background: rgba(41, 39, 34, 0.96);\n  backdrop-filter: blur(8px);\n}\n\n.acs-tab {\n  padding: 10px 5px;\n  border: 0;\n  border-bottom: 2px solid transparent;\n  background: transparent;\n  color: var(--acs-muted);\n  cursor: pointer;\n  font-size: 11px;\n}\n\n.acs-tab.is-active {\n  border-color: var(--acs-cyan);\n  color: var(--acs-text);\n}\n\n.acs-tab-panel {\n  padding: 20px 18px 28px;\n}\n\n.acs-tab-panel[hidden] {\n  display: none;\n}\n\n#acs-inspector-toggle {\n  display: none;\n}\n\n.acs-inspector-intro {\n  justify-content: space-between;\n  gap: 12px;\n  color: var(--acs-muted);\n  font-size: 11px;\n}\n\n.acs-inspector-intro > div {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.acs-inspector-intro strong {\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n}\n\n.acs-inspector-action,\n.acs-artifact-action {\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n  min-height: 28px;\n  padding: 5px 8px;\n  border: 1px solid var(--acs-line);\n  border-radius: 7px;\n  background: rgba(56, 53, 47, 0.86);\n  color: var(--acs-muted);\n  cursor: pointer;\n  font: 600 9px/1 var(--acs-body);\n}\n\n.acs-inspector-action:hover,\n.acs-inspector-action.is-active,\n.acs-artifact-action:hover {\n  border-color: rgba(217, 119, 87, 0.5);\n  color: var(--acs-cyan);\n}\n\n.acs-inspector-help,\n.acs-publish-copy p,\n.acs-publish-note {\n  color: var(--acs-muted);\n  font-size: 11px;\n  line-height: 1.6;\n}\n\n.acs-artifact-list {\n  display: grid;\n  gap: 8px;\n  margin-top: 17px;\n}\n\n.acs-artifact-empty {\n  padding: 22px 10px;\n  border-top: 1px solid var(--acs-line-soft);\n  border-bottom: 1px solid var(--acs-line-soft);\n  color: var(--acs-muted);\n  font-size: 11px;\n  line-height: 1.6;\n  text-align: center;\n}\n\n.acs-artifact {\n  overflow: hidden;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 10px;\n  background: #35322d;\n}\n\n.acs-artifact summary {\n  padding: 10px 11px;\n  cursor: pointer;\n  list-style: none;\n}\n\n.acs-artifact summary::-webkit-details-marker {\n  display: none;\n}\n\n.acs-artifact-head {\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.acs-artifact-name {\n  overflow: hidden;\n  color: var(--acs-text);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-artifact-step {\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n}\n\n.acs-artifact-editor {\n  border-top: 1px solid var(--acs-line-soft);\n  background: #2d2b27;\n}\n\n.acs-artifact-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  padding: 8px 9px;\n  border-bottom: 1px solid var(--acs-line-soft);\n}\n\n.acs-artifact-save-state {\n  color: var(--acs-green);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n}\n\n.acs-artifact-save-state.is-pending {\n  color: var(--acs-gold);\n}\n\n.acs-artifact-editor textarea.acs-artifact-content {\n  display: block;\n  width: 100%;\n  min-height: 260px;\n  max-height: 56vh;\n  margin: 0;\n  overflow: auto;\n  padding: 15px 16px;\n  border: 0;\n  outline: 0;\n  resize: vertical;\n  background: #302e29 !important;\n  color: #f0e9df !important;\n  caret-color: var(--acs-cyan);\n  font-family: var(--acs-body);\n  font-size: 12px;\n  font-weight: 450;\n  line-height: 1.78;\n  letter-spacing: 0.008em;\n  white-space: pre-wrap;\n  word-break: break-word;\n  tab-size: 2;\n  text-rendering: optimizeLegibility;\n  -webkit-font-smoothing: antialiased;\n}\n\n.acs-artifact-editor textarea.acs-artifact-content:focus {\n  background: #34312c !important;\n  box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.72);\n}\n\n.acs-artifact-editor textarea.acs-artifact-content::selection {\n  background: rgba(217, 119, 87, 0.3);\n  color: #fff8ee;\n}\n\n.acs-inspector.is-expanded .acs-artifact-content {\n  min-height: 360px;\n  max-height: 68vh;\n  font-size: 13px;\n  line-height: 1.82;\n}\n\n.acs-field-stack {\n  display: grid;\n  gap: 15px;\n}\n\n.acs-fixed-resource {\n  display: grid;\n  grid-template-columns: 34px minmax(0, 1fr) auto;\n  gap: 10px;\n  align-items: center;\n  padding: 11px;\n  border: 1px solid rgba(217, 119, 87, 0.28);\n  border-radius: 9px;\n  background: linear-gradient(110deg, rgba(217, 119, 87, 0.1), rgba(56, 53, 47, 0.82));\n}\n\n.acs-fixed-resource-icon {\n  display: grid;\n  width: 32px;\n  height: 32px;\n  place-items: center;\n  border: 1px solid rgba(217, 119, 87, 0.24);\n  border-radius: 8px;\n  color: var(--acs-cyan);\n  background: rgba(217, 119, 87, 0.1);\n  font-size: 11px;\n}\n\n.acs-fixed-resource-copy {\n  min-width: 0;\n}\n\n.acs-fixed-resource-copy > span,\n.acs-fixed-resource-copy > strong,\n.acs-fixed-resource-copy > small {\n  display: block;\n}\n\n.acs-fixed-resource-copy > span {\n  margin-bottom: 3px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n  font-weight: 700;\n  letter-spacing: 0.1em;\n}\n\n.acs-fixed-resource-copy > strong {\n  overflow: hidden;\n  color: var(--acs-text-soft);\n  font-size: 11px;\n  font-weight: 650;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-fixed-resource-copy > small {\n  margin-top: 3px;\n  color: var(--acs-muted);\n  font-size: 9px;\n  line-height: 1.45;\n}\n\n.acs-fixed-resource-badge {\n  padding: 4px 7px;\n  border: 1px solid rgba(217, 119, 87, 0.26);\n  border-radius: 999px;\n  color: var(--acs-cyan);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n  font-weight: 700;\n  white-space: nowrap;\n}\n\n.acs-fixed-resource.is-missing {\n  border-color: rgba(217, 132, 127, 0.42);\n  background: rgba(217, 132, 127, 0.08);\n}\n\n.acs-fixed-resource.is-missing .acs-fixed-resource-icon,\n.acs-fixed-resource.is-missing .acs-fixed-resource-badge {\n  border-color: rgba(217, 132, 127, 0.3);\n  color: var(--acs-red);\n}\n\n.acs-connection-section {\n  margin-bottom: 20px;\n  padding-bottom: 18px;\n  border-bottom: 1px solid var(--acs-line-soft);\n}\n\n.acs-settings-heading {\n  display: flex;\n  align-items: flex-start;\n  justify-content: space-between;\n  gap: 12px;\n  margin-bottom: 12px;\n}\n\n.acs-settings-heading span,\n.acs-settings-section-label {\n  color: var(--acs-text);\n  font-family: var(--acs-display);\n  font-size: 15px;\n  font-weight: 500;\n}\n\n.acs-settings-heading small {\n  display: block;\n  margin-top: 3px;\n  color: var(--acs-muted);\n  font-size: 10px;\n}\n\n.acs-settings-heading > strong {\n  max-width: 48%;\n  overflow: hidden;\n  padding: 5px 8px;\n  border: 1px solid var(--acs-line);\n  border-radius: 999px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 8px;\n  font-weight: 700;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.acs-settings-heading > strong.is-custom {\n  border-color: rgba(183, 163, 207, 0.38);\n  background: rgba(183, 163, 207, 0.1);\n  color: #cbb9dd;\n}\n\n.acs-connection-options {\n  display: grid;\n  gap: 8px;\n}\n\n.acs-connection-choice {\n  display: grid;\n  grid-template-columns: 18px minmax(0, 1fr);\n  gap: 9px;\n  align-items: start;\n  padding: 10px;\n  border: 1px solid var(--acs-line-soft);\n  border-radius: 9px;\n  background: #35322d;\n  cursor: pointer;\n}\n\n.acs-connection-choice:has(input:checked) {\n  border-color: rgba(217, 119, 87, 0.4);\n  background: rgba(217, 119, 87, 0.1);\n}\n\n.acs-field-stack .acs-connection-choice input,\n.acs-connection-choice input {\n  width: 14px;\n  min-height: 14px;\n  margin: 2px 0 0;\n  accent-color: var(--acs-cyan);\n}\n\n.acs-field-stack .acs-connection-choice > span,\n.acs-connection-choice > span {\n  margin: 0;\n}\n\n.acs-connection-choice strong,\n.acs-connection-choice small {\n  display: block;\n}\n\n.acs-connection-choice strong {\n  color: var(--acs-text-soft);\n  font-size: 11px;\n  font-weight: 650;\n}\n\n.acs-connection-choice small {\n  margin-top: 3px;\n  color: var(--acs-muted);\n  font-size: 9px;\n  line-height: 1.45;\n}\n\n.acs-custom-connection {\n  margin-top: 10px;\n  padding: 13px;\n  border-left: 2px solid rgba(183, 163, 207, 0.5);\n  border-radius: 0 10px 10px 0;\n  background: rgba(183, 163, 207, 0.08);\n}\n\n.acs-custom-connection[hidden] {\n  display: none;\n}\n\n.acs-model-picker {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;\n  gap: 7px;\n}\n\n.acs-model-field > label {\n  display: block;\n  margin-bottom: 7px;\n  color: var(--acs-muted);\n  font-family: var(--acs-mono);\n  font-size: 10px;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.acs-button-compact {\n  min-height: 38px;\n  padding: 7px 10px;\n  border-color: var(--acs-line);\n  background: rgba(217, 119, 87, 0.08);\n  white-space: nowrap;\n}\n\n.acs-security-note {\n  display: flex;\n  gap: 7px;\n  margin: 12px 0 0;\n  color: var(--acs-muted);\n  font-size: 9px;\n  line-height: 1.55;\n}\n\n.acs-security-note i {\n  margin-top: 2px;\n  color: var(--acs-violet);\n}\n\n.acs-settings-section-label {\n  margin: 0 0 13px;\n}\n\n.acs-field-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 12px;\n}\n\n.acs-field-stack input,\n.acs-field-stack select {\n  min-height: 38px;\n  padding: 8px 9px;\n  border-radius: 8px;\n  font-size: 11px;\n}\n\n.acs-field-stack select {\n  padding-right: 36px;\n  appearance: none;\n  color-scheme: dark;\n  background-color: #34312c !important;\n  background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23d97757' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5'/%3E%3C/svg%3E\") !important;\n  background-repeat: no-repeat !important;\n  background-position: right 12px center !important;\n  background-size: 11px 7px !important;\n  cursor: pointer;\n  transition: border-color 140ms ease, background-color 140ms ease;\n}\n\n.acs-field-stack select:hover {\n  border-color: rgba(217, 119, 87, 0.46);\n  background-color: #3b3832 !important;\n}\n\n.acs-field-stack select option {\n  background: #2d2b27;\n  color: var(--acs-text);\n}\n\n.acs-publish-copy h3 {\n  margin: 5px 0 8px;\n  font-family: var(--acs-display);\n  font-size: 22px;\n  font-weight: 500;\n}\n\n.acs-button-publish,\n.acs-button-secondary {\n  width: 100%;\n  margin-top: 16px;\n}\n\n.acs-button-publish {\n  min-height: 43px;\n  border-color: rgba(211, 173, 114, 0.48);\n  background: rgba(211, 173, 114, 0.11);\n  color: #e2c28f;\n}\n\n.acs-button-secondary {\n  margin-top: 8px;\n  background: transparent;\n}\n\n.acs-publish-note {\n  margin-top: 14px;\n  padding-left: 10px;\n  border-left: 2px solid var(--acs-gold);\n}\n\n.acs-visually-hidden {\n  position: absolute !important;\n  width: 1px !important;\n  height: 1px !important;\n  padding: 0 !important;\n  overflow: hidden !important;\n  clip: rect(0, 0, 0, 0) !important;\n  white-space: nowrap !important;\n  border: 0 !important;\n}\n\n.acs-shell button:focus-visible,\n.acs-shell input:focus-visible,\n.acs-shell textarea:focus-visible,\n.acs-shell select:focus-visible {\n  outline: 2px solid var(--acs-cyan);\n  outline-offset: 2px;\n}\n\nbody.acs-no-scroll {\n  overflow: hidden !important;\n}\n\n@media (max-width: 1120px) {\n  .acs-window {\n    inset: 1vh 1vw;\n  }\n\n  .acs-workspace {\n    grid-template-columns: 205px minmax(0, 1fr) 280px;\n  }\n\n  .acs-composer-actions {\n    align-items: flex-end;\n  }\n\n  .acs-composer-actions p {\n    display: none;\n  }\n}\n\n@media (max-width: 860px) {\n  .acs-window {\n    inset: 0;\n    grid-template-rows: 64px minmax(0, 1fr);\n    border: 0;\n    border-radius: 0;\n  }\n\n  .acs-dependency {\n    display: none;\n  }\n\n  .acs-workspace {\n    grid-template-columns: 68px minmax(0, 1fr);\n  }\n\n  .acs-rail {\n    grid-column: 1;\n  }\n\n  .acs-stage {\n    grid-column: 2;\n  }\n\n  .acs-inspector {\n    position: absolute;\n    top: 64px;\n    right: 0;\n    bottom: 0;\n    z-index: 5;\n    display: none;\n    width: min(88vw, 340px);\n    box-shadow: -18px 0 50px rgba(0, 0, 0, 0.4);\n  }\n\n  .acs-inspector.is-mobile-open {\n    display: block;\n  }\n\n  .acs-inspector.is-expanded {\n    top: 64px;\n    width: min(96vw, 860px);\n  }\n\n  #acs-inspector-toggle {\n    display: grid;\n  }\n\n  .acs-project-identity {\n    padding: 12px 7px;\n  }\n\n  .acs-project-title-field,\n  .acs-progress-row,\n  .acs-step-name,\n  .acs-step-number,\n  .acs-quiet-action {\n    display: none;\n  }\n\n  .acs-progress-track {\n    margin: 0;\n  }\n\n  .acs-step-rail {\n    padding-right: 7px;\n    padding-left: 7px;\n  }\n\n  .acs-phase-toggle {\n    display: grid;\n    grid-template-columns: 1fr;\n    width: 39px;\n    min-height: 28px;\n    margin: 0 auto;\n    padding: 6px;\n  }\n\n  .acs-phase-title,\n  .acs-phase-progress {\n    display: none;\n  }\n\n  .acs-phase-steps {\n    padding-left: 0;\n  }\n\n  .acs-phase-steps::before {\n    left: 13px;\n  }\n\n  .acs-step-button {\n    grid-template-columns: 27px;\n    width: 39px;\n  }\n\n  .acs-stage-heading,\n  .acs-composer {\n    padding-right: 17px;\n    padding-left: 17px;\n  }\n\n  .acs-brief-panel {\n    margin-right: 17px;\n    margin-left: 17px;\n  }\n\n  .acs-conversation {\n    padding-right: 17px;\n    padding-left: 17px;\n  }\n\n  .acs-guide-prompts {\n    grid-template-columns: 1fr;\n  }\n\n  .acs-guide-prompts li {\n    min-height: 0;\n  }\n\n  .acs-composer-actions {\n    display: block;\n  }\n\n  .acs-composer-actions > div {\n    display: grid;\n    grid-template-columns: auto 1fr;\n  }\n\n  .acs-button-confirm {\n    grid-column: 1 / -1;\n  }\n}\n\n@media (max-width: 560px) {\n  .acs-brand h1 {\n    font-size: 17px;\n  }\n\n  .acs-brand .acs-eyebrow,\n  #acs-save-project {\n    display: none;\n  }\n\n  .acs-brand-mark {\n    width: 30px;\n    height: 30px;\n  }\n\n  .acs-topbar {\n    padding: 0 12px;\n  }\n\n  .acs-stage-heading {\n    align-items: flex-start;\n  }\n\n  .acs-state-chip {\n    display: none;\n  }\n\n  .acs-overview-toggle span {\n    display: none;\n  }\n\n  .acs-overview-toggle {\n    width: 30px;\n    padding: 5px;\n  }\n\n  .acs-stage-heading h2 {\n    font-size: 25px;\n  }\n\n  .acs-section-label span:last-child {\n    display: none;\n  }\n\n  .acs-turn {\n    max-width: 100%;\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .acs-progress-track span,\n  .acs-button,\n  .acs-stage-heading,\n  .acs-overview-toggle {\n    transition: none;\n  }\n}\n";
+const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
+const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
+
+
+const STORAGE_KEY = 'auto-card-studio:project:v1';
+const CONNECTION_STORAGE_KEY = 'auto-card-studio:connection:v1';
+const PROJECT_VERSION = 1;
+const MAX_CONTEXT_CHARS = 420000;
+const FIXED_PRESET_NAME = 'A.U.T.O预设_v2.0';
+
+const DEFAULT_CONNECTION_SETTINGS = Object.freeze({
+    mode: 'current',
+    source: 'openai',
+    apiUrl: '',
+    model: '',
+});
+
+const PHASES = [
+    { id: 'foundation', label: 'I · 核心与世界', range: [1, 9] },
+    { id: 'narrative', label: 'II · 叙事与体验', range: [10, 15] },
+    { id: 'variables', label: 'III · 变量化系统', range: [16, 21] },
+    { id: 'production', label: 'IV · 装配与交付', range: [22, 30] },
+];
+
+const STEPS = [
+    ['9376366e-bf35-446f-babe-438959ccc452', '交互范式和美学纲领', '确定角色卡允许什么、拒绝什么，以及这段体验最终要呈现怎样的审美质感。'],
+    ['94e2bf01-18df-4be8-9377-aa12d53e654a', '实现机制', '把核心体验拆成可被剧情持续执行的机制与切面。'],
+    ['487bb55b-da3f-4ee7-8f6d-0c23b5591bc2', '弧光识别', '识别人物、关系、组织或世界状态从起点到终点的变化轨迹。'],
+    ['ac469228-bd1a-444b-a61e-fa91bea00042', '世界蓝图', '搭建世界的身份、支柱、边界与整体运行轮廓。'],
+    ['91be7e14-4169-4e4e-b0b2-c4a32c8809f0', '主要角色', '建立主要角色的原点、画像、当前状态与核心张力。'],
+    ['e9b91a84-50d3-40db-b642-084797782bc6', '关系图谱', '定义角色与世界实体之间可推动叙事的关系网络。'],
+    ['bb9bb9b7-3b3d-4b1a-8eb9-0a23ed3d799d', '生成规则', '为可重复生成的角色、地点、事件或细节建立一致的推演规则。'],
+    ['2eeba189-911a-4d15-bf46-7caba49581b7', '具体实例', '把生成规则落成世界中真实存在的实体、地点、组织与概念。'],
+    ['835fe974-b281-4077-9ef1-10ad92ce65ba', '世界知识', '补充能让叙事有据可依、可被角色实际使用的背景知识。'],
+    ['07688972-a290-4b22-a210-3f9df7ef0781', '空间规划设计', '规划世界内容如何分层、分区，并明确各部分之间的边界。'],
+    ['430d57cf-d2ea-46ce-b83d-624ca2300f2b', '情节图谱', '把关键事件、条件、分支和回路组织为可游玩的情节网络。'],
+    ['6ab76630-4988-4dcb-a1b7-2e2635ec7a00', '维度内容', '逐一填充空间规划中的叙事维度，让它们能够独立运作。'],
+    ['c6a34ba6-393f-48c7-993d-86c47de6a35c', '叙事指南核心', '确定叙事者的身份、态度、镜头与处理场景的核心方法。'],
+    ['324e85a9-0fc1-4e8b-85cf-1ff9851f5b03', '语料库', '建立符合角色与世界气质的措辞、意象、句式和表达素材。'],
+    ['35ea2ccc-99c5-4731-a25a-0693614b07fa', '场景策略集', '为高频或关键场景准备可复用、可变化的描写策略。'],
+    ['d491235e-9535-48b0-8b15-6c0e777114fb', '数据盘点', '识别哪些叙事信息需要成为变量，哪些应继续留在静态设定中。'],
+    ['60b1db7c-30d4-4a86-bd41-67e13c5084e0', '变量体系规划', '规划变量簇、层级、职责和相互依赖关系。'],
+    ['dace3da4-0f0d-4c81-8e7c-02db7e716acf', '具体变量设计', '为每个变量定义类型、初值、范围、联动与展示引用。'],
+    ['5255b750-60b7-4f53-ad3b-3a950452d0f1', '变量汇总与路由', '汇总变量结构，并规定剧情变化如何被路由到对应变量。'],
+    ['d8f77e8f-ab6c-486f-a422-c136d7d5cb95', '条件显示配置', '定义哪些变量状态会触发哪些世界书内容。'],
+    ['db7539c5-8920-4899-bbdc-9c0d910beb43', '条件展示内容', '编写由变量条件唤起的具体知识、场景与实例内容。'],
+    ['5472b214-c260-4ce8-97c2-7e9831cce93d', '世界根目录', '建立运行时索引，让模型能找到庞大世界书中的正确内容。'],
+    ['d6d362c4-5556-4bd0-a08c-067afb3424b1', '设计状态栏', '设计与体验一致的状态栏界面、数据区和正则捕获方式。'],
+    ['268aa2ec-491c-4232-827d-8dbe291d4917', '设计回复格式', '规定正文、摘要、选项、变量更新与状态栏的最终输出结构。'],
+    ['829abf27-660e-4df4-8925-d7041bfd2868', '副AI任务清单', '识别适合交给副 AI 独立执行的任务与触发时机。'],
+    ['3a430168-7280-44ed-ab33-a0e8e4bbaf35', '世界书提示词', '为副 AI 编写读取和维护世界书内容的任务提示词。'],
+    ['ca6d2266-d37f-4596-bd2b-b61ac0f7ba49', '变量提示词', '编写遵循 MVU 语法的变量更新任务提示词。'],
+    ['4c520657-a4b7-460f-95cf-96c1931c4cdc', '配置与条目设计', '规划最终世界书条目、激活策略、位置与读取关系。'],
+    ['bdc8f3a0-37a3-415a-b01d-b91359b79104', '世界书重组方案', '生成可供重组器执行的条目映射与属性方案。'],
+    ['0b166044-370f-428d-ba4c-35531287b921', '开场白和变量初始值', '用已完成的世界设定生成正式开场，并给出完整变量初始树。'],
+].map(([promptId, name, goal], index) => ({
+    number: index + 1,
+    promptId,
+    name,
+    goal,
+    phase: PHASES.find(phase => index + 1 >= phase.range[0] && index + 1 <= phase.range[1]).id,
+}));
+
+// 每一站都给出不同的创作入口，避免初次使用者只看到抽象的阶段名称。
+const STEP_GUIDES = [
+    {
+        title: '先定下这段体验的方向',
+        description: '不用一次写完整套设定。先告诉 A.U.T.O 玩家要体验什么，以及这段创作必须遵守的边界。',
+        prompts: ['玩家将以什么身份进入故事，主要能做什么？', '你最希望反复出现的是哪种情绪或体验？', '哪些内容、走向或表现方式明确不要出现？'],
+        placeholder: '例如：玩家扮演刚抵达边境城的调查员，体验重点是未知探索与同伴信任；不要替玩家决定关键选择。',
+    },
+    {
+        title: '找出体验持续发生的办法',
+        description: '把上一站的体验目标拆成可以在剧情里反复运作的机制。先描述“怎样发生”，不必急着写技术格式。',
+        prompts: ['什么事件会不断把玩家推向核心体验？', '角色、地点或资源分别承担什么作用？', '怎样避免体验只在开场出现一次就消失？'],
+        placeholder: '例如：线索调查推动探索；同伴信任决定能否获得真实情报；每次选择都会改变阵营态度。',
+    },
+    {
+        title: '画出变化发生的轨迹',
+        description: '这一站关注“从什么状态走向什么状态”。人物、关系、组织和世界都可以拥有自己的变化弧线。',
+        prompts: ['故事开始时，最重要的人或关系处于什么状态？', '什么事件会让它第一次发生明显变化？', '你希望它最终可能走向哪些不同结果？'],
+        placeholder: '例如：主角起初拒绝依赖任何人；共同危机迫使其合作；最终可能学会信任，也可能彻底走向孤立。',
+    },
+    {
+        title: '搭起世界能够运行的骨架',
+        description: '先确定世界最重要的事实、力量和边界。细节可以以后补，这里只需要让世界站得住。',
+        prompts: ['这是怎样的时代、地域或社会？', '哪些力量、规则或矛盾支配着日常生活？', '世界之外或设定边界之外，有什么不需要展开？'],
+        placeholder: '例如：被永久风暴包围的群岛文明；航路由三家公会控制；魔法只能改变记忆，不能创造物质。',
+    },
+    {
+        title: '让主要角色真正站到台前',
+        description: '从角色的过去、现在和内在矛盾入手。姓名可以暂定，但请尽量说明他为什么值得被故事持续关注。',
+        prompts: ['角色是谁，目前处在什么困境或位置？', '他最想得到什么，又最害怕失去什么？', '他与玩家是什么关系，表面和真实态度有何不同？'],
+        placeholder: '例如：姓名、身份、外貌印象、关键过去、当前目标、秘密，以及与玩家的初始关系。',
+    },
+    {
+        title: '把角色连接成会拉扯的网络',
+        description: '关系不是通讯录。重点写清彼此如何影响选择，以及哪些关系会主动制造剧情。',
+        prompts: ['谁信任、依赖、利用或敌视谁？', '哪些关系存在隐瞒、误解或单方面期待？', '一段关系变化时，会牵动哪些其他角色？'],
+        placeholder: '例如：A 表面效忠 B，实际在保护 C；B 依赖 A 的能力却怀疑其动机；玩家可能打破这一平衡。',
+    },
+    {
+        title: '规定新内容怎样被生成',
+        description: '为尚未逐一写出的角色、地点、事件和细节建立共同规律，让临场生成仍然属于同一个世界。',
+        prompts: ['需要反复生成的是人物、地点、事件还是物品？', '它们必须共享哪些特征和因果规律？', '有哪些反例看似合理，却不应该被生成？'],
+        placeholder: '例如：每座港口都由一种稀缺资源塑造；当地冲突必须同时涉及航路、阶层与风暴风险。',
+    },
+    {
+        title: '用具体实例检验规则',
+        description: '把生成规则落成几件真实存在的事物。实例既是世界内容，也是检查规则是否足够清楚的样本。',
+        prompts: ['最值得先落地的角色、地点或组织是什么？', '它如何体现上一站的生成规律？', '它能立即引出什么事件或互动？'],
+        placeholder: '例如：列出一个代表地点、一个当地组织和一个正在发生的事件，并说明它们之间的联系。',
+    },
+    {
+        title: '补齐角色真正用得上的知识',
+        description: '世界知识不是百科全书。优先补充会影响判断、对话和行动的事实与常识。',
+        prompts: ['当地人默认知道、外来者却不知道什么？', '哪些历史、制度或禁忌会改变角色的选择？', '遇到新情况时，模型应该依据什么规律判断？'],
+        placeholder: '例如：当地通行的礼仪、交易规则、历史创伤、危险常识，以及不同群体对它们的理解差异。',
+    },
+    {
+        title: '规划故事发生的空间层次',
+        description: '这里的“空间”也可以是时间、关系阶段或事件状态。目标是把庞大内容切成清楚、可管理的区域。',
+        prompts: ['故事可分成哪些主要区域或阶段？', '每个区域允许发生什么，不适合发生什么？', '玩家通过什么条件在区域之间移动？'],
+        placeholder: '例如：安全据点、争议边区和风暴核心；分别说明功能、主要冲突、进入条件与彼此联系。',
+    },
+    {
+        title: '把事件组织成可游玩的路径',
+        description: '不要只写一条固定剧情。先确定关键事件、触发条件、可选分支，以及选择如何回到长期主线。',
+        prompts: ['哪些事件是必须存在的关键节点？', '玩家的哪些选择会打开、关闭或延后分支？', '失败后故事怎样继续，而不是直接中断？'],
+        placeholder: '例如：调查失踪船队是入口；公开证据或私下交易形成两条路径；失败会提高追捕压力但不结束故事。',
+    },
+    {
+        title: '逐一填充每个叙事维度',
+        description: '为上一站划分的区域或阶段补充可独立运作的内容，让进入任何一处都有事可做。',
+        prompts: ['这个维度独有的规则、人物和冲突是什么？', '玩家进入后最先看到或遭遇什么？', '这里的行动会怎样影响其他维度？'],
+        placeholder: '例如：选择一个尚未完善的区域，补充环境特征、常驻人物、主要事件、危险和离开条件。',
+    },
+    {
+        title: '确定叙事者怎样观察世界',
+        description: '这一站决定实际游玩时“谁在讲、怎样讲”。重点是稳定的镜头、态度和处理方法。',
+        prompts: ['叙事者与玩家、角色保持怎样的距离？', '描写更关注动作、心理、环境还是对话？', '面对冲突、日常和未知信息时分别怎样处理？'],
+        placeholder: '例如：第三人称近距离跟随主要角色；少做解释，多通过动作与感官呈现；未知信息不提前揭晓。',
+    },
+    {
+        title: '收集这个世界自己的语言材料',
+        description: '把抽象文风变成可以直接调用的词语、意象、句式和表达习惯，避免所有场景都说同一种话。',
+        prompts: ['哪些词汇和意象最能代表世界气质？', '不同角色或群体说话有什么明显差异？', '有哪些陈词滥调或表达方式应当避免？'],
+        placeholder: '例如：航海者常用风向比喻；贵族句式克制而绕弯；禁用现代网络用语和泛滥的华丽形容词。',
+    },
+    {
+        title: '为关键场景准备写法',
+        description: '为经常出现或承担转折作用的场景准备策略。策略描述怎样变化，不是复制一段固定文本。',
+        prompts: ['哪些场景会高频出现或决定体验质量？', '每类场景应聚焦哪些感官、动作与信息？', '重复出现时，怎样根据状态产生变化？'],
+        placeholder: '例如：初次会面、秘密交易、风暴航行和关系决裂；分别说明节奏、焦点、变化来源与结束信号。',
+    },
+    {
+        title: '决定哪些信息需要被持续记录',
+        description: '先盘点动态信息，再决定是否变量化。只有会变化且会影响后续内容的信息才值得长期追踪。',
+        prompts: ['哪些状态会在游玩过程中频繁改变？', '哪些变化会影响剧情、关系或内容显示？', '哪些设定保持不变，放在普通世界书里更合适？'],
+        placeholder: '例如：信任、伤势、阵营声望和已发现线索需要记录；出生地与固定历史不需要变量化。',
+    },
+    {
+        title: '给变量分组并划清职责',
+        description: '把上一站的数据整理成稳定的体系。先看它们属于谁、服务什么，再考虑具体字段名。',
+        prompts: ['变量可以按角色、世界、任务或界面怎样分组？', '哪些是核心状态，哪些只是辅助记录？', '不同变量簇之间存在什么依赖关系？'],
+        placeholder: '例如：角色状态簇、关系簇、世界进程簇、线索簇；说明每组职责、更新频率和相互依赖。',
+    },
+    {
+        title: '把每一个变量定义清楚',
+        description: '为变量确定名称、类型、初值、范围和更新依据，避免运行后出现含义不明或互相冲突的字段。',
+        prompts: ['变量是数字、文本、布尔值、数组还是对象？', '初始值与合法范围是什么？', '什么事件会更新它，哪些变量会与它联动？'],
+        placeholder: '例如：信任度为 0–100 的整数，初值 20；兑现承诺上升，欺骗被识破下降，并影响可用对话。',
+    },
+    {
+        title: '让剧情变化准确流向变量',
+        description: '汇总变量结构，并规定叙事事件如何找到需要更新的字段，防止漏更、错更或重复更新。',
+        prompts: ['每类事件应该检查哪些变量簇？', '一次事件影响多个变量时，先后和优先级如何？', '哪些变化需要记录理由或保留旧值？'],
+        placeholder: '例如：关系事件先判断参与角色，再更新信任与关系阶段；世界事件随后更新阵营声望和可用地点。',
+    },
+    {
+        title: '规定内容在什么条件下出现',
+        description: '把变量状态与世界书内容连接起来。目标是用尽量少而清楚的条件，准确唤起需要的信息。',
+        prompts: ['哪些内容不能始终放入上下文，只能按需出现？', '它依赖哪个变量达到什么状态？', '多个条件同时满足时，是任一满足还是必须全部满足？'],
+        placeholder: '例如：关系阶段达到“信任”后显示角色秘密；进入北港且风暴等级大于 2 时显示封港事件。',
+    },
+    {
+        title: '编写条件触发后的实际内容',
+        description: '现在填写被条件唤起的知识、场景与实例。内容必须能脱离设计过程，被模型直接理解和使用。',
+        prompts: ['条件满足后，模型具体需要知道什么？', '内容是事实、行动规则、场景材料还是对话依据？', '条件失效或状态升级后，旧内容是否仍然有效？'],
+        placeholder: '例如：当信任阶段开启后，提供秘密的完整事实、角色透露秘密的方式，以及仍然不会主动说出的部分。',
+    },
+    {
+        title: '建立世界书的运行时导航',
+        description: '为已经很多的条目建立根索引，让模型先知道该去哪里找，而不是一次读取全部内容。',
+        prompts: ['世界书可以分成哪些主要内容域？', '每个域负责回答什么问题？', '模型遇到一种任务时，应按什么顺序查找？'],
+        placeholder: '例如：角色、地点、事件、规则、变量五个入口；说明每个入口的用途、下级标签与读取顺序。',
+    },
+    {
+        title: '设计玩家一眼能读懂的状态栏',
+        description: '状态栏只展示当前决策真正需要的信息。先确定内容和层级，再考虑装饰与代码。',
+        prompts: ['玩家每轮最需要看到哪些状态？', '哪些信息应该突出、折叠或暂时隐藏？', '状态栏怎样呼应世界气质，又不影响正文阅读？'],
+        placeholder: '例如：突出当前位置、时间、关系阶段与当前目标；详细变量折叠；整体采用航海日志式信息层级。',
+    },
+    {
+        title: '规定模型每轮回复的装配顺序',
+        description: '把正文、摘要、选项、变量更新和状态栏组织成稳定格式，让后续脚本能够可靠识别。',
+        prompts: ['玩家最终会看到哪些部分？', '哪些部分只供脚本读取，不应混进正文？', '各部分使用什么标签、顺序和缺省规则？'],
+        placeholder: '例如：先输出叙事正文，再输出可选行动；变量更新与摘要放在独立标签中，最后提供状态栏数据。',
+    },
+    {
+        title: '挑出适合交给副 AI 的工作',
+        description: '副 AI 适合处理独立、重复且有明确输入输出的任务，不应该替代主叙事的即时判断。',
+        prompts: ['哪些工作耗时重复，却不必占用主回复篇幅？', '任务在什么时机触发，需要读取哪些资料？', '结果写回哪里，失败时怎样处理？'],
+        placeholder: '例如：每 10 轮压缩长期摘要；新角色出现时补建档案；章节结束后整理待办与关系变化。',
+    },
+    {
+        title: '教副 AI 怎样维护世界知识',
+        description: '为世界书相关任务编写可执行的提示词，明确资料来源、判断范围、输出格式和禁止事项。',
+        prompts: ['副 AI 需要读取哪些条目或上下文？', '它要新增、更新、合并还是仅做检查？', '怎样的输出才能被系统安全地写回世界书？'],
+        placeholder: '例如：读取本轮新事实与现有角色条目；只更新已被剧情证实的信息；按指定标签输出变更块。',
+    },
+    {
+        title: '教副 AI 安全地更新变量',
+        description: '把变量更新规则写成严格任务，确保它只依据实际剧情改动合法字段，并遵循 MVU 格式。',
+        prompts: ['每轮需要检查哪些事件与变量？', '如何判断“没有变化”，避免强行更新？', '输出必须满足哪些 MVU 语法与范围约束？'],
+        placeholder: '例如：只依据本轮已发生事件；不得推测未公开事实；先核对字段类型和范围，再输出最小变更集。',
+    },
+    {
+        title: '把设计成果装进正确的条目',
+        description: '规划最终世界书的条目边界、激活方式、位置和读取关系，让内容既找得到，也不会全部常驻。',
+        prompts: ['哪些内容必须放在一起，哪些应该拆开？', '条目常驻、关键词触发还是由脚本读取？', '条目的位置、顺序和优先级怎样安排？'],
+        placeholder: '例如：核心规则常驻；角色细节按名字触发；条件内容由变量控制；列出条目名、内容来源与激活方式。',
+    },
+    {
+        title: '生成可以执行的重组方案',
+        description: '把源世界书内容映射到最终条目，并补全重组器需要的属性。这里重在准确，不再改写设定本身。',
+        prompts: ['每个源内容块应该进入哪个目标条目？', '需要合并、拆分、追加还是保持原样？', '是否存在无法识别、重复或缺失的内容块？'],
+        placeholder: '例如：确认源条目与目标条目的映射；标记合并方式、条目属性，以及需要人工复核的异常项。',
+    },
+    {
+        title: '用开场把整个世界启动起来',
+        description: '调用前面完成的世界、角色、叙事和变量设计，写出可直接开始游玩的开场与完整初始状态。',
+        prompts: ['玩家在第一句话前身处何时何地、面对什么？', '哪个人物、动作或事件最适合立刻建立核心体验？', '所有变量的初值是否与开场事实完全一致？'],
+        placeholder: '例如：指定开场地点、出场角色、即时矛盾、玩家可感知的信息，以及与场景一致的完整变量初始树。',
+    },
+];
+
+const STEP_PROMPT_IDS = new Set(STEPS.map(step => step.promptId));
+const PLACEHOLDER_IDS = new Set([
+    'worldInfoBefore',
+    'personaDescription',
+    'charDescription',
+    'charPersonality',
+    'scenario',
+    'worldInfoAfter',
+    'dialogueExamples',
+    'chatHistory',
+]);
+
+const WORLD_ENTRY_MAPPINGS = [
+    { step: 1, needle: '交互范式', tags: ['WORLD_interaction_paradigm'] },
+    { step: 1, needle: '美学纲领', tags: ['WORLD_aesthetic_program'] },
+    { step: 2, needle: '实现机制', prefixes: ['WORLD_implementation_mechanisms'] },
+    { step: 3, needle: '弧光识别' },
+    { step: 4, needle: '世界蓝图', tags: ['WORLD_blueprint'] },
+    { step: 5, needle: '主要角色-原点', suffixes: ['_原点'] },
+    { step: 5, needle: '主要角色-画像', suffixes: ['_画像'] },
+    { step: 5, needle: '主要角色-状态', sourcePrefixes: ['SOURCE_main_characters_'] },
+    { step: 6, needle: '关系图谱', prefixes: ['WORLD_relationship_map'] },
+    { step: 7, needle: '生成规则', prefixes: ['WORLD_generative_rules_'] },
+    { step: 8, needle: '具体实例', prefixes: ['WORLD_specific_instances'] },
+    { step: 9, needle: '世界知识', prefixes: ['WORLD_lore_'] },
+    { step: 10, needle: '空间规划' },
+    { step: 11, needle: '情节图谱' },
+    { step: 12, needle: '维度内容', prefixes: ['WORLD_dimension_'] },
+    { step: 13, needle: '叙事指南核心', tags: ['WORLD_narrative_core'] },
+    { step: 14, needle: '语料库', prefixes: ['WORLD_language_materials_'] },
+    { step: 15, needle: '场景策略集', prefixes: ['WORLD_scene_strategies_'] },
+    { step: 16, needle: '数据盘点' },
+    { step: 17, needle: '变量体系规划' },
+    { step: 18, needle: '当前变量', prefixes: ['WORLD_current_'] },
+    { step: 19, needle: '更新指南', tags: ['WORLD_variable_update_guide'] },
+    { step: 20, needle: '条件显示规划' },
+    { step: 21, needle: '其他条件显示内容', prefixes: ['WORLD_'] },
+    { step: 22, needle: '世界根目录', tags: ['WORLD_root_index'] },
+    { step: 23, needle: '输出格式', tags: ['SOURCE_statusbar_data_guide', 'STATUSBAR_DATA'], append: true },
+    { step: 24, needle: '输出格式', prefixes: ['SYS_output_format', 'WORLD_'], append: true },
+    { step: 25, needle: '副AI任务清单' },
+    { step: 26, needle: '世界书提示词' },
+    { step: 27, needle: '变量提示词' },
+    { step: 28, needle: '条目规划表' },
+];
+
+let project = loadProject();
+let connectionSettings = loadConnectionSettings();
+// 密钥只在当前页面的内存中保留，不能进入项目存档或导出文件。
+let customApiKey = '';
+let shell = null;
+let helper = null;
+let isGenerating = false;
+let activeGenerationId = null;
+let artifactPanelExpanded = false;
+const artifactSaveTimers = new Map();
+let environment = {
+    presetNames: [],
+    worldbookNames: [],
+    presetName: project.presetName || '',
+    worldbookName: project.sourceWorldbookName || '',
+};
+
+function createDefaultProject() {
+    const steps = {};
+    for (const step of STEPS) {
+        steps[step.number] = { status: 'idle', turns: [], updatedAt: null };
+    }
+
+    return {
+        version: PROJECT_VERSION,
+        id: globalThis.crypto?.randomUUID?.() || `auto-${Date.now()}`,
+        name: '未命名世界',
+        brief: '',
+        currentStep: 1,
+        presetName: '',
+        sourceWorldbookName: '',
+        preferences: {
+            aiRole: 'A.U.T.O.',
+            creatorRole: '创作者',
+            wordCount: '3000',
+            language: '中文',
+            person: '第三人称',
+        },
+        output: {
+            characterName: '',
+            worldbookName: '',
+        },
+        ui: {
+            collapsedPhases: [],
+            overviewCollapsed: true,
+        },
+        steps,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+}
+
+function loadProject() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (!saved || saved.version !== PROJECT_VERSION) {
+            return createDefaultProject();
+        }
+
+        const clean = createDefaultProject();
+        return {
+            ...clean,
+            ...saved,
+            preferences: { ...clean.preferences, ...saved.preferences },
+            output: { ...clean.output, ...saved.output },
+            ui: { ...clean.ui, ...saved.ui },
+            steps: { ...clean.steps, ...saved.steps },
+        };
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 无法读取本地项目，将创建新项目。', error);
+        return createDefaultProject();
+    }
+}
+
+function saveProject() {
+    project.updatedAt = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+}
+
+function loadConnectionSettings() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(CONNECTION_STORAGE_KEY));
+        return {
+            ...DEFAULT_CONNECTION_SETTINGS,
+            ...(saved && typeof saved === 'object' ? saved : {}),
+            mode: saved?.mode === 'custom' ? 'custom' : 'current',
+        };
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 无法读取模型连接设置，将使用当前 SillyTavern 连接。', error);
+        return { ...DEFAULT_CONNECTION_SETTINGS };
+    }
+}
+
+function saveConnectionSettings() {
+    // 明确挑选可持久化字段，避免以后误把 customApiKey 写入本地存储。
+    localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+        mode: connectionSettings.mode,
+        source: connectionSettings.source,
+        apiUrl: connectionSettings.apiUrl,
+        model: connectionSettings.model,
+    }));
+}
+
+function notify(type, message, title = 'A.U.T.O 角色卡创作台') {
+    if (globalThis.toastr?.[type]) {
+        globalThis.toastr[type](message, title);
+        return;
+    }
+    console[type === 'error' ? 'error' : 'info'](`[${title}] ${message}`);
+}
+
+function normalizeName(value) {
+    return String(value || '')
+        .normalize('NFKC')
+        .toLowerCase()
+        .replace(/[\s._·\-—()（）\[\]【】]/g, '');
+}
+
+function choosePresetName(names) {
+    // 创作台只认 A.U.T.O v2.0，避免项目记录或主界面选择把流程切到其他预设。
+    const exact = names.find(name => normalizeName(name) === normalizeName(FIXED_PRESET_NAME));
+    if (exact) return exact;
+    return names.find(name => {
+        const normalized = normalizeName(name);
+        return normalized.includes('auto') && normalized.includes('预设') && normalized.includes('20');
+    }) || '';
+}
+
+function chooseWorldbookName(names) {
+    if (project.sourceWorldbookName && names.includes(project.sourceWorldbookName)) {
+        return project.sourceWorldbookName;
+    }
+    const exact = names.find(name => /A\.U\.T\.O.*预设.*2\.0/i.test(name));
+    if (exact) return exact;
+    return names.find(name => {
+        const normalized = normalizeName(name);
+        return normalized.includes('auto') && normalized.includes('预设') && normalized.includes('20');
+    }) || '';
+}
+
+async function waitForTavernHelper(timeout = 12000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeout) {
+        if (globalThis.TavernHelper?.generateRaw && globalThis.TavernHelper?.getPreset) {
+            return globalThis.TavernHelper;
+        }
+        await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    return null;
+}
+
+async function inspectEnvironment() {
+    const status = shell.querySelector('#acs-dependency-status');
+    status.classList.remove('is-ready', 'is-error');
+    status.querySelector('span:last-child').textContent = '正在检查创作环境';
+
+    helper = await waitForTavernHelper();
+    if (!helper) {
+        status.classList.add('is-error');
+        status.querySelector('span:last-child').textContent = '未检测到酒馆助手';
+        notify('error', '请先启用“酒馆助手”扩展，然后刷新 SillyTavern。');
+        renderEnvironmentSelectors();
+        return;
+    }
+
+    try {
+        environment.presetNames = helper.getPresetNames?.() || [];
+        environment.worldbookNames = helper.getWorldbookNames?.() || [];
+        environment.presetName = choosePresetName(environment.presetNames);
+        environment.worldbookName = chooseWorldbookName(environment.worldbookNames);
+        project.presetName = environment.presetName;
+        project.sourceWorldbookName = environment.worldbookName;
+        saveProject();
+        renderEnvironmentSelectors();
+
+        const missing = [];
+        if (!environment.presetName) missing.push('A.U.T.O v2.0 预设');
+        if (!environment.worldbookName) missing.push('A.U.T.O v2.0 世界书');
+        if (missing.length) {
+            status.classList.add('is-error');
+            status.querySelector('span:last-child').textContent = `缺少：${missing.join('、')}`;
+            return;
+        }
+
+        status.classList.add('is-ready');
+        status.querySelector('span:last-child').textContent = '预设、世界书与酒馆助手已就绪';
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 环境检查失败', error);
+        status.classList.add('is-error');
+        status.querySelector('span:last-child').textContent = '环境检查失败';
+    }
+}
+
+function renderEnvironmentSelectors() {
+    const presetLock = shell.querySelector('#acs-preset-lock');
+    const presetName = shell.querySelector('#acs-preset-name');
+    const worldbookSelect = shell.querySelector('#acs-worldbook-select');
+    const presetReady = Boolean(environment.presetName);
+    presetLock.classList.toggle('is-missing', !presetReady);
+    presetName.textContent = presetReady ? environment.presetName : `未找到 ${FIXED_PRESET_NAME}`;
+    fillSelect(worldbookSelect, environment.worldbookNames, environment.worldbookName, '未找到可用世界书');
+}
+
+function fillSelect(select, items, selected, emptyLabel) {
+    select.replaceChildren();
+    if (!items.length) {
+        const option = new Option(emptyLabel, '');
+        option.disabled = true;
+        option.selected = true;
+        select.add(option);
+        return;
+    }
+    for (const item of items) {
+        select.add(new Option(item, item, false, item === selected));
+    }
+}
+
+function renderStepRail() {
+    const rail = shell.querySelector('#acs-step-rail');
+    rail.replaceChildren();
+
+    for (const phase of PHASES) {
+        const phaseSteps = STEPS.filter(item => item.phase === phase.id);
+        const completed = phaseSteps.filter(step => project.steps[step.number]?.status === 'accepted').length;
+        const collapsed = project.ui.collapsedPhases.includes(phase.id);
+        const section = document.createElement('section');
+        section.className = 'acs-phase-group';
+        section.dataset.phase = phase.id;
+        section.classList.toggle('is-collapsed', collapsed);
+
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'acs-phase-toggle';
+        toggle.dataset.phaseToggle = phase.id;
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.setAttribute('aria-controls', `acs-phase-${phase.id}`);
+        toggle.innerHTML = `
+            <span class="acs-phase-title">${phase.label}</span>
+            <span class="acs-phase-progress">${completed}/${phaseSteps.length}</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        `;
+
+        const steps = document.createElement('div');
+        steps.id = `acs-phase-${phase.id}`;
+        steps.className = 'acs-phase-steps';
+        steps.hidden = collapsed;
+
+        for (const step of phaseSteps) {
+            const state = project.steps[step.number] || { status: 'idle' };
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'acs-step-button';
+            button.dataset.step = String(step.number);
+            button.title = `Step ${step.number} · ${step.name}`;
+            button.setAttribute('aria-label', button.title);
+            if (step.number === project.currentStep) button.classList.add('is-active');
+            if (state.status === 'accepted') button.classList.add('is-complete');
+            if (state.status === 'draft') button.classList.add('is-draft');
+
+            const node = document.createElement('span');
+            node.className = 'acs-step-node';
+            if (state.status === 'accepted') node.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
+            const name = document.createElement('span');
+            name.className = 'acs-step-name';
+            name.textContent = step.name;
+            const number = document.createElement('span');
+            number.className = 'acs-step-number';
+            number.textContent = String(step.number).padStart(2, '0');
+            button.append(node, name, number);
+            steps.append(button);
+        }
+        section.append(toggle, steps);
+        rail.append(section);
+    }
+}
+
+function togglePhase(phaseId) {
+    if (!PHASES.some(phase => phase.id === phaseId)) return;
+    const collapsed = new Set(project.ui.collapsedPhases);
+    collapsed.has(phaseId) ? collapsed.delete(phaseId) : collapsed.add(phaseId);
+    project.ui.collapsedPhases = [...collapsed];
+    saveProject();
+    renderStepRail();
+}
+
+function revealStepPhase(stepNumber) {
+    const phaseId = STEPS[stepNumber - 1]?.phase;
+    if (!phaseId || !project.ui.collapsedPhases.includes(phaseId)) return;
+    project.ui.collapsedPhases = project.ui.collapsedPhases.filter(id => id !== phaseId);
+}
+
+function getAutoPresetSafe() {
+    try {
+        return helper && environment.presetName ? helper.getPreset(environment.presetName) : null;
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 无法读取用于回复渲染的预设。', error);
+        return null;
+    }
+}
+
+function normalizeResponseRegex(script) {
+    if (!script || script.findRegex !== undefined) return script;
+    return {
+        id: script.id,
+        scriptName: script.script_name,
+        disabled: !script.enabled,
+        findRegex: script.find_regex,
+        replaceString: script.replace_string ?? '',
+        trimStrings: script.trim_strings || [],
+        placement: script.source?.ai_output ? [2] : [],
+        markdownOnly: Boolean(script.destination?.display),
+        promptOnly: Boolean(script.destination?.prompt),
+    };
+}
+
+function shouldRunResponseRegex(script, mode) {
+    if (!script || script.disabled || !script.findRegex) return false;
+    const placements = Array.isArray(script.placement) ? script.placement.map(Number) : [];
+    if (!placements.includes(2)) return false;
+    if (mode === 'markdown') return Boolean(script.markdownOnly);
+    if (mode === 'prompt') return Boolean(script.promptOnly);
+    return !script.markdownOnly && !script.promptOnly;
+}
+
+function runSingleResponseRegex(script, text) {
+    let result = String(text || '');
+    for (const trimString of script.trimStrings || []) {
+        result = result.replaceAll(trimString, '');
+    }
+    const regex = globalThis.builtin?.parseRegexFromString?.(script.findRegex);
+    if (!regex) throw new Error(`无法解析正则：${script.findRegex}`);
+    return result.replace(regex, script.replaceString ?? '');
+}
+
+function getResponseRegexes() {
+    const globalScripts = globalThis.getTavernRegexes?.({ type: 'global' }) || [];
+    const presetScripts = environment.presetName
+        ? globalThis.getTavernRegexes?.({ type: 'preset', name: environment.presetName }) || []
+        : [];
+    return [...globalScripts, ...presetScripts].map(normalizeResponseRegex);
+}
+
+function runResponseRegexPass(text, _preset, mode) {
+    let result = String(text || '');
+    for (const script of getResponseRegexes()) {
+        if (!shouldRunResponseRegex(script, mode)) continue;
+        try {
+            result = runSingleResponseRegex(script, result);
+        } catch (error) {
+            console.warn(`[A.U.T.O Card Studio] 回复正则执行失败：${script.scriptName || '未命名正则'}`, error);
+        }
+    }
+    return result;
+}
+
+function responseForDisplay(rawResponse, preset) {
+    const outputProcessed = runResponseRegexPass(rawResponse, preset, 'output');
+    return runResponseRegexPass(outputProcessed, preset, 'markdown');
+}
+
+function responseForPrompt(rawResponse, preset) {
+    const outputProcessed = runResponseRegexPass(rawResponse, preset, 'output');
+    return runResponseRegexPass(outputProcessed, preset, 'prompt');
+}
+
+function normalizeCodeLanguage(value) {
+    const language = String(value || '').trim().toLowerCase();
+    const aliases = {
+        js: 'JAVASCRIPT',
+        javascript: 'JAVASCRIPT',
+        ts: 'TYPESCRIPT',
+        typescript: 'TYPESCRIPT',
+        py: 'PYTHON',
+        python: 'PYTHON',
+        yml: 'YAML',
+        yaml: 'YAML',
+        json: 'JSON',
+        html: 'HTML',
+        xml: 'XML',
+        css: 'CSS',
+        scss: 'SCSS',
+        sql: 'SQL',
+        md: 'MARKDOWN',
+        markdown: 'MARKDOWN',
+        sh: 'SHELL',
+        bash: 'SHELL',
+        shell: 'SHELL',
+        ejs: 'EJS',
+    };
+    return aliases[language] || language.toUpperCase() || '代码';
+}
+
+function detectCodeLanguage(code) {
+    const declaredClass = [...code.classList].find(name => name.startsWith('language-'));
+    if (declaredClass) return normalizeCodeLanguage(declaredClass.slice('language-'.length));
+
+    const source = code.textContent.trim();
+    if (!source) return '代码';
+
+    if (/^<%[=-]?|<%[\s\S]*%>/.test(source)) return 'EJS';
+    if (/^<!doctype\s+html|^<html\b|^<(?:head|body|main|section|article|div|script|style)\b/i.test(source)) return 'HTML';
+    if (/^<[A-Za-z_][\w:.-]*(?:\s|>)/.test(source) && /<\/[A-Za-z_][\w:.-]*>/.test(source)) return 'XML';
+
+    try {
+        JSON.parse(source);
+        return 'JSON';
+    } catch {
+        // 不是合法 JSON 时继续进行轻量特征识别。
+    }
+
+    if (/^(?:from\s+\S+\s+import|import\s+\S+|def\s+\w+\s*\(|class\s+\w+.*:)|\bprint\s*\(/m.test(source)) return 'PYTHON';
+    if (/\b(?:const|let|var)\s+\w+|\bfunction\s+\w+\s*\(|=>|console\.(?:log|warn|error)\s*\(/m.test(source)) return 'JAVASCRIPT';
+    if (/^(?:SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|WITH)\b/im.test(source)) return 'SQL';
+    if (/^(?:---\s*$|[\w.'"-]+:\s*\S+)/m.test(source)
+        && (source.match(/^[\w.'"-]+:\s*.*$/gm) || []).length >= 2) return 'YAML';
+    if (/^(?:#{1,6}\s|[-*+]\s|\d+\.\s)|\[[^\]]+\]\([^)]+\)/m.test(source)) return 'MARKDOWN';
+    if (/^[.#]?[\w-]+(?:\s+[.#]?[\w-]+)*\s*\{[\s\S]*:[^;{}]+;/m.test(source)) return 'CSS';
+    if (/^#!.*\b(?:bash|sh)\b|^(?:export\s+\w+=|(?:npm|pnpm|yarn|git|curl)\s+)/m.test(source)) return 'SHELL';
+    return '代码';
+}
+
+function decorateResponseCodeBlocks(element) {
+    for (const code of element.querySelectorAll('pre > code')) {
+        const pre = code.parentElement;
+        // AUTO 的说明区使用代码围栏承载普通文字，不将它误标为代码产物。
+        if (pre.closest('details')) continue;
+        const language = detectCodeLanguage(code);
+        const details = document.createElement('details');
+        details.className = 'acs-code-block';
+        details.open = true;
+        details.dataset.codeLanguage = language;
+
+        const summary = document.createElement('summary');
+        summary.setAttribute('aria-label', `${language} 代码块，点击折叠或展开`);
+        const type = document.createElement('span');
+        type.textContent = language;
+        const icon = document.createElement('i');
+        icon.className = 'fa-solid fa-chevron-down';
+        icon.setAttribute('aria-hidden', 'true');
+        summary.append(type, icon);
+
+        pre.classList.add('acs-code-content');
+        pre.before(details);
+        details.append(summary, pre);
+    }
+}
+
+function sanitizeRenderedHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = String(html || '');
+    template.content.querySelectorAll('script, iframe, object, embed, link, meta').forEach(node => node.remove());
+    template.content.querySelectorAll('*').forEach(node => {
+        for (const attribute of [...node.attributes]) {
+            const name = attribute.name.toLowerCase();
+            const value = attribute.value.trim().toLowerCase();
+            if (name.startsWith('on') || ((name === 'href' || name === 'src') && value.startsWith('javascript:'))) {
+                node.removeAttribute(attribute.name);
+            }
+        }
+    });
+    return template.innerHTML;
+}
+
+function renderAssistantResponse(element, rawResponse, preset) {
+    const displayText = responseForDisplay(rawResponse, preset);
+    const rendered = globalThis.builtin?.renderMarkdown?.(displayText)
+        ?? String(displayText).replace(/[&<>]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]).replace(/\n/g, '<br>');
+    element.innerHTML = sanitizeRenderedHtml(rendered);
+    decorateResponseCodeBlocks(element);
+}
+
+function renderCurrentStep() {
+    const step = STEPS[project.currentStep - 1];
+    const guide = STEP_GUIDES[step.number - 1];
+    const state = project.steps[step.number];
+    shell.querySelector('#acs-step-kicker').textContent = `PHASE ${String(step.number).padStart(2, '0')} / 30`;
+    shell.querySelector('#acs-step-title').textContent = step.name;
+    shell.querySelector('#acs-step-goal').textContent = step.goal;
+
+    // 空白状态也是创作向导：切换步骤时同步刷新，而不是沿用第一站文案。
+    shell.querySelector('#acs-empty-kicker').textContent = `STATION ${String(step.number).padStart(2, '0')} · 创作航标`;
+    shell.querySelector('#acs-empty-title').textContent = guide.title;
+    shell.querySelector('#acs-empty-description').textContent = guide.description;
+    const guidePrompts = shell.querySelector('#acs-empty-prompts');
+    guidePrompts.replaceChildren();
+    for (const prompt of guide.prompts) {
+        const item = document.createElement('li');
+        item.textContent = prompt;
+        guidePrompts.append(item);
+    }
+    shell.querySelector('#acs-user-input-label').textContent = `本轮补充 · ${step.name}`;
+    shell.querySelector('#acs-user-input').placeholder = guide.placeholder;
+
+    const stateChip = shell.querySelector('#acs-step-state');
+    stateChip.classList.remove('is-draft', 'is-complete');
+    if (state.status === 'accepted') {
+        stateChip.textContent = '已确认';
+        stateChip.classList.add('is-complete');
+    } else if (state.status === 'draft') {
+        stateChip.textContent = '待确认';
+        stateChip.classList.add('is-draft');
+    } else {
+        stateChip.textContent = '未开始';
+    }
+
+    const turns = shell.querySelector('#acs-turns');
+    turns.replaceChildren();
+    const hasTurns = Array.isArray(state.turns) && state.turns.length > 0;
+    const responsePreset = hasTurns ? getAutoPresetSafe() : null;
+    let latestUserIndex = -1;
+    for (let index = state.turns.length - 1; index >= 0; index -= 1) {
+        if (state.turns[index].role === 'user') {
+            latestUserIndex = index;
+            break;
+        }
+    }
+    shell.querySelector('#acs-empty-turns').hidden = hasTurns;
+    for (const [turnIndex, turn] of (state.turns || []).entries()) {
+        const article = document.createElement('article');
+        article.className = `acs-turn ${turn.role === 'user' ? 'is-user' : 'is-assistant'}`;
+        const label = document.createElement('div');
+        label.className = 'acs-turn-label';
+        const labelText = document.createElement('span');
+        labelText.textContent = turn.role === 'user' ? '你的补充' : project.preferences.aiRole || 'A.U.T.O.';
+        label.append(labelText);
+        if (turn.role === 'user' && turnIndex === latestUserIndex) {
+            const retry = document.createElement('button');
+            retry.className = 'acs-turn-retry';
+            retry.type = 'button';
+            retry.dataset.retryTurn = String(turnIndex);
+            retry.disabled = isGenerating;
+            retry.title = '重新生成这条输入';
+            retry.innerHTML = '<i class="fa-solid fa-rotate-right" aria-hidden="true"></i><span>重试</span>';
+            label.append(retry);
+        }
+        const content = document.createElement(turn.role === 'user' ? 'pre' : 'div');
+        content.className = 'acs-turn-content';
+        if (turn.role === 'user') {
+            content.textContent = turn.content;
+        } else {
+            renderAssistantResponse(content, turn.content, responsePreset);
+        }
+        article.append(label, content);
+        turns.append(article);
+    }
+
+    shell.querySelector('#acs-accept-step').disabled = !latestAssistantResponse(step.number) || isGenerating;
+    shell.querySelector('#acs-generate').disabled = isGenerating;
+    shell.querySelector('#acs-generation-hint').textContent = state.turns?.length
+        ? `会带上本阶段对话与已确认产物继续生成 · ${connectionDisplayName()}`
+        : `可留空生成；本阶段将整理「${step.name}」 · ${connectionDisplayName()}`;
+
+    requestAnimationFrame(() => {
+        const conversation = shell.querySelector('.acs-conversation');
+        conversation.scrollTop = conversation.scrollHeight;
+    });
+}
+
+function renderProgress() {
+    const completed = STEPS.filter(step => project.steps[step.number]?.status === 'accepted').length;
+    const percent = Math.round((completed / STEPS.length) * 100);
+    shell.querySelector('#acs-progress-copy').textContent = `${completed} / ${STEPS.length}`;
+    shell.querySelector('#acs-progress-percent').textContent = `${percent}%`;
+    shell.querySelector('#acs-progress-bar').style.width = `${percent}%`;
+}
+
+function renderArtifacts() {
+    const list = shell.querySelector('#acs-artifact-list');
+    const artifacts = [];
+    for (const step of STEPS) {
+        const response = latestAssistantResponse(step.number);
+        if (!response) continue;
+        extractArtifactBlocks(response).forEach((block, blockIndex) => {
+            artifacts.push({
+                ...block,
+                blockIndex,
+                step: step.number,
+                accepted: project.steps[step.number].status === 'accepted',
+            });
+        });
+    }
+
+    list.replaceChildren();
+    shell.querySelector('#acs-block-count').textContent = `${artifacts.length} 个区块`;
+    if (!artifacts.length) {
+        const empty = document.createElement('div');
+        empty.className = 'acs-artifact-empty';
+        empty.textContent = '生成并确认阶段草案后，结构化产物会在这里出现。';
+        list.append(empty);
+        return;
+    }
+
+    for (const artifact of artifacts) {
+        const details = document.createElement('details');
+        details.className = 'acs-artifact';
+        if (artifacts.length === 1) details.open = true;
+        const summary = document.createElement('summary');
+        const head = document.createElement('span');
+        head.className = 'acs-artifact-head';
+        const name = document.createElement('span');
+        name.className = 'acs-artifact-name';
+        name.textContent = artifact.tag;
+        const step = document.createElement('span');
+        step.className = 'acs-artifact-step';
+        step.textContent = `S${String(artifact.step).padStart(2, '0')}${artifact.accepted ? ' · 已确认' : ' · 草案'}`;
+        head.append(name, step);
+        summary.append(head);
+
+        const editor = document.createElement('div');
+        editor.className = 'acs-artifact-editor';
+        const toolbar = document.createElement('div');
+        toolbar.className = 'acs-artifact-toolbar';
+        const saveState = document.createElement('span');
+        saveState.className = 'acs-artifact-save-state';
+        saveState.textContent = '可编辑 · 自动保存';
+        const copy = document.createElement('button');
+        copy.type = 'button';
+        copy.className = 'acs-artifact-action';
+        copy.dataset.copyArtifact = '';
+        copy.title = '复制这个区块';
+        copy.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i><span>复制</span>';
+        toolbar.append(saveState, copy);
+
+        const content = document.createElement('textarea');
+        content.className = 'acs-artifact-content';
+        content.value = artifact.content;
+        content.spellcheck = false;
+        content.dataset.artifactStep = String(artifact.step);
+        content.dataset.artifactIndex = String(artifact.blockIndex);
+        content.dataset.savedContent = artifact.content;
+        content.setAttribute('aria-label', `${artifact.tag} 区块内容`);
+        editor.append(toolbar, content);
+        details.append(summary, editor);
+        list.append(details);
+    }
+}
+
+function saveArtifactEdit(textarea) {
+    const stepNumber = Number(textarea.dataset.artifactStep);
+    const blockIndex = Number(textarea.dataset.artifactIndex);
+    const timerKey = `${stepNumber}:${blockIndex}`;
+    clearTimeout(artifactSaveTimers.get(timerKey));
+    artifactSaveTimers.delete(timerKey);
+    const latest = latestAssistantTurn(stepNumber);
+    if (!latest) return false;
+
+    const source = latest.turn.content;
+    const previous = textarea.dataset.savedContent || '';
+    let start = previous ? source.indexOf(previous) : -1;
+    let end = start >= 0 ? start + previous.length : -1;
+    if (start < 0) {
+        const currentBlock = extractArtifactBlocks(source)[blockIndex];
+        if (!currentBlock) return false;
+        start = currentBlock.start;
+        end = currentBlock.end;
+    }
+
+    latest.turn.content = `${source.slice(0, start)}${textarea.value}${source.slice(end)}`;
+    latest.turn.editedAt = new Date().toISOString();
+    project.steps[stepNumber].updatedAt = latest.turn.editedAt;
+    textarea.dataset.savedContent = textarea.value;
+    saveProject();
+
+    const state = textarea.closest('.acs-artifact-editor')?.querySelector('.acs-artifact-save-state');
+    if (state) {
+        state.textContent = `已保存 · ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        state.classList.remove('is-pending');
+    }
+    return true;
+}
+
+function scheduleArtifactSave(textarea) {
+    const key = `${textarea.dataset.artifactStep}:${textarea.dataset.artifactIndex}`;
+    clearTimeout(artifactSaveTimers.get(key));
+    const state = textarea.closest('.acs-artifact-editor')?.querySelector('.acs-artifact-save-state');
+    if (state) {
+        state.textContent = '正在保存…';
+        state.classList.add('is-pending');
+    }
+    artifactSaveTimers.set(key, setTimeout(() => {
+        saveArtifactEdit(textarea);
+        artifactSaveTimers.delete(key);
+    }, 360));
+}
+
+async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+    const fallback = document.createElement('textarea');
+    fallback.value = text;
+    fallback.style.position = 'fixed';
+    fallback.style.opacity = '0';
+    document.body.append(fallback);
+    fallback.select();
+    document.execCommand('copy');
+    fallback.remove();
+}
+
+async function copyArtifact(button) {
+    const textarea = button.closest('.acs-artifact-editor')?.querySelector('.acs-artifact-content');
+    if (!textarea) return;
+    try {
+        await copyText(textarea.value);
+        button.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i><span>已复制</span>';
+        setTimeout(() => {
+            button.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i><span>复制</span>';
+        }, 1400);
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 复制产物失败', error);
+        notify('error', '复制失败，请选中文本后使用 Ctrl+C。');
+    }
+}
+
+function toggleArtifactPanel(force) {
+    artifactPanelExpanded = typeof force === 'boolean' ? force : !artifactPanelExpanded;
+    const inspector = shell.querySelector('.acs-inspector');
+    const button = shell.querySelector('#acs-expand-artifacts');
+    inspector.classList.toggle('is-expanded', artifactPanelExpanded);
+    button.classList.toggle('is-active', artifactPanelExpanded);
+    button.setAttribute('aria-pressed', String(artifactPanelExpanded));
+    button.title = artifactPanelExpanded ? '收回产物工作区' : '放大产物工作区';
+    button.querySelector('i').className = artifactPanelExpanded
+        ? 'fa-solid fa-compress'
+        : 'fa-solid fa-expand';
+}
+
+function renderProjectFields() {
+    shell.querySelector('#acs-project-name').value = project.name;
+    shell.querySelector('#acs-project-brief').value = project.brief;
+    shell.querySelector('#acs-ai-role').value = project.preferences.aiRole;
+    shell.querySelector('#acs-creator-role').value = project.preferences.creatorRole;
+    shell.querySelector('#acs-word-count').value = project.preferences.wordCount;
+    shell.querySelector('#acs-language').value = project.preferences.language;
+    shell.querySelector('#acs-person').value = project.preferences.person;
+    shell.querySelector('#acs-character-name').value = project.output.characterName;
+    shell.querySelector('#acs-output-worldbook').value = project.output.worldbookName || defaultOutputWorldbookName();
+    renderConnectionSettings();
+}
+
+function connectionDisplayName() {
+    if (connectionSettings.mode === 'current') return '当前 ST 连接';
+    return connectionSettings.model.trim() || '独立连接未完成';
+}
+
+function renderConnectionSettings() {
+    for (const radio of shell.querySelectorAll('input[name="acs-connection-mode"]')) {
+        radio.checked = radio.value === connectionSettings.mode;
+    }
+
+    const isCustom = connectionSettings.mode === 'custom';
+    shell.querySelector('#acs-custom-connection').hidden = !isCustom;
+    shell.querySelector('#acs-custom-source').value = connectionSettings.source;
+    shell.querySelector('#acs-custom-api-url').value = connectionSettings.apiUrl;
+    shell.querySelector('#acs-custom-api-key').value = customApiKey;
+    shell.querySelector('#acs-custom-model').value = connectionSettings.model;
+
+    const summary = shell.querySelector('#acs-connection-summary');
+    summary.classList.toggle('is-custom', isCustom);
+    summary.textContent = isCustom
+        ? (connectionSettings.model.trim() || '等待配置')
+        : '跟随 SillyTavern';
+}
+
+function renderAll() {
+    renderProjectFields();
+    renderOverviewState();
+    renderStepRail();
+    renderCurrentStep();
+    renderProgress();
+    renderArtifacts();
+}
+
+function renderOverviewState() {
+    const collapsed = Boolean(project.ui.overviewCollapsed);
+    const stage = shell.querySelector('.acs-stage');
+    const briefPanel = shell.querySelector('#acs-brief-panel');
+    const button = shell.querySelector('#acs-toggle-overview');
+    const icon = button.querySelector('i');
+
+    stage.classList.toggle('is-overview-collapsed', collapsed);
+    briefPanel.hidden = collapsed;
+    button.setAttribute('aria-expanded', String(!collapsed));
+    button.title = collapsed ? '展开创作概览' : '收起创作概览';
+    button.querySelector('span').textContent = collapsed ? '展开概览' : '收起概览';
+    icon.className = collapsed ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up';
+}
+
+function toggleOverview() {
+    project.ui.overviewCollapsed = !project.ui.overviewCollapsed;
+    saveProject();
+    renderOverviewState();
+}
+
+function latestAssistantResponse(stepNumber) {
+    return latestAssistantTurn(stepNumber)?.turn.content || '';
+}
+
+function latestAssistantTurn(stepNumber) {
+    const turns = project.steps[stepNumber]?.turns || [];
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+        if (turns[index].role === 'assistant') return { turn: turns[index], index };
+    }
+    return null;
+}
+
+function sanitizeMacroValue(value) {
+    return String(value || '').replace(/[{}\r\n]/g, '').trim();
+}
+
+function customizeSettingsPrompt(content) {
+    const replacements = {
+        AI_role: project.preferences.aiRole,
+        creator_role: project.preferences.creatorRole,
+        word_count: project.preferences.wordCount,
+        language: project.preferences.language,
+        person: project.preferences.person,
+    };
+    let result = content;
+    for (const [key, value] of Object.entries(replacements)) {
+        const pattern = new RegExp(`\\{\\{setvar::${key}::[\\s\\S]*?\\}\\}`, 'g');
+        result = result.replace(pattern, `{{setvar::${key}::${sanitizeMacroValue(value)}}}`);
+    }
+    return result;
+}
+
+function buildProjectContext(currentStep, preset) {
+    const sections = [
+        '<STUDIO_PROJECT_CONTEXT>',
+        `项目名称: ${project.name}`,
+        `创作母题:\n${project.brief || '尚未填写，请主动提出必要问题。'}`,
+        `当前阶段: Step ${currentStep.number} ${currentStep.name}`,
+        '',
+        '# 已确认或正在迭代的前序产物',
+    ];
+
+    for (const step of STEPS) {
+        if (step.number >= currentStep.number) break;
+        const response = latestAssistantResponse(step.number);
+        if (!response) continue;
+        const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
+        const promptResponse = responseForPrompt(response, preset);
+        sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse.slice(0, 22000)}`);
+    }
+
+    const currentTurns = project.steps[currentStep.number].turns || [];
+    // 最新一条用户输入会通过 user_input 单独发送，避免在上下文中重复一次。
+    const contextualTurns = currentTurns.at(-1)?.role === 'user' ? currentTurns.slice(0, -1) : currentTurns;
+    if (contextualTurns.length) {
+        sections.push('\n# 当前阶段的既有对话');
+        for (const turn of contextualTurns.slice(-6)) {
+            const content = turn.role === 'assistant'
+                ? responseForPrompt(turn.content, preset)
+                : turn.content;
+            sections.push(`\n[${turn.role === 'user' ? '用户' : 'A.U.T.O'}]\n${content.slice(0, 18000)}`);
+        }
+    }
+    sections.push('\n</STUDIO_PROJECT_CONTEXT>');
+
+    let context = sections.join('\n');
+    if (context.length > MAX_CONTEXT_CHARS) {
+        context = `${context.slice(0, 180000)}\n\n[中间较早的产物因上下文长度省略]\n\n${context.slice(-(MAX_CONTEXT_CHARS - 180000))}`;
+    }
+    return context;
+}
+
+function buildOrderedPrompts(preset, currentStep) {
+    const ordered = [];
+    for (const prompt of preset.prompts || []) {
+        if (PLACEHOLDER_IDS.has(prompt.id)) continue;
+        const isWorkflowStep = STEP_PROMPT_IDS.has(prompt.id);
+        if (isWorkflowStep && prompt.id !== currentStep.promptId) continue;
+        if (!isWorkflowStep && !prompt.enabled) continue;
+        if (!prompt.content?.trim()) continue;
+
+        let content = prompt.id === '0a09c911-6d52-4635-a244-b30f9aafa412'
+            ? customizeSettingsPrompt(prompt.content)
+            : prompt.content;
+        try {
+            content = helper.substitudeMacros(content);
+        } catch (error) {
+            console.warn(`[A.U.T.O Card Studio] 提示词宏替换失败：${prompt.name}`, error);
+        }
+        if (content.trim()) ordered.push({ role: prompt.role || 'system', content });
+    }
+
+    ordered.push({ role: 'user', content: buildProjectContext(currentStep, preset) });
+    ordered.push('user_input');
+    return ordered;
+}
+
+function presetGenerationOptions(preset) {
+    const settings = preset.settings || {};
+    const customApi = {};
+    const assignNumber = (key, value) => {
+        if (Number.isFinite(value)) customApi[key] = value;
+    };
+    assignNumber('max_tokens', settings.max_completion_tokens);
+    assignNumber('temperature', settings.temperature);
+    assignNumber('frequency_penalty', settings.frequency_penalty);
+    assignNumber('presence_penalty', settings.presence_penalty);
+    assignNumber('top_p', settings.top_p);
+    assignNumber('top_k', settings.top_k);
+
+    if (connectionSettings.mode === 'custom') {
+        customApi.apiurl = connectionSettings.apiUrl.trim();
+        customApi.model = connectionSettings.model.trim();
+        customApi.source = connectionSettings.source;
+        if (customApiKey.trim()) customApi.key = customApiKey.trim();
+    }
+    return customApi;
+}
+
+function customConnectionError() {
+    if (connectionSettings.mode !== 'custom') return null;
+    const apiUrl = connectionSettings.apiUrl.trim();
+    if (!apiUrl) return { message: '请先填写独立连接的接口地址。', selector: '#acs-custom-api-url' };
+    try {
+        const parsed = new URL(apiUrl);
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('unsupported protocol');
+    } catch {
+        return { message: '接口地址格式不正确，请填写以 http:// 或 https:// 开头的完整地址。', selector: '#acs-custom-api-url' };
+    }
+    if (!connectionSettings.model.trim()) {
+        return { message: '请填写模型名称，或点击“获取模型”后选择。', selector: '#acs-custom-model' };
+    }
+    return null;
+}
+
+async function fetchCustomModels() {
+    const apiUrl = connectionSettings.apiUrl.trim();
+    if (!apiUrl) {
+        notify('warning', '请先填写接口地址，再获取模型列表。');
+        shell.querySelector('#acs-custom-api-url').focus();
+        return;
+    }
+    if (!helper?.getModelList) {
+        notify('error', '当前酒馆助手版本不支持获取模型列表，请手动填写模型名称。');
+        return;
+    }
+
+    const button = shell.querySelector('#acs-fetch-models');
+    const originalMarkup = button.innerHTML;
+    button.disabled = true;
+    button.textContent = '正在获取…';
+    try {
+        const models = await helper.getModelList({
+            apiurl: apiUrl,
+            ...(customApiKey.trim() ? { key: customApiKey.trim() } : {}),
+        });
+        const uniqueModels = [...new Set((models || []).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        const options = shell.querySelector('#acs-custom-model-options');
+        options.replaceChildren(...uniqueModels.map(model => new Option(model, model)));
+        notify('success', uniqueModels.length
+            ? `已获取 ${uniqueModels.length} 个模型，可以在“模型名称”中选择。`
+            : '连接成功，但接口没有返回可选模型，请手动填写模型名称。');
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 获取模型列表失败', error);
+        notify('error', `获取模型失败：${String(error?.message || error)}`);
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalMarkup;
+    }
+}
+
+function prepareGeneration() {
+    if (isGenerating) return;
+    if (!helper) {
+        notify('error', '未检测到酒馆助手，无法调用 A.U.T.O 生成。');
+        return null;
+    }
+    if (!environment.presetName) {
+        notify('error', '没有找到 A.U.T.O v2.0 预设，请在“设置”中选择正确预设。');
+        return null;
+    }
+    if (!project.brief.trim() && project.currentStep === 1) {
+        // 母题收起时先自动展开，避免提示用户后却无法看到输入框。
+        project.ui.overviewCollapsed = false;
+        saveProject();
+        renderOverviewState();
+        notify('warning', '请先写下一两句创作母题，再开始第一阶段。');
+        shell.querySelector('#acs-project-brief').focus();
+        return null;
+    }
+
+    const connectionError = customConnectionError();
+    if (connectionError) {
+        notify('warning', connectionError.message);
+        switchInspectorTab('settings');
+        shell.querySelector(connectionError.selector).focus();
+        return null;
+    }
+
+    const step = STEPS[project.currentStep - 1];
+    const state = project.steps[step.number];
+    return { step, state };
+}
+
+async function runStepGeneration(step, state, userInput, { appendUserTurn = true, retried = false } = {}) {
+    if (appendUserTurn) {
+        state.turns.push({ role: 'user', content: userInput, createdAt: new Date().toISOString() });
+    }
+    state.status = 'draft';
+    saveProject();
+    shell.querySelector('#acs-user-input').value = '';
+    setGenerating(true);
+    renderCurrentStep();
+    renderStepRail();
+
+    let succeeded = false;
+    try {
+        const preset = helper.getPreset(environment.presetName);
+        activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
+        const result = await helper.generateRaw({
+            generation_id: activeGenerationId,
+            user_input: userInput,
+            should_stream: false,
+            should_silence: false,
+            ordered_prompts: buildOrderedPrompts(preset, step),
+            custom_api: presetGenerationOptions(preset),
+        });
+        const response = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+        state.turns.push({ role: 'assistant', content: response, createdAt: new Date().toISOString() });
+        state.status = 'draft';
+        state.updatedAt = new Date().toISOString();
+        saveProject();
+        succeeded = true;
+        notify('success', retried
+            ? `Step ${step.number}「${step.name}」已重新生成。`
+            : `Step ${step.number}「${step.name}」草案已生成。`);
+    } catch (error) {
+        const message = String(error?.message || error);
+        const stopped = /abort|stop|停止|中断/i.test(message);
+        if (!stopped) {
+            console.error('[A.U.T.O Card Studio] 生成失败', error);
+            notify('error', `生成失败：${message}`);
+        } else {
+            notify('info', '本次生成已停止。');
+        }
+    } finally {
+        activeGenerationId = null;
+        setGenerating(false);
+        renderAll();
+    }
+    return succeeded;
+}
+
+async function generateCurrentStep() {
+    const prepared = prepareGeneration();
+    if (!prepared) return;
+    const { step, state } = prepared;
+    const userInput = shell.querySelector('#acs-user-input').value.trim()
+        || (state.turns.length ? '请基于既有对话继续完善本阶段产物，并保持 A.U.T.O 规定的输出格式。' : `请执行 Step ${step.number}「${step.name}」。`);
+
+    await runStepGeneration(step, state, userInput);
+}
+
+async function retryLatestUserInput(turnIndex) {
+    const prepared = prepareGeneration();
+    if (!prepared) return;
+    const { step, state } = prepared;
+    let latestUserIndex = -1;
+    for (let index = state.turns.length - 1; index >= 0; index -= 1) {
+        if (state.turns[index].role === 'user') {
+            latestUserIndex = index;
+            break;
+        }
+    }
+    if (latestUserIndex < 0 || turnIndex !== latestUserIndex) {
+        notify('info', '这条输入已不是最新消息，请重试当前最后一条输入。');
+        renderCurrentStep();
+        return;
+    }
+
+    const userInput = state.turns[latestUserIndex].content;
+    const previousTail = state.turns.slice(latestUserIndex + 1);
+    const previousStatus = state.status;
+    state.turns = state.turns.slice(0, latestUserIndex + 1);
+    const succeeded = await runStepGeneration(step, state, userInput, { appendUserTurn: false, retried: true });
+    if (!succeeded && previousTail.length) {
+        state.turns.push(...previousTail);
+        state.status = previousStatus;
+        saveProject();
+        renderAll();
+        notify('info', '重试未完成，已恢复原来的回复。');
+    }
+}
+
+function setGenerating(value) {
+    isGenerating = value;
+    const generateButton = shell.querySelector('#acs-generate');
+    const stopButton = shell.querySelector('#acs-stop-generation');
+    generateButton.disabled = value;
+    generateButton.innerHTML = value
+        ? '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> A.U.T.O 正在构筑'
+        : '<i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> 生成阶段草案';
+    stopButton.hidden = !value;
+    shell.querySelector('#acs-accept-step').disabled = value || !latestAssistantResponse(project.currentStep);
+}
+
+function stopGeneration() {
+    if (!activeGenerationId || !helper?.stopGenerationById) return;
+    helper.stopGenerationById(activeGenerationId);
+}
+
+function acceptCurrentStep() {
+    const step = STEPS[project.currentStep - 1];
+    if (!latestAssistantResponse(step.number)) return;
+    project.steps[step.number].status = 'accepted';
+    project.steps[step.number].updatedAt = new Date().toISOString();
+    if (project.currentStep < STEPS.length) {
+        project.currentStep += 1;
+        revealStepPhase(project.currentStep);
+    }
+    saveProject();
+    renderAll();
+    shell.querySelector('#acs-user-input').focus();
+}
+
+function extractXmlBlocks(text) {
+    const blocks = [];
+    const pattern = /<([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)(?:\s[^>]*)?>[\s\S]*?<\/\1>/g;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+        blocks.push({
+            tag: match[1],
+            content: match[0],
+            start: match.index,
+            end: match.index + match[0].length,
+        });
+    }
+    return blocks;
+}
+
+function extractArtifactBlocks(text) {
+    return extractXmlBlocks(text).filter(block => (
+        block.tag.startsWith('WORLD_')
+        || block.tag === 'NARRATIVE'
+        || block.tag === 'UpdateVariable'
+        || block.tag === 'initvar'
+        || block.tag === 'STATUSBAR_DATA'
+        || block.tag.startsWith('SOURCE_statusbar')
+        || (block.tag.startsWith('SOURCE_main_characters_') && block.tag.endsWith('_状态'))
+    ));
+}
+
+function extractMappedContent(response, mapping) {
+    if (!response) return '';
+    const blocks = extractXmlBlocks(response);
+    const selected = blocks.filter(block => {
+        if (mapping.tags?.includes(block.tag)) return true;
+        if (mapping.prefixes?.some(prefix => block.tag.startsWith(prefix))) return true;
+        if (mapping.suffixes?.some(suffix => block.tag.endsWith(suffix))) return true;
+        if (mapping.sourcePrefixes?.some(prefix => block.tag.startsWith(prefix) && block.tag.endsWith('_状态'))) return true;
+        return false;
+    });
+    return selected.length ? selected.map(block => block.content).join('\n\n') : response;
+}
+
+function entryDisplayName(entry) {
+    return String(entry.name || entry.comment || '');
+}
+
+function buildOutputWorldbook(template) {
+    const worldbook = typeof structuredClone === 'function'
+        ? structuredClone(template)
+        : JSON.parse(JSON.stringify(template));
+
+    for (const mapping of WORLD_ENTRY_MAPPINGS) {
+        if (project.steps[mapping.step]?.status !== 'accepted') continue;
+        const response = latestAssistantResponse(mapping.step);
+        if (!response) continue;
+        const entry = worldbook.find(item => entryDisplayName(item).includes(mapping.needle));
+        if (!entry) {
+            console.warn(`[A.U.T.O Card Studio] 世界书模板中没有找到条目：${mapping.needle}`);
+            continue;
+        }
+        const content = extractMappedContent(response, mapping);
+        if (mapping.append && entry.content?.trim()) {
+            if (!entry.content.includes(content)) entry.content = `${entry.content}\n\n${content}`;
+        } else {
+            entry.content = content;
+        }
+    }
+    return worldbook;
+}
+
+function extractOpeningMessage() {
+    const response = latestAssistantResponse(30);
+    if (!response) return `欢迎来到「${project.name}」。`;
+    const wanted = extractXmlBlocks(response).filter(block => [
+        'NARRATIVE',
+        'NARRATIVE_parallel',
+        'CONTEXT_options',
+        'CONTEXT_summary',
+        'CONTEXT_hidden_summary',
+        'UpdateVariable',
+        'STATUSBAR_DATA',
+    ].includes(block.tag));
+    return wanted.length ? wanted.map(block => block.content).join('\n\n') : response;
+}
+
+function defaultOutputWorldbookName() {
+    return `${project.name || '未命名世界'} · 世界书`;
+}
+
+async function publishProject() {
+    if (!helper) {
+        notify('error', '未检测到酒馆助手，无法写入角色卡。');
+        return;
+    }
+    if (!environment.worldbookName) {
+        notify('error', '请先在“设置”中选择 A.U.T.O 世界书模板。');
+        return;
+    }
+
+    const characterName = shell.querySelector('#acs-character-name').value.trim();
+    const worldbookName = shell.querySelector('#acs-output-worldbook').value.trim() || defaultOutputWorldbookName();
+    if (!characterName) {
+        notify('warning', '请填写角色卡名称。');
+        shell.querySelector('#acs-character-name').focus();
+        return;
+    }
+
+    const existingCharacters = helper.getCharacterNames?.() || [];
+    const existingWorldbooks = helper.getWorldbookNames?.() || [];
+    const overwritten = [];
+    if (existingCharacters.includes(characterName)) overwritten.push(`角色卡“${characterName}”`);
+    if (existingWorldbooks.includes(worldbookName)) overwritten.push(`世界书“${worldbookName}”`);
+    const message = overwritten.length
+        ? `将更新${overwritten.join('和')}。已有头像与扩展数据会尽量保留，是否继续？`
+        : `将创建角色卡“${characterName}”及世界书“${worldbookName}”，是否继续？`;
+    if (!hostWindow.confirm(message)) return;
+
+    const button = shell.querySelector('#acs-publish');
+    button.disabled = true;
+    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在装配角色卡';
+    try {
+        const template = await helper.getWorldbook(environment.worldbookName);
+        const outputWorldbook = buildOutputWorldbook(template);
+        await helper.createOrReplaceWorldbook(worldbookName, outputWorldbook, { render: 'immediate' });
+
+        let existing = {};
+        if (existingCharacters.includes(characterName)) {
+            existing = await helper.getCharacter(characterName);
+        }
+        const creatorNotes = [
+            `由 A.U.T.O 角色卡创作台生成`,
+            `项目: ${project.name}`,
+            `更新时间: ${new Date().toLocaleString('zh-CN')}`,
+            '',
+            project.brief,
+        ].join('\n');
+        const character = {
+            ...existing,
+            creator: project.preferences.creatorRole,
+            creator_notes: creatorNotes,
+            description: existing.description || `# ${project.name}\n\n${project.brief}`,
+            first_messages: [extractOpeningMessage()],
+            worldbook: worldbookName,
+            extensions: existing.extensions || {
+                regex_scripts: [],
+                tavern_helper: { scripts: [], variables: {} },
+            },
+        };
+        await helper.createOrReplaceCharacter(characterName, character, { render: 'immediate' });
+
+        project.output.characterName = characterName;
+        project.output.worldbookName = worldbookName;
+        saveProject();
+        shell.querySelector('#acs-publish-note').textContent = `已创建：${characterName} · ${worldbookName}`;
+        notify('success', '角色卡与世界书已写入 SillyTavern。');
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 发布失败', error);
+        notify('error', `发布失败：${error?.message || error}`);
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="fa-solid fa-feather-pointed" aria-hidden="true"></i> 创建角色卡与世界书';
+    }
+}
+
+function projectDossier() {
+    const lines = [
+        `# ${project.name}`,
+        '',
+        '## 创作母题',
+        '',
+        project.brief || '未填写',
+        '',
+        '## 创作设置',
+        '',
+        `- A.U.T.O 预设：${environment.presetName || '未选择'}`,
+        `- 世界书模板：${environment.worldbookName || '未选择'}`,
+        `- 创作者：${project.preferences.creatorRole}`,
+        `- 输出语言：${project.preferences.language}`,
+        `- 叙事人称：${project.preferences.person}`,
+    ];
+    for (const step of STEPS) {
+        const response = latestAssistantResponse(step.number);
+        if (!response) continue;
+        const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
+        lines.push('', `## Step ${step.number} · ${step.name}（${status}）`, '', response);
+    }
+    return lines.join('\n');
+}
+
+function safeFileName(value) {
+    return String(value || 'AUTO项目').replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').slice(0, 90);
+}
+
+function downloadBlob(content, fileName, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportProjectJson() {
+    downloadBlob(
+        JSON.stringify(project, null, 2),
+        `${safeFileName(project.name)}.auto-card-studio.json`,
+        'application/json;charset=utf-8',
+    );
+}
+
+function downloadDossier() {
+    downloadBlob(projectDossier(), `${safeFileName(project.name)}-创作档案.md`, 'text/markdown;charset=utf-8');
+}
+
+function newProject() {
+    const hasWork = STEPS.some(step => project.steps[step.number]?.turns?.length);
+    if (hasWork && !hostWindow.confirm('新建项目不会删除已导出的文件，但会清空当前本地工作台。是否继续？')) return;
+    project = createDefaultProject();
+    environment.presetName = choosePresetName(environment.presetNames);
+    environment.worldbookName = chooseWorldbookName(environment.worldbookNames);
+    project.presetName = environment.presetName;
+    project.sourceWorldbookName = environment.worldbookName;
+    saveProject();
+    renderEnvironmentSelectors();
+    renderAll();
+}
+
+function selectStep(number) {
+    if (number < 1 || number > STEPS.length || isGenerating) return;
+    project.currentStep = number;
+    revealStepPhase(number);
+    saveProject();
+    renderStepRail();
+    renderCurrentStep();
+}
+
+function switchInspectorTab(name) {
+    if (name !== 'structure' && artifactPanelExpanded) toggleArtifactPanel(false);
+    for (const tab of shell.querySelectorAll('[data-acs-tab]')) {
+        const active = tab.dataset.acsTab === name;
+        tab.classList.toggle('is-active', active);
+        tab.setAttribute('aria-selected', String(active));
+    }
+    for (const panel of shell.querySelectorAll('[data-acs-panel]')) {
+        const active = panel.dataset.acsPanel === name;
+        panel.classList.toggle('is-active', active);
+        panel.hidden = !active;
+    }
+}
+
+function toggleMobileInspector() {
+    const inspector = shell.querySelector('.acs-inspector');
+    const button = shell.querySelector('#acs-inspector-toggle');
+    const opened = inspector.classList.toggle('is-mobile-open');
+    button.setAttribute('aria-expanded', String(opened));
+    button.title = opened ? '关闭项目检查器' : '打开项目检查器';
+}
+
+function bindStudioEvents() {
+    for (const close of shell.querySelectorAll('[data-acs-close]')) close.addEventListener('click', closeStudio);
+    shell.querySelector('#acs-step-rail').addEventListener('click', event => {
+        const phaseToggle = event.target.closest('[data-phase-toggle]');
+        if (phaseToggle) {
+            togglePhase(phaseToggle.dataset.phaseToggle);
+            return;
+        }
+        const button = event.target.closest('[data-step]');
+        if (button) selectStep(Number(button.dataset.step));
+    });
+    shell.querySelector('#acs-toggle-overview').addEventListener('click', toggleOverview);
+    shell.querySelector('#acs-turns').addEventListener('click', event => {
+        const retry = event.target.closest('[data-retry-turn]');
+        if (retry) retryLatestUserInput(Number(retry.dataset.retryTurn));
+    });
+    shell.querySelector('#acs-generate').addEventListener('click', generateCurrentStep);
+    shell.querySelector('#acs-stop-generation').addEventListener('click', stopGeneration);
+    shell.querySelector('#acs-accept-step').addEventListener('click', acceptCurrentStep);
+    shell.querySelector('#acs-publish').addEventListener('click', publishProject);
+    shell.querySelector('#acs-download-dossier').addEventListener('click', downloadDossier);
+    shell.querySelector('#acs-save-project').addEventListener('click', exportProjectJson);
+    shell.querySelector('#acs-inspector-toggle').addEventListener('click', toggleMobileInspector);
+    shell.querySelector('#acs-new-project').addEventListener('click', newProject);
+    shell.querySelector('#acs-fetch-models').addEventListener('click', fetchCustomModels);
+    shell.querySelector('#acs-expand-artifacts').addEventListener('click', () => toggleArtifactPanel());
+
+    const artifactList = shell.querySelector('#acs-artifact-list');
+    artifactList.addEventListener('click', event => {
+        const copyButton = event.target.closest('[data-copy-artifact]');
+        if (copyButton) copyArtifact(copyButton);
+    });
+    artifactList.addEventListener('input', event => {
+        if (event.target.matches('.acs-artifact-content')) scheduleArtifactSave(event.target);
+    });
+    artifactList.addEventListener('focusout', event => {
+        if (event.target.matches('.acs-artifact-content')) saveArtifactEdit(event.target);
+    });
+    artifactList.addEventListener('keydown', event => {
+        if (!event.target.matches('.acs-artifact-content')) return;
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+            event.preventDefault();
+            saveArtifactEdit(event.target);
+        }
+    });
+
+    for (const radio of shell.querySelectorAll('input[name="acs-connection-mode"]')) {
+        radio.addEventListener('change', event => {
+            if (!event.target.checked) return;
+            connectionSettings.mode = event.target.value === 'custom' ? 'custom' : 'current';
+            saveConnectionSettings();
+            renderConnectionSettings();
+            renderCurrentStep();
+        });
+    }
+    shell.querySelector('#acs-custom-source').addEventListener('change', event => {
+        connectionSettings.source = event.target.value;
+        saveConnectionSettings();
+    });
+    shell.querySelector('#acs-custom-api-url').addEventListener('input', event => {
+        connectionSettings.apiUrl = event.target.value;
+        saveConnectionSettings();
+    });
+    shell.querySelector('#acs-custom-api-key').addEventListener('input', event => {
+        customApiKey = event.target.value;
+    });
+    shell.querySelector('#acs-custom-model').addEventListener('input', event => {
+        connectionSettings.model = event.target.value;
+        saveConnectionSettings();
+        shell.querySelector('#acs-connection-summary').textContent = event.target.value.trim() || '等待配置';
+        renderCurrentStep();
+    });
+
+    shell.querySelector('#acs-project-name').addEventListener('input', event => {
+        const previousDefault = defaultOutputWorldbookName();
+        project.name = event.target.value || '未命名世界';
+        if (!project.output.worldbookName || project.output.worldbookName === previousDefault) {
+            project.output.worldbookName = defaultOutputWorldbookName();
+            shell.querySelector('#acs-output-worldbook').value = project.output.worldbookName;
+        }
+        saveProject();
+    });
+    shell.querySelector('#acs-project-brief').addEventListener('input', event => {
+        project.brief = event.target.value;
+        saveProject();
+    });
+
+    const preferenceFields = {
+        '#acs-ai-role': 'aiRole',
+        '#acs-creator-role': 'creatorRole',
+        '#acs-word-count': 'wordCount',
+        '#acs-language': 'language',
+        '#acs-person': 'person',
+    };
+    for (const [selector, key] of Object.entries(preferenceFields)) {
+        shell.querySelector(selector).addEventListener('change', event => {
+            project.preferences[key] = event.target.value;
+            saveProject();
+            renderCurrentStep();
+        });
+    }
+
+    shell.querySelector('#acs-worldbook-select').addEventListener('change', event => {
+        environment.worldbookName = event.target.value;
+        project.sourceWorldbookName = event.target.value;
+        saveProject();
+    });
+    shell.querySelector('#acs-character-name').addEventListener('input', event => {
+        project.output.characterName = event.target.value;
+        saveProject();
+    });
+    shell.querySelector('#acs-output-worldbook').addEventListener('input', event => {
+        project.output.worldbookName = event.target.value;
+        saveProject();
+    });
+    for (const tab of shell.querySelectorAll('[data-acs-tab]')) {
+        tab.addEventListener('click', () => switchInspectorTab(tab.dataset.acsTab));
+    }
+    shell.querySelector('#acs-user-input').addEventListener('keydown', event => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+            event.preventDefault();
+            generateCurrentStep();
+        }
+    });
+}
+
+function ensureStudioStyle() {
+    if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
+    const style = document.createElement('style');
+    style.id = SCRIPT_STYLE_ID;
+    style.textContent = STUDIO_CSS;
+    document.head.append(style);
+}
+
+async function ensureStudioLoaded() {
+    if (shell?.isConnected) return;
+
+    const existing = document.querySelector('#auto-card-studio');
+    if (existing && existing.dataset.acsRuntime !== SCRIPT_RUNTIME_MARK) {
+        // 删除旧插件留在当前页面中的隐藏界面，脚本版随后接管。
+        existing.remove();
+        document.querySelector('#auto-card-studio-launch')?.remove();
+        document.body.classList.remove('acs-no-scroll');
+    }
+
+    ensureStudioStyle();
+    const container = document.createElement('div');
+    container.innerHTML = STUDIO_HTML;
+    shell = container.querySelector('#auto-card-studio');
+    shell.dataset.acsRuntime = SCRIPT_RUNTIME_MARK;
+    document.body.append(shell);
+    bindStudioEvents();
+    renderAll();
+    await inspectEnvironment();
+}
+
+function showStudioRuntimeError(error) {
+    try {
+        ensureStudioStyle();
+        if (!shell?.isConnected) {
+            const container = document.createElement('div');
+            container.innerHTML = STUDIO_HTML;
+            shell = container.querySelector('#auto-card-studio');
+            shell.dataset.acsRuntime = SCRIPT_RUNTIME_MARK;
+            document.body.append(shell);
+        }
+        shell.classList.add('is-open');
+        shell.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('acs-no-scroll');
+        let banner = shell.querySelector('#acs-runtime-error');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'acs-runtime-error';
+            banner.style.cssText = 'position:absolute;z-index:20;left:50%;top:92px;transform:translateX(-50%);max-width:min(760px,80vw);padding:14px 18px;border:1px solid #d9847f;border-radius:12px;background:#3a2926;color:#f4ddd8;box-shadow:0 12px 32px #0008;font:14px/1.6 sans-serif;';
+            shell.querySelector('.acs-window')?.append(banner);
+        }
+        banner.textContent = `创作台初始化失败：${error?.message || error}。请把这段提示发给开发者。`;
+    } catch (fallbackError) {
+        console.error('[A.U.T.O Card Studio] 错误提示界面创建失败', fallbackError);
+    }
+}
+
+async function openStudio() {
+    try {
+        await ensureStudioLoaded();
+        shell.classList.add('is-open');
+        shell.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('acs-no-scroll');
+        renderAll();
+        const initialFocus = project.ui.overviewCollapsed
+            ? shell.querySelector('#acs-user-input')
+            : shell.querySelector('#acs-project-brief');
+        initialFocus.focus();
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 打开失败', error);
+        showStudioRuntimeError(error);
+        notify('error', `无法打开创作台：${error?.message || error}`);
+    }
+}
+
+function closeStudio() {
+    if (!shell || isGenerating) {
+        if (isGenerating) notify('warning', '请先停止当前生成，再关闭创作台。');
+        return;
+    }
+    if (artifactPanelExpanded) toggleArtifactPanel(false);
+    shell.classList.remove('is-open');
+    shell.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('acs-no-scroll');
+}
+
+function handleHostKeydown(event) {
+    if (event.key !== 'Escape' || !shell?.classList.contains('is-open')) return;
+    if (artifactPanelExpanded) {
+        toggleArtifactPanel(false);
+        return;
+    }
+    closeStudio();
+}
+
+function cleanupScriptRuntime() {
+    document.removeEventListener('keydown', handleHostKeydown);
+    document.body.classList.remove('acs-no-scroll');
+    if (shell?.dataset.acsRuntime === SCRIPT_RUNTIME_MARK) shell.remove();
+    document.querySelector(`#${SCRIPT_STYLE_ID}`)?.remove();
+    shell = null;
+}
+
+document.addEventListener('keydown', handleHostKeydown);
+appendInexistentScriptButtons([{ name: '打开 A.U.T.O 创作台', visible: true }]);
+eventOn(getButtonEvent('打开 A.U.T.O 创作台'), openStudio);
+window.addEventListener('pagehide', cleanupScriptRuntime, { once: true });
