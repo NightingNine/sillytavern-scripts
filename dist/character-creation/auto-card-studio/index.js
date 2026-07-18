@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.6';
+const AUTO_CARD_STUDIO_VERSION = '0.6.7';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1414,6 +1414,61 @@ const DEFAULT_CONNECTION_SETTINGS = Object.freeze({
     apiUrl: '',
     model: '',
 });
+
+// 依据 A.U.T.O 教程整理的步骤说明。这里解释步骤在整套制卡结构中的作用，
+// 不复制预设提示词，也不会改变实际发送给模型的内容。
+const STEP_TUTORIAL_NOTES = Object.freeze([
+    ['体验锚定', '先界定玩家与 AI 的互动关系，再确定希望持续获得的审美体验。它是整张卡最重要的方向约束。', '检查 AI 能做什么、不能做什么、是否抢玩家行动，以及叙事视角和体验重点是否准确。', '交互范式与美学纲领。两者通常会进入最终世界书。', '不要用“精确、真实”等空泛词代替体验描述；它们可能把描写带向冷感。'],
+    ['概念补强', '当美学纲领不足以支撑复杂体验时，补充让核心体验成立的世界机制；也可以把它当作灵感发生器。', '从 Step 1 的目标反推必须存在的规则、资源、冲突与反馈，反复生成后只保留真正必要的部分。', '一个或多个实现机制。简单世界可选择不交付。', '这一步并非强制；如果交互范式和美学纲领已经足够，就不要为了完整而堆设定。'],
+    ['长线推演', '为单线长剧情识别阶段变化与关键转折，主要用于指导后续设计，而不是直接塞进运行中的角色卡。', '先给出起点、终点和不可违背的转折，再检查阶段是否能连续推进。', '弧光框架，默认作为设计参考。', '它只适合单线且消耗较多上下文；开放世界或多线结构可以跳过。'],
+    ['世界全景', '从核心感觉出发描摹世界的整体面貌，是实体内容设计的第一张全景图。', '先写结构与主要矛盾，再决定哪些局部值得在后续步骤展开。', '世界蓝图。对世界观要求不高时，它本身就可以够用。', '先抓核心、再画全局、最后补局部；不要一开始陷进百科细节。'],
+    ['角色原型', '设计适合变量更新和异步改写的主要角色结构，而不只是写一篇静态人物小传。', '同时检查角色原点、可见画像与当前状态，让后续变量能够找到稳定落点。', '每名主要角色的原点、画像和状态。', '如果对人物结构不满意，可在生成规则和具体实例步骤进一步设计，不必在此一次定死。'],
+    ['关系索引', '把角色与势力组织成可导航、可扩展的关系目录。目录里放人物、组织或其他实体都可以。', '确定节点、上下级与关键连线，并说明关系变化会牵动什么。', '关系图谱。', '它首先是结构工具，不必把所有关系都写成固定剧情。'],
+    ['生成模板', '为需要批量或运行时生成的内容建立模板，让新内容仍遵守同一世界逻辑。', '选择要生成的对象，规定共同字段、变化范围、禁区与因果约束。', '一个或多个生成规则。', '模板既可用于游玩时实时生成，也可只用于指导下一步制作实例。'],
+    ['落地实例', '按生成规则制作世界中真实存在的角色、地点、组织或物品，也允许不依赖模板直接生成。', '优先制作会立刻参与剧情的实例，用它们反向检验规则是否可执行。', '一个或多个具体实例。', '默认思路偏向“实际存在的东西”；抽象制度和历史更适合 Step 9。'],
+    ['抽象知识', '补充习俗、历史、经济、制度等不易被当作实体实例表达的世界知识。', '只写会影响角色判断和行动的知识，并标明不同群体是否有不同认知。', '一个或多个世界知识条目。', '不要把世界书写成百科全书；优先保留游玩中真的会被用到的部分。'],
+    ['状态空间', '用状态机思路规划地点、阶段、关系层级等互斥或可迁移的状态空间。', '列出状态、进入条件、退出条件、允许迁移与禁止迁移。', '空间规划设计。', '这里的“空间”不只指地图，也可以是时间阶段、身份或关系状态。'],
+    ['剧情状态机', '把关键情节组织成带条件和分支的图谱，使剧情可推进、可失败、可回流。', '先建立节点和迁移，再补充触发条件与失败后的继续路径。', '一个或多个情节图谱。', '不要把它误写成唯一剧本；重点是结构关系和可玩路径。'],
+    ['状态内容', '为已经划分的每个状态或维度填写实际可用内容。', '逐一补充该维度独有的人物、规则、冲突、入口与出口。', '一个或多个维度内容。', '只有结构而没有内容时，状态机无法游玩；反过来也避免重复已经存在的通用设定。'],
+    ['叙事总则', '把交互范式和美学纲领落实为叙述者在实际写作中的稳定做法。', '确定镜头距离、信息边界、主动性、节奏和不同场景的处理原则。', '叙事指南核心。', '这一层追求可执行的写法，不擅长复刻某位具体作者的文风。'],
+    ['语言材料', '准备可直接调用的词汇、意象、句式与群体表达差异。', '从世界气质和角色身份出发整理语料，同时列出应避免的表达。', '一个或多个语料库。', '语料是材料而不是成文模板；避免让所有角色共享同一种腔调。'],
+    ['场景方法', '为高频、关键或特殊场景设计可复用的描写策略。', '说明每类场景的感官焦点、节奏、变化来源和结束信号。', '一个或多个场景策略集。', '策略应能随状态变化，不能只是复制固定段落。'],
+    ['变量盘点', '在变量化前整理所有已设计信息，区分动态数据、条件内容和静态设定。', '检查哪些信息会变化、是否影响后续，以及是否值得占用变量。', '待变量化清单与待条件化清单。', '变量不是越多越好；不变化或不影响游玩的信息应继续留在普通设定中。'],
+    ['体系规划', '把变量分成职责清晰的簇，并规划层级和依赖，避免后面出现一棵无法维护的变量树。', '按角色、世界、任务和界面等维度分组，注明更新频率与依赖。', '变量体系规划。', '先规划结构再命名字段；这一阶段关注组织方式，不急于写完整初值。'],
+    ['字段实现', '逐一设计变量的类型、初值、范围、联动和显示引用。', '核对每个字段由什么事件更新，怎样判断无变化，以及是否符合 MVU 使用方式。', '当前变量、条件映射与变量 schema。', '初值必须和开局事实一致；数值范围、枚举值和对象结构要明确。'],
+    ['更新路由', '汇总变量结构并规定剧情信息如何路由到正确字段。', '按事件类型检查相关变量簇，定义更新顺序、理由记录和最小变更原则。', '变量更新指南与条件显示规划。', '目标是减少漏更、错更和重复更新，而不是再次设计新变量。'],
+    ['条件配置', '把现有 XML 内容改造成按变量条件显示的世界书内容，降低无关上下文占用。', '为每段内容设置明确条件，检查多个条件之间是同时满足还是任一满足。', '经过条件化配置的世界内容。', '适合地点、阶段、人物状态等同一时刻只需显示一部分的内容。'],
+    ['条件补充', '在变量体系完成后，补写只有满足特定条件才应出现的彩蛋、事件或知识。', '先定义较严格的交叉条件，再写条件成立时模型需要知道的实际内容。', '条件触发的世界内容。', '条件可以涉及不在场事件；不要让彩蛋因为条件过松而变成必然剧情。'],
+    ['根目录', '为大量 XML 和世界书条目建立运行时目录，让 AI 知道信息在哪里。', '先清理同名或重复 XML，再按内容域编制索引并安排在世界书前部。', '世界根目录。', '目录只负责导航，不要复制所有正文；重复标签会让索引失真。'],
+    ['状态栏输出', '设计玩家最终看到的状态界面，并规定它读取哪些变量或临时输出。', '先定形态、移动端布局和信息优先级，再生成 HTML 与捕获正则。', '状态栏界面、数据说明与局部正则。', '状态栏可以只读已设计变量，也可以配合回复格式读取 AI 临时输出；长内容可从断点续写。'],
+    ['回复装配', '规定游玩时每轮回复的分区结构，让正文、思考、摘要、变量与状态栏各归其位。', '逐区决定是否启用、谁可见、标签与顺序，并检查脚本是否能稳定捕获。', '最终回复格式。', '叙事区是主内容；其他分区按需求启用，不要为了齐全增加无用输出。'],
+    ['任务拆分', '找出适合交给更快、更便宜副 AI 的独立任务，释放主 AI 的叙事能力。', '为每项任务确定触发时机、读取资料、输出位置和失败处理。', '副 AI 任务清单。', '适合摘要、变量更新和世界书改写；即时叙事判断仍应留给主 AI。'],
+    ['世界书任务', '为需要新增或改写聊天世界书条目的副 AI 任务编写专用提示词。', '严格限定参考条目、事实来源、写回标签和允许修改的范围。', '一个或多个世界书任务提示词。', '副 AI 会读取它被允许看到的条目；同一条目中的条件内容可能无法再被细分隔离。'],
+    ['变量任务', '为一个或一组变量编写独立更新提示词，使变量更新可以拆分运行。', '要求只依据已发生剧情、校验字段类型，并输出最小合法变更。', '一个或多个变量更新任务提示词。', '选择普通周期任务还是专用变量任务，取决于是否需要加入任务周期计算。'],
+    ['交付结构', '设计最终世界书有哪些条目、每个条目包含哪些 XML，以及关键字和读取关系。', '同时考虑主 AI 与各副任务各自应该看到什么，避免所有内容常驻。', '条目规划与 AutoTask 配置。', '这是重组前的设计稿；条目边界应服务读取与维护，而不是照搬旧模板。'],
+    ['可执行重组', '把 Step 28 的设计转为程序可执行的内容块映射和条目属性方案。', '核对每个源内容块的目标、顺序、合并方式与遗漏项。', '世界书重组方案。发布时会自动执行。', '这一步不再改写设定；若存在未映射或重复内容，应先修正再发布。'],
+    ['启动场景', '生成独立开局，用第一幕启动前面设计的世界、角色、变量和核心体验。', '确定时间地点、即时矛盾、玩家可知信息，并让完整变量初值与开场事实一致。', '正式开场白与变量初始值。', '它是单独开局而非通用设定；不同开局可以重复生成并保留版本。'],
+].map(([stage, purpose, workflow, deliverable, caution]) => ({ stage, purpose, workflow, deliverable, caution })));
+
+const STEP_HELP_CSS = `
+.acs-step-title-line { display:flex; align-items:center; gap:10px; min-width:0; }
+.acs-step-help-button { display:grid; width:27px; height:27px; flex:0 0 auto; place-items:center; padding:0; border:1px solid rgba(211,173,114,.34); border-radius:999px; background:rgba(211,173,114,.08); color:var(--acs-gold); cursor:pointer; transition:transform 140ms ease, background 140ms ease, border-color 140ms ease; }
+.acs-step-help-button:hover { transform:translateY(-1px); border-color:rgba(211,173,114,.62); background:rgba(211,173,114,.15); }
+.acs-step-help-overlay { position:absolute; inset:0; z-index:35; display:grid; padding:clamp(14px,4vh,42px); place-items:center; background:rgba(18,16,14,.76); backdrop-filter:blur(10px); }
+.acs-step-help-dialog { width:min(720px,94vw); max-height:min(780px,90vh); overflow:auto; border:1px solid rgba(211,173,114,.34); border-radius:18px; background:#2b2925; box-shadow:0 30px 90px rgba(10,9,8,.58); scrollbar-width:thin; scrollbar-color:var(--acs-line) transparent; }
+.acs-step-help-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:22px 24px 18px; border-bottom:1px solid var(--acs-line-soft); background:linear-gradient(120deg,rgba(217,119,87,.09),transparent 52%); }
+.acs-step-help-kicker { margin:0 0 7px; color:var(--acs-cyan); font:700 9px/1 var(--acs-mono); letter-spacing:.16em; }
+.acs-step-help-head h2 { margin:0; font:500 27px/1.2 var(--acs-display); }
+.acs-step-help-head small { display:block; margin-top:7px; color:var(--acs-muted); font-size:10px; }
+.acs-step-help-close { display:grid; width:34px; height:34px; flex:0 0 auto; place-items:center; border:1px solid var(--acs-line); border-radius:9px; background:transparent; color:var(--acs-muted); cursor:pointer; }
+.acs-step-help-body { display:grid; gap:12px; padding:20px 24px 24px; }
+.acs-step-help-lead { margin:0; color:var(--acs-text); font:500 14px/1.75 var(--acs-body); }
+.acs-step-help-section { padding:14px 15px; border:1px solid var(--acs-line-soft); border-radius:11px; background:#34312c; }
+.acs-step-help-section span { display:block; margin-bottom:7px; color:var(--acs-gold); font:700 9px/1 var(--acs-mono); letter-spacing:.12em; }
+.acs-step-help-section p { margin:0; color:var(--acs-text-soft); font-size:11px; line-height:1.72; }
+.acs-step-help-section.is-caution { border-left:2px solid var(--acs-cyan); }
+@media (max-width:560px) { .acs-step-help-overlay{padding:0}.acs-step-help-dialog{width:100%;max-height:100%;border-radius:0}.acs-step-help-head,.acs-step-help-body{padding-left:17px;padding-right:17px}.acs-step-title-line{gap:7px}.acs-step-help-button{width:25px;height:25px} }
+`;
 
 const PHASES = [
     { id: 'foundation', label: 'I · 核心与世界', range: [1, 9] },
@@ -1665,8 +1720,8 @@ const TOUR_STEPS = Object.freeze([
         scene: 'welcome',
         eyebrow: 'ORIENTATION 01',
         title: '先认识这座角色锻造台',
-        description: 'A.U.T.O 会把角色卡创作拆成 30 个相互衔接的步骤。你负责方向、取舍与修改，AI 负责按照固定预设整理阶段产物。',
-        points: ['无需一次写完全部设定，可以从模糊想法开始。', '每一步的对话、正式产物和历史版本都会保存在当前项目。'],
+        description: 'A.U.T.O 不是一步出卡工具，而是一套分层设计流程：先锚定体验，再依次完成实体、状态机、描写、变量、输出、异步任务与交付。',
+        points: ['第一次使用建议完整走一遍；熟悉结构后可以按需要拆分步骤。', '你负责方向、检查与取舍，AI 按固定预设生成可交付产物。'],
         actionNote: '接下来会自动打开各区域演示，不会修改你的项目内容。',
     },
     {
@@ -1695,9 +1750,9 @@ const TOUR_STEPS = Object.freeze([
         placement: 'right',
         scene: 'route',
         eyebrow: 'ROUTE 04',
-        title: '30 步被组织成四段旅程',
-        description: '左侧依次完成核心与世界、叙事与体验、变量化系统、装配与交付。大类可以折叠，也可以跳转到任意步骤。',
-        points: ['通常按顺序推进，后一步会读取前面正式产物的最新版。', '需要返工时可直接返回旧步骤，原有对话和版本不会丢失。'],
+        title: '30 步组成一条分层设计路线',
+        description: '左侧四个折叠区用于导航，实际逻辑依次覆盖概念、实体、状态机、描写、变量、目录、输出、异步任务、重组和开局。',
+        points: ['新手通常按顺序推进，确认后的最新产物会成为后续步骤的上下文。', 'Step 3 等步骤可以跳过；返工时直接返回，历史版本不会丢失。'],
         actionNote: '已自动展开第一大类并定位 Step 1。',
     },
     {
@@ -1705,9 +1760,9 @@ const TOUR_STEPS = Object.freeze([
         placement: 'bottom',
         scene: 'station',
         eyebrow: 'STATION 05',
-        title: '每一步只解决一个明确问题',
-        description: '标题、目标说明和空白页提问会随步骤变化。先理解这一站要产出什么，再决定直接生成还是补充方向。',
-        points: ['“未开始、草案、已确认”表示当前步骤状态。', '确认只代表采用当前版本，之后仍然可以返回修改。'],
+        title: '先理解步骤，再要求 AI 生成',
+        description: '标题右侧的说明按钮会解释这一站为什么存在、建议怎样做、最终交付什么，以及教程中特别提醒的常见误区。',
+        points: ['“未开始、草案、已确认”表示当前步骤状态。', '确认只代表采用当前版本；之后仍可返回修改、重生成或恢复历史。'],
         actionNote: '中间内容已切换到 Step 1 的任务视图。',
     },
     {
@@ -5683,6 +5738,76 @@ function handleTourResize() {
     });
 }
 
+function installStepHelpUI() {
+    const title = shell.querySelector('#acs-step-title');
+    if (!title || shell.querySelector('#acs-step-help')) return;
+
+    const titleLine = document.createElement('div');
+    titleLine.className = 'acs-step-title-line';
+    title.parentNode.insertBefore(titleLine, title);
+    titleLine.append(title);
+
+    const button = document.createElement('button');
+    button.id = 'acs-step-help';
+    button.className = 'acs-step-help-button';
+    button.type = 'button';
+    button.title = '查看当前步骤说明';
+    button.setAttribute('aria-label', '查看当前步骤说明');
+    button.innerHTML = '<i class="fa-solid fa-circle-info" aria-hidden="true"></i>';
+    titleLine.append(button);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'acs-step-help-overlay';
+    overlay.className = 'acs-step-help-overlay';
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML = `
+      <section class="acs-step-help-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-step-help-title">
+        <header class="acs-step-help-head">
+          <div>
+            <p id="acs-step-help-kicker" class="acs-step-help-kicker"></p>
+            <h2 id="acs-step-help-title"></h2>
+            <small id="acs-step-help-stage"></small>
+          </div>
+          <button class="acs-step-help-close" type="button" data-step-help-close title="关闭说明" aria-label="关闭说明">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </header>
+        <div class="acs-step-help-body">
+          <p id="acs-step-help-purpose" class="acs-step-help-lead"></p>
+          <section class="acs-step-help-section"><span>建议怎么做</span><p id="acs-step-help-workflow"></p></section>
+          <section class="acs-step-help-section"><span>本步最终产物</span><p id="acs-step-help-deliverable"></p></section>
+          <section class="acs-step-help-section is-caution"><span>教程提醒</span><p id="acs-step-help-caution"></p></section>
+        </div>
+      </section>`;
+    shell.append(overlay);
+}
+
+function openStepHelp() {
+    const step = STEPS[project.currentStep - 1];
+    const note = STEP_TUTORIAL_NOTES[project.currentStep - 1];
+    const overlay = shell.querySelector('#acs-step-help-overlay');
+    if (!step || !note || !overlay) return;
+    shell.querySelector('#acs-step-help-kicker').textContent = `STEP ${String(step.number).padStart(2, '0')} / 30`;
+    shell.querySelector('#acs-step-help-title').textContent = step.name;
+    shell.querySelector('#acs-step-help-stage').textContent = `${note.stage} · ${step.goal}`;
+    shell.querySelector('#acs-step-help-purpose').textContent = note.purpose;
+    shell.querySelector('#acs-step-help-workflow').textContent = note.workflow;
+    shell.querySelector('#acs-step-help-deliverable').textContent = note.deliverable;
+    shell.querySelector('#acs-step-help-caution').textContent = note.caution;
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.querySelector('[data-step-help-close]')?.focus({ preventScroll: true });
+}
+
+function closeStepHelp() {
+    const overlay = shell?.querySelector('#acs-step-help-overlay');
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    shell.querySelector('#acs-step-help')?.focus({ preventScroll: true });
+}
+
 function bindStudioEvents() {
     for (const close of shell.querySelectorAll('[data-acs-close]')) close.addEventListener('click', closeStudio);
     shell.querySelector('#acs-step-rail').addEventListener('click', event => {
@@ -5734,6 +5859,14 @@ function bindStudioEvents() {
     shell.querySelector('#acs-tour-previous').addEventListener('click', () => moveTour(-1));
     shell.querySelector('#acs-tour-next').addEventListener('click', () => moveTour(1));
     shell.querySelector('#acs-tour-overlay').addEventListener('keydown', handleTourKeydown);
+    shell.querySelector('#acs-step-help').addEventListener('click', openStepHelp);
+    shell.querySelector('#acs-step-help-overlay').addEventListener('click', event => {
+        if (event.target === event.currentTarget) closeStepHelp();
+    });
+    shell.querySelector('#acs-step-help-overlay').addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeStepHelp();
+    });
+    shell.querySelector('[data-step-help-close]').addEventListener('click', closeStepHelp);
     shell.querySelector('#acs-inspector-toggle').addEventListener('click', toggleMobileInspector);
     shell.querySelector('#acs-new-project').addEventListener('click', newProject);
     shell.querySelector('#acs-fetch-models').addEventListener('click', fetchCustomModels);
@@ -5899,7 +6032,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${DELIVERY_DIALOG_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${DELIVERY_DIALOG_CSS}`;
     document.head.append(style);
 }
 
@@ -5921,6 +6054,7 @@ async function ensureStudioLoaded() {
     shell.dataset.acsRuntime = SCRIPT_RUNTIME_MARK;
     document.body.append(shell);
     updateStudioViewportScale();
+    installStepHelpUI();
     installProjectLibraryUI();
     installStudioToolsUI();
     installConversationNavigation();
