@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.5.1 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.5.2 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -33,7 +33,7 @@ const PROJECT_LIBRARY_CSS = `
 
 .acs-project-menu {
   position: absolute;
-  top: 62px;
+  top: calc(100% + 7px);
   left: 12px;
   z-index: 60;
   width: min(310px, calc(100vw - 42px));
@@ -42,6 +42,18 @@ const PROJECT_LIBRARY_CSS = `
   border-radius: 16px;
   background: #34312c;
   box-shadow: 0 22px 54px rgba(12, 10, 8, 0.48), 0 2px 8px rgba(12, 10, 8, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-16px) scaleY(0.94);
+  transform-origin: top left;
+  transition: opacity 150ms ease, transform 210ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.acs-project-menu.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scaleY(1);
 }
 
 .acs-project-menu::before {
@@ -331,11 +343,17 @@ const PROJECT_LIBRARY_CSS = `
   font-size: 9px;
   text-align: center;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .acs-project-menu {
+    transition: none;
+  }
+}
 `;
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.5.1';
+const AUTO_CARD_STUDIO_VERSION = '0.5.2';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
@@ -644,6 +662,7 @@ let launcherInstallTimer = null;
 let isGenerating = false;
 let activeGenerationId = null;
 let artifactPanelExpanded = false;
+let projectMenuCloseTimer = null;
 const artifactSaveTimers = new Map();
 let environment = {
     checked: false,
@@ -1632,12 +1651,28 @@ function installProjectLibraryUI() {
 function toggleProjectMenu(force) {
     const menu = shell.querySelector('#acs-project-menu');
     const icon = shell.querySelector('.acs-project-title-icon');
-    const opened = typeof force === 'boolean' ? force : menu.hidden;
-    menu.hidden = !opened;
+    const opened = typeof force === 'boolean' ? force : !menu.classList.contains('is-open');
+    if (projectMenuCloseTimer) {
+        hostWindow.clearTimeout(projectMenuCloseTimer);
+        projectMenuCloseTimer = null;
+    }
     icon.setAttribute('aria-expanded', String(opened));
     icon.setAttribute('title', opened ? '收起项目库' : '打开项目库');
+    icon.setAttribute('aria-label', opened ? '收起项目库' : '打开项目库');
     icon.querySelector('i').className = opened ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder';
-    if (opened) renderProjectMenu();
+    if (opened) {
+        renderProjectMenu();
+        menu.hidden = false;
+        // 强制建立收起态，再触发 class 过渡，避免浏览器把两帧合并成突然出现。
+        void menu.offsetHeight;
+        menu.classList.add('is-open');
+        return;
+    }
+    menu.classList.remove('is-open');
+    projectMenuCloseTimer = hostWindow.setTimeout(() => {
+        if (!menu.classList.contains('is-open')) menu.hidden = true;
+        projectMenuCloseTimer = null;
+    }, 220);
 }
 
 function syncEnvironmentToProject() {
@@ -2621,6 +2656,7 @@ function handleHostKeydown(event) {
 function cleanupScriptRuntime() {
     document.removeEventListener('keydown', handleHostKeydown);
     if (launcherInstallTimer) hostWindow.clearInterval(launcherInstallTimer);
+    if (projectMenuCloseTimer) hostWindow.clearTimeout(projectMenuCloseTimer);
     document.querySelector('#auto-card-studio-wand-launcher')?.remove();
     document.body.classList.remove('acs-no-scroll');
     if (shell?.dataset.acsRuntime === SCRIPT_RUNTIME_MARK) shell.remove();
