@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.11 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.12 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.11';
+const AUTO_CARD_STUDIO_VERSION = '0.6.12';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1452,6 +1452,11 @@ const STEP_TUTORIAL_NOTES = Object.freeze([
 ].map(([stage, purpose, workflow, deliverable, caution]) => ({ stage, purpose, workflow, deliverable, caution })));
 
 const STEP_HELP_CSS = `
+.acs-step-name { display:flex; align-items:center; gap:6px; min-width:0; }
+.acs-step-name-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.acs-core-step-badge { flex:0 0 auto; padding:2px 5px; border:1px solid rgba(211,173,114,.32); border-radius:999px; background:rgba(211,173,114,.08); color:#d6bd95; font-family:var(--acs-mono); font-size:7px; font-weight:700; letter-spacing:.04em; line-height:1.2; }
+.acs-step-button.is-core-step .acs-step-node { border-color:rgba(211,173,114,.62); }
+.acs-step-button.is-core-step.is-active .acs-step-node { border-color:var(--acs-cyan); }
 .acs-step-title-line { display:flex; align-items:center; gap:10px; min-width:0; }
 .acs-step-help-button { display:grid; width:27px; height:27px; flex:0 0 auto; place-items:center; padding:0; border:1px solid rgba(211,173,114,.34); border-radius:999px; background:rgba(211,173,114,.08); color:var(--acs-gold); cursor:pointer; transition:transform 140ms ease, background 140ms ease, border-color 140ms ease; }
 .acs-step-help-button:hover { transform:translateY(-1px); border-color:rgba(211,173,114,.62); background:rgba(211,173,114,.15); }
@@ -1500,7 +1505,9 @@ const PHASES = [
     { id: 'foundation', label: 'I · 核心与世界', range: [1, 9] },
     { id: 'narrative', label: 'II · 叙事与体验', range: [10, 15] },
     { id: 'variables', label: 'III · 变量化系统', range: [16, 21] },
-    { id: 'production', label: 'IV · 装配与交付', range: [22, 29] },
+    { id: 'production', label: 'IV · 装配设计', range: [22, 24] },
+    { id: 'autotask', label: 'V · AutoTask 配置', range: [25, 28] },
+    { id: 'delivery', label: 'VI · 启动与交付', range: [29, 29] },
 ];
 
 const DELIVERY_DIALOG_CSS = `
@@ -1893,6 +1900,9 @@ const STEPS = [
     goal,
     phase: PHASES.find(phase => index + 1 >= phase.range[0] && index + 1 <= phase.range[1]).id,
 }));
+
+// “核心”表示能够组成一张基础可玩角色卡的最短主线；其余步骤仍可按题材与功能需求选做。
+const CORE_STEP_NUMBERS = new Set([1, 2, 4, 5, 13, 24, 29]);
 
 // 每一站都给出不同的创作入口，避免初次使用者只看到抽象的阶段名称。
 const STEP_GUIDES = [
@@ -2816,12 +2826,14 @@ function renderStepRail() {
 
         for (const step of phaseSteps) {
             const state = project.steps[step.number] || { status: 'idle' };
+            const isCoreStep = CORE_STEP_NUMBERS.has(step.number);
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'acs-step-button';
             button.dataset.step = String(step.number);
-            button.title = `Step ${step.number} · ${step.name}`;
+            button.title = `Step ${step.number} · ${step.name}${isCoreStep ? ' · 核心必备步骤' : ' · 按需求选做'}`;
             button.setAttribute('aria-label', button.title);
+            button.classList.toggle('is-core-step', isCoreStep);
             if (step.number === project.currentStep) button.classList.add('is-active');
             if (state.status === 'accepted') button.classList.add('is-complete');
             if (state.status === 'draft') button.classList.add('is-draft');
@@ -2831,7 +2843,17 @@ function renderStepRail() {
             if (state.status === 'accepted') node.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
             const name = document.createElement('span');
             name.className = 'acs-step-name';
-            name.textContent = step.name;
+            const nameLabel = document.createElement('span');
+            nameLabel.className = 'acs-step-name-label';
+            nameLabel.textContent = step.name;
+            name.append(nameLabel);
+            if (isCoreStep) {
+                const badge = document.createElement('span');
+                badge.className = 'acs-core-step-badge';
+                badge.textContent = '核心';
+                badge.setAttribute('aria-hidden', 'true');
+                name.append(badge);
+            }
             const number = document.createElement('span');
             number.className = 'acs-step-number';
             number.textContent = String(step.number).padStart(2, '0');
