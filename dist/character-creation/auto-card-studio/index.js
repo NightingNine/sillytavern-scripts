@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.4 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.5 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.4';
+const AUTO_CARD_STUDIO_VERSION = '0.6.5';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -4061,6 +4061,12 @@ function buildOrderedPrompts(preset, currentStep, options = {}) {
             name: '本轮输入',
             content: prepareTemplateMacrosForGeneration(options.previewUserInput),
         });
+    } else if (Object.prototype.hasOwnProperty.call(options, 'embeddedUserInput')) {
+        // 后台发布生成没有常规输入框上下文，直接嵌入 RolePrompt，避免酒馆助手解析 user_input 占位符时报错。
+        ordered.push({
+            role: 'user',
+            content: prepareTemplateMacrosForGeneration(options.embeddedUserInput),
+        });
     } else {
         ordered.push('user_input');
     }
@@ -4948,10 +4954,12 @@ async function generateDeliveryReorgPlan(selectedArtifacts) {
     const generationId = `auto-card-studio-delivery-reorg-${project.id}-${Date.now()}`;
     const result = await helper.generateRaw({
         generation_id: generationId,
-        user_input: prepareTemplateMacrosForGeneration(userInput),
         should_stream: false,
         should_silence: false,
-        ordered_prompts: buildOrderedPrompts(preset, step, { reorgArtifacts: selectedArtifacts }),
+        ordered_prompts: buildOrderedPrompts(preset, step, {
+            reorgArtifacts: selectedArtifacts,
+            embeddedUserInput: userInput,
+        }),
         custom_api: presetGenerationOptions(preset),
     });
     const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);

@@ -6,7 +6,7 @@
 
 | 分类 | 脚本 | 当前版本 | 使用说明 |
 | --- | --- | --- | --- |
-| 角色卡创作 | A.U.T.O 角色卡创作台 | 0.6.4 | [查看文档](docs/character-creation/auto-card-studio.md) |
+| 角色卡创作 | A.U.T.O 角色卡创作台 | 0.6.5 | [查看文档](docs/character-creation/auto-card-studio.md) |
 
 ## 酒馆助手导入
 
