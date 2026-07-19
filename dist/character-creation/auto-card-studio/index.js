@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.17 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.19 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -81,6 +81,46 @@ const HTML_PREVIEW_CSS = `
 
     .acs-html-preview-frame {
         height: 52vh;
+    }
+}
+`;
+
+const OUTPUT_MODE_CSS = `
+.acs-output-mode {
+    margin-top: 14px;
+    padding-top: 13px;
+    border-top: 1px solid var(--acs-line-soft);
+}
+
+.acs-output-mode > span {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--acs-muted);
+    font-family: var(--acs-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.acs-output-mode-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.acs-output-mode .acs-connection-choice {
+    min-width: 0;
+    padding: 9px;
+}
+
+.acs-output-mode .acs-connection-choice small {
+    line-height: 1.4;
+}
+
+@media (max-width: 420px) {
+    .acs-output-mode-options {
+        grid-template-columns: 1fr;
     }
 }
 `;
@@ -1380,7 +1420,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.18';
+const AUTO_CARD_STUDIO_VERSION = '0.6.19';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1390,7 +1430,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-16';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-17';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1426,6 +1466,7 @@ const DEFAULT_CONNECTION_SETTINGS = Object.freeze({
     source: 'openai',
     apiUrl: '',
     model: '',
+    outputMode: 'complete',
 });
 
 // 依据 A.U.T.O 教程整理的步骤说明。这里解释步骤在整套制卡结构中的作用，
@@ -3750,6 +3791,7 @@ function loadConnectionSettings() {
             ...DEFAULT_CONNECTION_SETTINGS,
             ...(saved && typeof saved === 'object' ? saved : {}),
             mode: saved?.mode === 'custom' ? 'custom' : 'current',
+            outputMode: saved?.outputMode === 'stream' ? 'stream' : 'complete',
         };
     } catch (error) {
         console.warn('[A.U.T.O Card Studio] 无法读取模型连接设置，将使用当前 SillyTavern 连接。', error);
@@ -3764,6 +3806,7 @@ function saveConnectionSettings() {
         source: connectionSettings.source,
         apiUrl: connectionSettings.apiUrl,
         model: connectionSettings.model,
+        outputMode: connectionSettings.outputMode,
     }));
 }
 
@@ -5489,8 +5532,11 @@ async function deleteProject(projectId) {
 }
 
 function connectionDisplayName() {
-    if (connectionSettings.mode === 'current') return '当前 ST 连接';
-    return connectionSettings.model.trim() || '独立连接未完成';
+    const connectionName = connectionSettings.mode === 'current'
+        ? '当前 ST 连接'
+        : (connectionSettings.model.trim() || '独立连接未完成');
+    const outputName = connectionSettings.outputMode === 'stream' ? '流式' : '非流式';
+    return `${connectionName} · ${outputName}`;
 }
 
 function generationDependencyMessage() {
@@ -5500,9 +5546,52 @@ function generationDependencyMessage() {
     return '';
 }
 
+function ensureOutputModeControls() {
+    if (shell.querySelector('#acs-output-mode')) return;
+    const connectionOptions = shell.querySelector('.acs-connection-options');
+    if (!connectionOptions) return;
+
+    const section = document.createElement('div');
+    section.id = 'acs-output-mode';
+    section.className = 'acs-output-mode';
+    section.innerHTML = `
+        <span>输出方式</span>
+        <div class="acs-output-mode-options" role="radiogroup" aria-label="模型输出方式">
+            <label class="acs-connection-choice">
+                <input type="radio" name="acs-output-mode" value="stream">
+                <span>
+                    <strong>流式输出</strong>
+                    <small>生成时实时显示内容</small>
+                </span>
+            </label>
+            <label class="acs-connection-choice">
+                <input type="radio" name="acs-output-mode" value="complete">
+                <span>
+                    <strong>非流式输出</strong>
+                    <small>完成后一次显示回复</small>
+                </span>
+            </label>
+        </div>`;
+    connectionOptions.insertAdjacentElement('afterend', section);
+
+    for (const radio of section.querySelectorAll('input[name="acs-output-mode"]')) {
+        radio.addEventListener('change', event => {
+            if (!event.target.checked) return;
+            connectionSettings.outputMode = event.target.value === 'stream' ? 'stream' : 'complete';
+            saveConnectionSettings();
+            renderConnectionSettings();
+            renderCurrentStep();
+        });
+    }
+}
+
 function renderConnectionSettings() {
+    ensureOutputModeControls();
     for (const radio of shell.querySelectorAll('input[name="acs-connection-mode"]')) {
         radio.checked = radio.value === connectionSettings.mode;
+    }
+    for (const radio of shell.querySelectorAll('input[name="acs-output-mode"]')) {
+        radio.checked = radio.value === connectionSettings.outputMode;
     }
 
     const isCustom = connectionSettings.mode === 'custom';
@@ -5997,6 +6086,77 @@ function presetGenerationOptions(preset) {
     return customApi;
 }
 
+/**
+ * 生成诊断只记录请求形状，不记录提示词正文、用户输入或 API 密钥。
+ * 这样用户在反馈渠道兼容问题时，能提供足够信息，同时不会意外泄露创作内容。
+ */
+function generationDiagnosticOptions(customApi) {
+    const { key, apiurl, ...safeOptions } = customApi || {};
+    let safeApiUrl = '';
+    if (apiurl) {
+        try {
+            const parsed = new URL(apiurl);
+            safeApiUrl = `${parsed.origin}${parsed.pathname}`;
+        } catch {
+            safeApiUrl = '[接口地址格式无效]';
+        }
+    }
+    return {
+        ...safeOptions,
+        ...(safeApiUrl ? { apiurl: safeApiUrl } : {}),
+        ...(key ? { key: '[已配置，已隐藏]' } : {}),
+    };
+}
+
+/** 将不同酒馆助手/兼容层抛出的错误提取为可打印的安全摘要。 */
+function generationErrorDetails(error) {
+    const seen = new WeakSet();
+    const simplify = (value, depth = 0) => {
+        if (value === null || value === undefined) return value;
+        if (typeof value === 'string') return value.length > 4000 ? `${value.slice(0, 4000)}…[已截断]` : value;
+        if (typeof value === 'number' || typeof value === 'boolean') return value;
+        if (depth >= 3) return '[嵌套内容已省略]';
+        if (typeof value !== 'object') return String(value);
+        if (seen.has(value)) return '[循环引用]';
+        seen.add(value);
+        if (Array.isArray(value)) return value.slice(0, 20).map(item => simplify(item, depth + 1));
+        const output = {};
+        for (const field of ['name', 'message', 'status', 'statusCode', 'code', 'type', 'error', 'errors', 'data', 'response', 'cause', 'body']) {
+            if (!(field in value) || field === 'key' || field === 'authorization') continue;
+            try {
+                output[field] = simplify(value[field], depth + 1);
+            } catch {
+                output[field] = '[读取失败]';
+            }
+        }
+        return Object.keys(output).length ? output : String(value);
+    };
+    return simplify(error);
+}
+
+function generationErrorMessage(error, fallback = '未知错误') {
+    const details = generationErrorDetails(error);
+    const candidates = [
+        details?.message,
+        details?.error?.message,
+        details?.data?.message,
+        details?.data?.error?.message,
+        details?.response?.data?.message,
+        details?.response?.data?.error?.message,
+        details?.cause?.message,
+        typeof details === 'string' ? details : '',
+    ];
+    return String(candidates.find(value => typeof value === 'string' && value.trim()) || fallback);
+}
+
+function logGenerationDiagnostic(phase, detail) {
+    const label = `[A.U.T.O Card Studio] 生成诊断 · ${phase}`;
+    if (console.groupCollapsed) console.groupCollapsed(label);
+    else console.info(label);
+    console.info(detail);
+    if (console.groupEnd) console.groupEnd();
+}
+
 function customConnectionError() {
     if (connectionSettings.mode !== 'custom') return null;
     const apiUrl = connectionSettings.apiUrl.trim();
@@ -6102,20 +6262,63 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
     renderStepRail();
 
     let succeeded = false;
+    let streamSubscription = null;
+    let streamingTurn = null;
+    let generationDiagnostic = null;
     try {
         const preset = studioResources.preset;
         activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
+        const shouldStream = connectionSettings.outputMode === 'stream';
+        const customApi = presetGenerationOptions(preset);
+        // 同一轮只构建一次，确保日志的条目数与实际传给酒馆助手的内容一致。
+        const orderedPrompts = buildOrderedPrompts(preset, step);
+        generationDiagnostic = {
+            step: `${step.number} · ${step.name}`,
+            generation_id: activeGenerationId,
+            should_stream: shouldStream,
+            connection_mode: connectionSettings.mode,
+            output_mode: connectionSettings.outputMode,
+            preset_prompt_count: Array.isArray(preset.prompts) ? preset.prompts.length : 0,
+            ordered_prompt_count: orderedPrompts.length,
+            ordered_prompt_shape: orderedPrompts.map((prompt, index) => typeof prompt === 'string'
+                ? { index: index + 1, type: 'user_input 占位符' }
+                : { index: index + 1, role: prompt.role || 'system', characters: String(prompt.content || '').length }),
+            user_input_characters: String(userInput || '').length,
+            custom_api: generationDiagnosticOptions(customApi),
+        };
+        logGenerationDiagnostic('请求开始（不含提示词正文）', generationDiagnostic);
+
+        if (shouldStream) {
+            streamingTurn = { role: 'assistant', content: '', createdAt: new Date().toISOString() };
+            state.turns.push(streamingTurn);
+            renderCurrentStep();
+            streamSubscription = eventOn(iframe_events.STREAM_TOKEN_RECEIVED_FULLY, (fullText, generationId) => {
+                if (generationId !== activeGenerationId || !streamingTurn) return;
+                streamingTurn.content = normalizeFinalArtifactUserMacros(String(fullText || ''), step.number);
+                const content = shell.querySelector('#acs-turns .acs-turn:last-child .acs-turn-content');
+                if (content) content.textContent = streamingTurn.content;
+                const conversation = shell.querySelector('.acs-conversation');
+                if (conversation) conversation.scrollTop = conversation.scrollHeight;
+            });
+        }
+
         const result = await helper.generateRaw({
             generation_id: activeGenerationId,
             user_input: prepareTemplateMacrosForGeneration(userInput),
-            should_stream: false,
+            should_stream: shouldStream,
             should_silence: false,
-            ordered_prompts: buildOrderedPrompts(preset, step),
-            custom_api: presetGenerationOptions(preset),
+            ordered_prompts: orderedPrompts,
+            custom_api: customApi,
         });
         const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+        logGenerationDiagnostic('请求完成', {
+            ...generationDiagnostic,
+            result_type: typeof result,
+            response_characters: rawResponse.length,
+        });
         const response = normalizeFinalArtifactUserMacros(rawResponse, step.number);
-        state.turns.push({ role: 'assistant', content: response, createdAt: new Date().toISOString() });
+        if (streamingTurn) streamingTurn.content = response;
+        else state.turns.push({ role: 'assistant', content: response, createdAt: new Date().toISOString() });
         state.status = 'draft';
         state.updatedAt = new Date().toISOString();
         saveProject();
@@ -6124,15 +6327,31 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             ? `Step ${step.number}「${step.name}」已重新生成。`
             : `Step ${step.number}「${step.name}」草案已生成。`);
     } catch (error) {
-        const message = String(error?.message || error);
+        const message = generationErrorMessage(error, String(error?.message || error));
         const stopped = /abort|stop|停止|中断/i.test(message);
         if (!stopped) {
+            if (streamingTurn) state.turns = state.turns.filter(turn => turn !== streamingTurn);
+            const details = generationErrorDetails(error);
             console.error('[A.U.T.O Card Studio] 生成失败', error);
-            notify('error', `生成失败：${message}`);
+            logGenerationDiagnostic('请求失败', {
+                ...generationDiagnostic,
+                error: details,
+                note: '若 error 仍只有 Bad Request，说明酒馆助手/渠道没有透传原始响应；请在开发者工具 Network 的 Fetch/XHR 中查看失败请求的 Response。',
+            });
+            // 保持提示简短；完整但脱敏的参数与接口错误可在浏览器控制台查看。
+            notify('error', `生成失败：${message}。详细诊断已输出到浏览器控制台。`);
         } else {
+            if (streamingTurn?.content) {
+                state.status = 'draft';
+                state.updatedAt = new Date().toISOString();
+                saveProject();
+            } else if (streamingTurn) {
+                state.turns = state.turns.filter(turn => turn !== streamingTurn);
+            }
             notify('info', '本次生成已停止。');
         }
     } finally {
+        streamSubscription?.stop?.();
         activeGenerationId = null;
         setGenerating(false);
         renderAll();
@@ -8314,7 +8533,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}`;
     document.head.append(style);
 }
 
