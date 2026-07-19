@@ -2,6 +2,14 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.6.21",
+      "title": "接口错误诊断增强",
+      "changes": [
+        "生成失败时会记录本地生成接口的 HTTP 状态和渠道响应正文，便于排查 Bad Request。",
+        "诊断不记录提示词正文、用户输入或 API 密钥。"
+      ]
+    },
+    {
       "version": "0.6.17",
       "title": "独立资源与发布流程",
       "changes": [

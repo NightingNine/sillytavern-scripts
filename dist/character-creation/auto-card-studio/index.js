@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.20 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.21 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1420,7 +1420,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.20';
+const AUTO_CARD_STUDIO_VERSION = '0.6.21';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -6167,6 +6167,53 @@ function logGenerationDiagnostic(phase, detail) {
     if (console.groupEnd) console.groupEnd();
 }
 
+/**
+ * 酒馆助手有时只把 HTTP 状态文本抛给调用方。记录本轮生成端点的响应摘要，
+ * 用于保留渠道实际返回的错误正文；不会读取请求 body 或修改原始 Response。
+ */
+function captureGenerationHttpResponse() {
+    const originalFetch = globalThis.fetch;
+    let captured = null;
+    const watchedPath = '/api/backends/chat-completions/generate';
+    const safePath = value => {
+        try {
+            const parsed = new URL(value, globalThis.location?.origin);
+            return parsed.pathname;
+        } catch {
+            return String(value || '');
+        }
+    };
+    const proxyFetch = async (...args) => {
+        const response = await originalFetch(...args);
+        const request = args[0];
+        const requestUrl = typeof request === 'string' ? request : request?.url;
+        if (safePath(requestUrl).includes(watchedPath)) {
+            captured = {
+                status: response.status,
+                status_text: response.statusText,
+                content_type: response.headers?.get?.('content-type') || '',
+            };
+            if (!response.ok) {
+                try {
+                    const body = await response.clone().text();
+                    captured.response_body = body.length > 4000 ? `${body.slice(0, 4000)}…[已截断]` : body;
+                } catch (error) {
+                    captured.response_body = `[无法读取响应正文：${String(error?.message || error)}]`;
+                }
+            }
+        }
+        return response;
+    };
+    globalThis.fetch = proxyFetch;
+    return {
+        read: () => captured,
+        stop: () => {
+            // 不覆盖其他脚本后来安装的 fetch 包装器。
+            if (globalThis.fetch === proxyFetch) globalThis.fetch = originalFetch;
+        },
+    };
+}
+
 function customConnectionError() {
     if (connectionSettings.mode !== 'custom') return null;
     const apiUrl = connectionSettings.apiUrl.trim();
@@ -6275,6 +6322,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
     let streamSubscription = null;
     let streamingTurn = null;
     let generationDiagnostic = null;
+    let httpResponseCapture = null;
     try {
         const preset = studioResources.preset;
         activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
@@ -6297,6 +6345,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             custom_api: generationDiagnosticOptions(customApi),
         };
         logGenerationDiagnostic('请求开始（不含提示词正文）', generationDiagnostic);
+        httpResponseCapture = captureGenerationHttpResponse();
 
         if (shouldStream) {
             streamingTurn = { role: 'assistant', content: '', createdAt: new Date().toISOString() };
@@ -6325,6 +6374,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             ...generationDiagnostic,
             result_type: typeof result,
             response_characters: rawResponse.length,
+            http_response: httpResponseCapture?.read(),
         });
         const response = normalizeFinalArtifactUserMacros(rawResponse, step.number);
         if (streamingTurn) streamingTurn.content = response;
@@ -6346,6 +6396,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             logGenerationDiagnostic('请求失败', {
                 ...generationDiagnostic,
                 error: details,
+                http_response: httpResponseCapture?.read(),
                 note: '若 error 仍只有 Bad Request，说明酒馆助手/渠道没有透传原始响应；请在开发者工具 Network 的 Fetch/XHR 中查看失败请求的 Response。',
             });
             // 保持提示简短；完整但脱敏的参数与接口错误可在浏览器控制台查看。
@@ -6361,6 +6412,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             notify('info', '本次生成已停止。');
         }
     } finally {
+        httpResponseCapture?.stop();
         streamSubscription?.stop?.();
         activeGenerationId = null;
         setGenerating(false);
