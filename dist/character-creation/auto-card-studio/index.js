@@ -7158,9 +7158,11 @@ async function generateDeliveryReorgPlan(selectedArtifacts) {
         '请严格输出 A.U.T.O 规定的 reorg_plan JSON 代码块。',
     ].join('\n');
     const generationId = `auto-card-studio-delivery-reorg-${project.id}-${Date.now()}`;
+    // 发布阶段的重组与普通步骤使用同一输出方式，避免部分渠道把非流式请求路由到不同鉴权路径。
+    const shouldStream = connectionSettings.outputMode === 'stream';
     const result = await helper.generateRaw({
         generation_id: generationId,
-        should_stream: false,
+        should_stream: shouldStream,
         should_silence: false,
         ordered_prompts: buildOrderedPrompts(preset, step, {
             reorgArtifacts: selectedArtifacts,
@@ -7456,7 +7458,14 @@ async function confirmProjectDelivery() {
     button.disabled = true;
     button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在自动重组';
     try {
-        const worldbookBuild = await ensureDeliveryReorg(selectedArtifacts);
+        let worldbookBuild;
+        try {
+            worldbookBuild = await ensureDeliveryReorg(selectedArtifacts);
+        } catch (error) {
+            // 单独标记重组请求，避免用户把模型渠道错误误认为角色卡写入失败。
+            console.error('[A.U.T.O Card Studio] 世界书重组请求失败', error);
+            throw new Error(`世界书重组请求失败：${error?.message || error}`);
+        }
         button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在创建';
         let existing = {};
         if (existingCharacters.includes(characterName)) {
