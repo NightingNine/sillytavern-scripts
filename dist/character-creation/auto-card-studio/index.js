@@ -1387,10 +1387,13 @@ const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
 const TOUR_COMPLETED_KEY = 'auto-card-studio:tour-completed:v1';
 // 测试分支不参与正式版版本号比较；手动更新直接重新拉取本分支的最新脚本。
 const TEST_BRANCH_UPDATE_MODE = true;
-const TEST_BRANCH_SCRIPT_URL = 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-mobile-test/dist/character-creation/auto-card-studio/index.js';
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
+const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
+const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-3';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
+const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
 const STUDIO_DESIGN_MIN_WIDTH = 1360;
 const STUDIO_DESIGN_MIN_HEIGHT = 760;
 const STUDIO_VIEWPORT_MARGIN = 24;
@@ -1851,6 +1854,17 @@ const MOBILE_ADAPTATION_CSS = `
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 手机端保留导出和检查更新入口；窄屏时均使用紧凑图标。 */
+.acs-shell.acs-mobile-layout #acs-save-project,
+.acs-shell.acs-mobile-layout #acs-check-update {
+  display: grid;
+}
+
+.acs-shell.acs-mobile-layout .acs-update-control {
+  display: block;
+  flex: 0 0 auto;
+}
+
 .acs-shell.acs-mobile-layout .acs-tour-launch span {
   display: none;
 }
@@ -2275,36 +2289,54 @@ const MOBILE_ADAPTATION_CSS = `
 .acs-shell.acs-mobile-layout #acs-tour-card {
   position: relative !important;
   inset: auto !important;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   width: 100% !important;
   height: 100vh;
   height: 100dvh;
   max-height: none;
   padding: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   transform: none !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .acs-shell.acs-mobile-layout #acs-tour-card .acs-tour-card-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   padding: max(16px, env(safe-area-inset-top, 0px)) 17px 13px;
   border-bottom: 1px solid var(--acs-line-soft);
   background: #302e29;
 }
 
 .acs-shell.acs-mobile-layout #acs-tour-content {
-  min-height: 0;
-  overflow: auto;
-  padding: 18px 17px 22px;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  display: contents;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-eyebrow {
+  margin: 20px 17px 0;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card > h2,
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-description,
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-points,
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-action-note,
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-dots {
+  margin-right: 17px;
+  margin-left: 17px;
 }
 
 .acs-shell.acs-mobile-layout #acs-tour-card .acs-tour-actions {
-  margin: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: auto 0 0;
   padding: 12px 17px max(14px, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--acs-line-soft);
   background: #302e29;
@@ -2332,9 +2364,8 @@ const MOBILE_ADAPTATION_CSS = `
   }
 }
 
-/* 窄屏优先保留创作操作；更新仍会自动检查，可在较宽屏幕中手动触发。 */
-@media (max-width: 460px) {
-  .acs-shell.acs-mobile-layout .acs-update-control {
+@media (max-width: 350px) {
+  .acs-shell.acs-mobile-layout .acs-brand > div {
     display: none;
   }
 }
@@ -2831,6 +2862,7 @@ let connectionSettings = loadConnectionSettings();
 let customApiKey = '';
 let availableCustomModels = [];
 let shell = null;
+let studioOpenPromise = null;
 let helper = null;
 let launcherInstallTimer = null;
 let isGenerating = false;
@@ -4610,7 +4642,7 @@ function installDeliveryUI() {
     const publishNote = shell.querySelector('#acs-publish-note');
     if (publishNote) publishNote.textContent = '点击创建后可逐项勾选；默认选择所有已确认产物。';
     const updateButton = shell.querySelector('#acs-check-update');
-    if (updateButton) updateButton.title = `检查更新（当前 v${AUTO_CARD_STUDIO_VERSION}）`;
+    if (updateButton) updateButton.title = `检查更新（当前 ${studioVersionLabel()}）`;
 
     if (!shell.querySelector('#acs-confirm-overlay')) {
         const confirmOverlay = document.createElement('div');
@@ -6742,23 +6774,11 @@ function syncMobileTourContent(card) {
     const actionBar = card?.querySelector('.acs-tour-actions');
     if (!card || !actionBar) return;
     const content = card.querySelector('#acs-tour-content');
-    const useMobileLayout = shell.classList.contains('acs-mobile-layout');
-
-    if (!useMobileLayout && content) {
-        // 退出手机布局时还原原始 DOM 顺序，桌面端视觉保持不变。
+    if (content) {
+        // 早期测试版曾动态包裹引导内容；统一还原，避免手机浏览器在重排后丢失点击或滚动。
         while (content.firstChild) card.insertBefore(content.firstChild, actionBar);
         content.remove();
-        return;
     }
-    if (!useMobileLayout || content) return;
-
-    const mobileContent = document.createElement('div');
-    mobileContent.id = 'acs-tour-content';
-    for (const selector of ['#acs-tour-eyebrow', '#acs-tour-title', '#acs-tour-description', '#acs-tour-points', '#acs-tour-action-note', '#acs-tour-dots']) {
-        const element = card.querySelector(selector);
-        if (element) mobileContent.append(element);
-    }
-    card.insertBefore(mobileContent, actionBar);
 }
 
 function positionTourStep() {
@@ -6846,9 +6866,7 @@ function renderTourStep() {
     actionNote.textContent = step.actionNote || '';
     actionNote.hidden = !step.actionNote;
 
-    if (shell.classList.contains('acs-mobile-layout')) {
-        shell.querySelector('#acs-tour-content')?.scrollTo({ top: 0, behavior: 'auto' });
-    }
+    if (shell.classList.contains('acs-mobile-layout')) card.scrollTop = 0;
 
     const dots = shell.querySelector('#acs-tour-dots');
     dots.replaceChildren(...TOUR_STEPS.map((_, index) => {
@@ -6882,20 +6900,30 @@ function renderTourStep() {
 
 function startTour() {
     if (!shell?.classList.contains('is-open') || tourActive) return;
-    flushPendingProjectEdits();
-    tourRestoreState = captureTourWorkspace();
-    // 手机端先收起抽屉，避免引导浮层被残留的侧栏状态干扰。
-    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
-    if (artifactPanelExpanded) toggleArtifactPanel(false);
-    toggleProjectMenu(false);
-    closeStyledSelects();
-    tourStepIndex = 0;
-    tourActive = true;
     const overlay = shell.querySelector('#acs-tour-overlay');
-    overlay.hidden = false;
-    overlay.setAttribute('aria-hidden', 'false');
-    shell.classList.add('is-touring');
-    renderTourStep();
+    try {
+        flushPendingProjectEdits();
+        tourRestoreState = captureTourWorkspace();
+        // 手机端先收起抽屉，避免引导浮层被残留的侧栏状态干扰。
+        if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
+        if (artifactPanelExpanded) toggleArtifactPanel(false);
+        toggleProjectMenu(false);
+        closeStyledSelects();
+        tourStepIndex = 0;
+        tourActive = true;
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        shell.classList.add('is-touring');
+        renderTourStep();
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 打开新手引导失败', error);
+        tourActive = false;
+        overlay.hidden = true;
+        overlay.setAttribute('aria-hidden', 'true');
+        shell.classList.remove('is-touring');
+        restoreTourWorkspace();
+        notify('error', `新手引导打开失败：${error?.message || error}`);
+    }
 }
 
 function closeTour(completed = false) {
@@ -7533,6 +7561,15 @@ async function openStudio() {
     }
 }
 
+function requestOpenStudio() {
+    if (!studioOpenPromise) {
+        studioOpenPromise = openStudio().finally(() => {
+            studioOpenPromise = null;
+        });
+    }
+    return studioOpenPromise;
+}
+
 function closeStudio() {
     if (!shell || isGenerating) {
         if (isGenerating) notify('warning', '请先停止当前生成，再关闭创作台。');
@@ -7601,6 +7638,7 @@ function cleanupScriptRuntime() {
 
 const TOOLBAR_LAUNCHER_NAME = '🔨';
 const LEGACY_TOOLBAR_LAUNCHER_NAME = '打开 A.U.T.O 创作台';
+const OPEN_HANDLER_KEY = '__autoCardStudioOpenHandler';
 
 function migrateToolbarLauncherName() {
     try {
@@ -7635,6 +7673,10 @@ function installToolbarLauncher() {
     button.dataset.autoCardStudioLauncher = 'true';
     button.title = '打开 A.U.T.O 角色卡创作台';
     button.setAttribute('aria-label', '打开 A.U.T.O 角色卡创作台');
+    if (button.dataset.autoCardStudioDirectBound !== 'true') {
+        button.dataset.autoCardStudioDirectBound = 'true';
+        button.addEventListener('click', () => hostWindow[OPEN_HANDLER_KEY]?.());
+    }
     // 按钮配置本身就是图标字符；这里不再等脚本加载后替换文字内容。
     return true;
 }
@@ -7653,7 +7695,7 @@ function installWandLauncher() {
             <div class="fa-fw fa-solid fa-hammer extensionsMenuExtensionButton" aria-hidden="true"></div>
             <span>A.U.T.O 角色卡创作台</span>
         `;
-        item.addEventListener('click', openStudio);
+        item.addEventListener('click', () => hostWindow[OPEN_HANDLER_KEY]?.());
         menu.append(item);
     }
     return true;
@@ -7686,6 +7728,13 @@ function compareVersions(left, right) {
         if (leftParts[index] !== rightParts[index]) return leftParts[index] - rightParts[index];
     }
     return 0;
+}
+
+function studioVersionLabel() {
+    if (!TEST_BRANCH_UPDATE_MODE) return `v${AUTO_CARD_STUDIO_VERSION}`;
+    const pinnedRevision = String(localStorage.getItem(TEST_BRANCH_PIN_KEY) || '').trim();
+    const revisionLabel = /^[0-9a-f]{40}$/i.test(pinnedRevision) ? ` · ${pinnedRevision.slice(0, 7)}` : '';
+    return `v${AUTO_CARD_STUDIO_VERSION} · ${TEST_BRANCH_BUILD_LABEL}${revisionLabel}`;
 }
 
 async function getLatestPublishedVersion(forceRefresh = false) {
@@ -7733,7 +7782,7 @@ function showUpdateFeedback(message, state = '', duration = 3200) {
         updateFeedbackTimer = hostWindow.setTimeout(() => {
             feedback.hidden = true;
             button.classList.remove('is-current', 'is-error');
-            button.title = `检查更新（当前 v${AUTO_CARD_STUDIO_VERSION}）`;
+            button.title = `检查更新（当前 ${studioVersionLabel()}）`;
             updateFeedbackTimer = null;
         }, duration);
     }
@@ -7749,15 +7798,27 @@ async function checkForUpdatesManually() {
     showUpdateFeedback('正在检查新版本…', 'checking', 0);
     try {
         if (TEST_BRANCH_UPDATE_MODE) {
-            // 测试脚本固定指向分支名，使用唯一查询参数避开浏览器与 CDN 的旧缓存。
-            const refreshToken = String(Date.now());
-            const testScriptUrl = `${TEST_BRANCH_SCRIPT_URL}?update=${refreshToken}`;
-            const testResponse = await hostWindow.fetch(testScriptUrl, { cache: 'no-store' });
-            if (!testResponse.ok) throw new Error(`测试分支脚本请求失败：HTTP ${testResponse.status}`);
+            // 先读取分支最新提交，再加载不可变的提交地址，彻底绕开分支 CDN 缓存。
+            const branchResponse = await hostWindow.fetch(TEST_BRANCH_API_URL, {
+                cache: 'no-store',
+                headers: { Accept: 'application/vnd.github+json' },
+            });
+            if (!branchResponse.ok) throw new Error(`测试分支检查失败：HTTP ${branchResponse.status}`);
+            const revision = String((await branchResponse.json())?.commit?.sha || '').trim();
+            if (!/^[0-9a-f]{40}$/i.test(revision)) throw new Error('测试分支返回的提交编号无效');
 
-            hostWindow.sessionStorage.setItem(TEST_BRANCH_UPDATE_KEY, refreshToken);
-            showUpdateFeedback('已获取测试分支，正在重新载入…', 'checking', 0);
-            notify('info', '已获取测试分支最新脚本，正在重新打开创作台。');
+            const scriptResponse = await hostWindow.fetch(TEST_SCRIPT_URL_BY_REF(revision), { cache: 'no-store' });
+            if (!scriptResponse.ok) throw new Error(`测试脚本尚未就绪：HTTP ${scriptResponse.status}`);
+            if (localStorage.getItem(TEST_BRANCH_PIN_KEY) === revision) {
+                showUpdateFeedback(`已是测试版最新构建 ${revision.slice(0, 7)}`, 'current');
+                notify('success', `当前已是测试版最新构建 ${revision.slice(0, 7)}。`);
+                return;
+            }
+
+            localStorage.setItem(TEST_BRANCH_PIN_KEY, revision);
+            hostWindow.sessionStorage.setItem(TEST_BRANCH_UPDATE_KEY, revision);
+            showUpdateFeedback(`正在载入测试构建 ${revision.slice(0, 7)}…`, 'checking', 0);
+            notify('info', `正在载入测试版 ${revision.slice(0, 7)}。`);
             hostWindow.setTimeout(() => hostWindow.location.reload(), 650);
             return;
         }
@@ -7787,34 +7848,41 @@ async function checkForUpdatesManually() {
 }
 
 function startStudioRuntime() {
+    hostWindow[OPEN_HANDLER_KEY] = requestOpenStudio;
     document.addEventListener('keydown', handleHostKeydown);
     hostWindow.addEventListener('resize', handleTourResize);
     hostWindow.visualViewport?.addEventListener('resize', handleTourResize);
     migrateToolbarLauncherName();
-    eventOn(getButtonEvent(TOOLBAR_LAUNCHER_NAME), openStudio);
+    eventOn(getButtonEvent(TOOLBAR_LAUNCHER_NAME), requestOpenStudio);
     // 首次升级时旧按钮可能已经渲染并持有旧事件，保留一次兼容绑定。
-    eventOn(getButtonEvent(LEGACY_TOOLBAR_LAUNCHER_NAME), openStudio);
+    eventOn(getButtonEvent(LEGACY_TOOLBAR_LAUNCHER_NAME), requestOpenStudio);
     installStudioLaunchers();
     window.addEventListener('pagehide', cleanupScriptRuntime, { once: true });
     if (hostWindow.sessionStorage.getItem(UPDATE_REOPEN_KEY)) {
         hostWindow.sessionStorage.removeItem(UPDATE_REOPEN_KEY);
-        hostWindow.setTimeout(openStudio, 0);
+        hostWindow.setTimeout(requestOpenStudio, 0);
     }
 }
 
 async function startStudioWithAutoUpdate() {
     if (TEST_BRANCH_UPDATE_MODE) {
-        const refreshToken = hostWindow.sessionStorage.getItem(TEST_BRANCH_UPDATE_KEY);
-        if (refreshToken) {
-            hostWindow.sessionStorage.removeItem(TEST_BRANCH_UPDATE_KEY);
+        const requestedRevision = String(
+            hostWindow.sessionStorage.getItem(TEST_BRANCH_UPDATE_KEY)
+            || localStorage.getItem(TEST_BRANCH_PIN_KEY)
+            || '',
+        ).trim();
+        hostWindow.sessionStorage.removeItem(TEST_BRANCH_UPDATE_KEY);
+        if (/^[0-9a-f]{40}$/i.test(requestedRevision) && !String(import.meta.url).includes(`@${requestedRevision}/`)) {
             try {
-                // 页面重载后由旧脚本接力导入带缓存标记的最新测试分支，避免一直命中旧文件。
-                await import(`${TEST_BRANCH_SCRIPT_URL}?update=${encodeURIComponent(refreshToken)}`);
+                await import(TEST_SCRIPT_URL_BY_REF(requestedRevision));
                 return;
             } catch (error) {
                 console.warn('[A.U.T.O Card Studio] 测试分支更新加载失败，继续使用当前脚本。', error);
             }
         }
+        // 测试版只跟随测试分支，不参与正式版自动更新。
+        startStudioRuntime();
+        return;
     }
 
     try {
