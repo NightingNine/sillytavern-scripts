@@ -477,11 +477,61 @@ const CONNECTION_PROFILE_CSS = `
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 7px;
+  align-items: stretch;
 }
 
-.acs-connection-profile-name-row input {
+.acs-connection-profile-nameplate {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr);
+  align-items: center;
   min-width: 0;
-  min-height: 34px;
+  min-height: 36px;
+  padding: 3px 5px 3px 6px;
+  border: 1px solid rgba(232, 224, 212, 0.14);
+  border-radius: 9px;
+  background:
+    linear-gradient(100deg, rgba(217, 119, 87, 0.08), transparent 42%),
+    #302e29;
+  box-shadow: inset 0 1px 0 rgba(255, 248, 238, 0.025);
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.acs-connection-profile-nameplate:focus-within {
+  border-color: rgba(217, 119, 87, 0.72);
+  background:
+    linear-gradient(100deg, rgba(217, 119, 87, 0.12), transparent 48%),
+    #34312c;
+  box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.11), inset 0 1px 0 rgba(255, 248, 238, 0.04);
+}
+
+.acs-connection-profile-nameplate > i {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 7px;
+  background: rgba(217, 119, 87, 0.11);
+  color: var(--acs-cyan);
+  font-size: 9px;
+}
+
+.acs-connection-profile-nameplate input,
+.acs-connection-profile-nameplate input:hover,
+.acs-connection-profile-nameplate input:focus {
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 6px;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--acs-text);
+  font: 600 11px/1.35 var(--acs-body);
+}
+
+.acs-connection-profile-nameplate input::placeholder {
+  color: rgba(171, 162, 151, 0.7);
+  font-weight: 500;
 }
 
 .acs-connection-profile-action {
@@ -491,10 +541,20 @@ const CONNECTION_PROFILE_CSS = `
   padding: 7px 9px;
   place-items: center;
   border: 1px solid var(--acs-line);
-  border-radius: 8px;
+  border-radius: 9px;
   background: rgba(56, 53, 47, 0.88);
   color: var(--acs-text-soft);
   cursor: pointer;
+}
+
+#acs-save-connection-profile {
+  border-color: rgba(211, 173, 114, 0.3);
+  background: rgba(211, 173, 114, 0.09);
+  color: var(--acs-gold);
+}
+
+#acs-delete-connection-profile:not(:disabled) {
+  color: var(--acs-muted);
 }
 
 .acs-connection-profile-action:hover:not(:disabled) {
@@ -1634,7 +1694,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-21';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-22';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -5923,7 +5983,10 @@ function installConnectionProfileUI() {
         <select id="acs-connection-profile"></select>
       </label>
       <div class="acs-connection-profile-name-row">
-        <input id="acs-connection-profile-name" type="text" maxlength="60" placeholder="例如：OpenRouter · Gemini">
+        <label class="acs-connection-profile-nameplate" for="acs-connection-profile-name">
+          <i class="fa-solid fa-tag" aria-hidden="true"></i>
+          <input id="acs-connection-profile-name" type="text" maxlength="60" placeholder="给这套连接起个名字">
+        </label>
         <button id="acs-save-connection-profile" class="acs-connection-profile-action" type="button" aria-label="保存连接预设" title="保存为新连接预设">
           <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
         </button>
