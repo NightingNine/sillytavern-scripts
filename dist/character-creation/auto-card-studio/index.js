@@ -6178,6 +6178,54 @@ function logGenerationDiagnostic(phase, detail) {
     if (console.groupEnd) console.groupEnd();
 }
 
+/**
+ * 酒馆助手有时只把 HTTP 状态文本抛给调用方。测试版在本轮生成期间旁路记录
+ * SillyTavern 本地生成端点的响应摘要，以便保留渠道实际返回的错误正文。
+ * 不读取请求 body，也不修改原始 Response，因此不会泄露提示词或影响生成流程。
+ */
+function captureGenerationHttpResponse() {
+    const originalFetch = globalThis.fetch;
+    let captured = null;
+    const watchedPath = '/api/backends/chat-completions/generate';
+    const safePath = value => {
+        try {
+            const parsed = new URL(value, globalThis.location?.origin);
+            return parsed.pathname;
+        } catch {
+            return String(value || '');
+        }
+    };
+    const proxyFetch = async (...args) => {
+        const response = await originalFetch(...args);
+        const request = args[0];
+        const requestUrl = typeof request === 'string' ? request : request?.url;
+        if (safePath(requestUrl).includes(watchedPath)) {
+            captured = {
+                status: response.status,
+                status_text: response.statusText,
+                content_type: response.headers?.get?.('content-type') || '',
+            };
+            if (!response.ok) {
+                try {
+                    const body = await response.clone().text();
+                    captured.response_body = body.length > 4000 ? `${body.slice(0, 4000)}…[已截断]` : body;
+                } catch (error) {
+                    captured.response_body = `[无法读取响应正文：${String(error?.message || error)}]`;
+                }
+            }
+        }
+        return response;
+    };
+    globalThis.fetch = proxyFetch;
+    return {
+        read: () => captured,
+        stop: () => {
+            // 不覆盖其他脚本后来安装的 fetch 包装器。
+            if (globalThis.fetch === proxyFetch) globalThis.fetch = originalFetch;
+        },
+    };
+}
+
 function customConnectionError() {
     if (connectionSettings.mode !== 'custom') return null;
     const apiUrl = connectionSettings.apiUrl.trim();
@@ -6286,6 +6334,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
     let streamSubscription = null;
     let streamingTurn = null;
     let generationDiagnostic = null;
+    let httpResponseCapture = null;
     try {
         const preset = studioResources.preset;
         activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
@@ -6308,6 +6357,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             custom_api: generationDiagnosticOptions(customApi),
         };
         logGenerationDiagnostic('请求开始（不含提示词正文）', generationDiagnostic);
+        httpResponseCapture = captureGenerationHttpResponse();
 
         if (shouldStream) {
             streamingTurn = { role: 'assistant', content: '', createdAt: new Date().toISOString() };
@@ -6336,6 +6386,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             ...generationDiagnostic,
             result_type: typeof result,
             response_characters: rawResponse.length,
+            http_response: httpResponseCapture?.read(),
         });
         const response = normalizeFinalArtifactUserMacros(rawResponse, step.number);
         if (streamingTurn) streamingTurn.content = response;
@@ -6357,6 +6408,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             logGenerationDiagnostic('请求失败', {
                 ...generationDiagnostic,
                 error: details,
+                http_response: httpResponseCapture?.read(),
                 note: '若 error 仍只有 Bad Request，说明酒馆助手/渠道没有透传原始响应；请在开发者工具 Network 的 Fetch/XHR 中查看失败请求的 Response。',
             });
             // 保持提示简短；完整但脱敏的参数与接口错误可在浏览器控制台查看。
@@ -6372,6 +6424,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             notify('info', '本次生成已停止。');
         }
     } finally {
+        httpResponseCapture?.stop();
         streamSubscription?.stop?.();
         activeGenerationId = null;
         setGenerating(false);
