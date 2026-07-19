@@ -1769,6 +1769,431 @@ const CONFIRM_DIALOG_CSS = `
 @media(prefers-reduced-motion:reduce){.acs-confirm-dialog{animation:none}}
 `;
 
+const MOBILE_ADAPTATION_CSS = `
+/* 手机端使用真正的单栏工作区；步骤和检查器分别作为左右抽屉。 */
+.acs-mobile-flow-toggle,
+.acs-mobile-scrim {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-window {
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  border: 0;
+  border-radius: 0;
+  transform: none !important;
+  grid-template-rows: calc(56px + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
+}
+
+.acs-shell.acs-mobile-layout .acs-topbar {
+  min-width: 0;
+  padding: env(safe-area-inset-top, 0px) 8px 0 10px;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand {
+  min-width: 0;
+  gap: 8px;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand-mark {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand > div {
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand h1 {
+  overflow: hidden;
+  max-width: 42vw;
+  font-size: 16px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand .acs-eyebrow,
+.acs-shell.acs-mobile-layout .acs-dependency,
+.acs-shell.acs-mobile-layout #acs-save-project,
+.acs-shell.acs-mobile-layout .acs-update-feedback {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout .acs-topbar-actions {
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.acs-shell.acs-mobile-layout .acs-icon-button,
+.acs-shell.acs-mobile-layout .acs-tour-launch,
+.acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.acs-shell.acs-mobile-layout .acs-tour-launch span {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
+  border: 1px solid var(--acs-line);
+  background: rgba(56, 53, 47, 0.84);
+  color: var(--acs-muted);
+  cursor: pointer;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-flow-toggle[aria-expanded="true"],
+.acs-shell.acs-mobile-layout #acs-inspector-toggle[aria-expanded="true"] {
+  border-color: rgba(217, 119, 87, 0.52);
+  background: var(--acs-cyan-soft);
+  color: var(--acs-cyan);
+}
+
+.acs-shell.acs-mobile-layout .acs-workspace {
+  position: relative;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-rail,
+.acs-shell.acs-mobile-layout .acs-inspector {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 16;
+  display: grid;
+  height: auto;
+  box-shadow: 0 0 46px rgba(10, 9, 8, 0.5);
+  transition: transform 220ms cubic-bezier(.2,.75,.25,1);
+}
+
+.acs-shell.acs-mobile-layout .acs-rail {
+  left: 0;
+  width: min(86vw, 340px);
+  transform: translateX(-104%);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-rail {
+  transform: translateX(0);
+}
+
+.acs-shell.acs-mobile-layout .acs-inspector,
+.acs-shell.acs-mobile-layout .acs-inspector.is-expanded {
+  right: 0;
+  left: auto;
+  width: min(94vw, 420px);
+  background: #292722;
+  transform: translateX(104%);
+}
+
+.acs-shell.acs-mobile-layout .acs-inspector.is-mobile-open,
+.acs-shell.acs-mobile-layout .acs-inspector.is-expanded {
+  display: grid;
+  transform: translateX(0);
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-scrim {
+  position: absolute;
+  inset: calc(56px + env(safe-area-inset-top, 0px)) 0 0;
+  z-index: 15;
+  border: 0;
+  background: rgba(15, 13, 11, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-panel-open .acs-mobile-scrim {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-identity {
+  padding: 14px 13px 12px;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-title-field,
+.acs-shell.acs-mobile-layout .acs-progress-row,
+.acs-shell.acs-mobile-layout .acs-step-name,
+.acs-shell.acs-mobile-layout .acs-step-number,
+.acs-shell.acs-mobile-layout .acs-quiet-action,
+.acs-shell.acs-mobile-layout .acs-phase-title,
+.acs-shell.acs-mobile-layout .acs-phase-progress {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout .acs-progress-row {
+  display: flex;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-rail {
+  padding: 10px 8px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle {
+  grid-template-columns: minmax(0, 1fr) auto 13px;
+  width: 100%;
+  min-height: 38px;
+  margin: 0;
+  padding: 7px 9px 7px 12px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-steps {
+  padding-left: 10px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-steps::before {
+  left: 20px;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button {
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  width: 100%;
+  min-height: 43px;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading {
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 12px 9px;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading h2 {
+  font-size: clamp(20px, 6vw, 25px);
+  line-height: 1.14;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading-actions {
+  gap: 5px;
+}
+
+.acs-shell.acs-mobile-layout .acs-state-chip,
+.acs-shell.acs-mobile-layout .acs-overview-toggle span,
+.acs-shell.acs-mobile-layout .acs-clear-step-button span {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-overview-toggle,
+.acs-shell.acs-mobile-layout .acs-clear-step-button,
+.acs-shell.acs-mobile-layout .acs-step-help-button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-goal {
+  margin-top: 5px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.acs-shell.acs-mobile-layout .acs-brief-panel {
+  margin: 0 12px 9px;
+  padding: 10px;
+}
+
+.acs-shell.acs-mobile-layout .acs-brief-panel textarea {
+  min-height: 78px;
+  max-height: 24vh;
+}
+
+.acs-shell.acs-mobile-layout .acs-conversation {
+  padding: 10px 12px 14px;
+  scroll-padding-bottom: 18px;
+}
+
+.acs-shell.acs-mobile-layout .acs-empty-turns {
+  width: 100%;
+  padding: 20px 4px;
+}
+
+.acs-shell.acs-mobile-layout .acs-empty-turns h3 {
+  font-size: 23px;
+}
+
+.acs-shell.acs-mobile-layout .acs-guide-prompts {
+  grid-template-columns: 1fr;
+}
+
+.acs-shell.acs-mobile-layout .acs-guide-prompts li {
+  min-height: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-turn {
+  max-width: 100%;
+}
+
+.acs-shell.acs-mobile-layout .acs-turn-content {
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer {
+  padding: 9px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout .acs-composer textarea {
+  min-height: 68px;
+  max-height: 26vh;
+  font-size: 14px;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-actions {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-actions > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-actions .acs-button {
+  min-width: 0;
+  min-height: 43px;
+  padding: 8px 9px;
+}
+
+.acs-shell.acs-mobile-layout .acs-button-confirm {
+  grid-column: 1 / -1;
+}
+
+.acs-shell.acs-mobile-layout .acs-conversation-nav {
+  right: 12px;
+  bottom: 8px;
+}
+
+.acs-shell.acs-mobile-layout .acs-tabs {
+  padding: 7px 10px 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-tab {
+  min-height: 44px;
+}
+
+.acs-shell.acs-mobile-layout .acs-tab-panel {
+  padding: 15px 12px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout .acs-field-grid,
+.acs-shell.acs-mobile-layout .acs-model-picker {
+  grid-template-columns: 1fr;
+}
+
+.acs-shell.acs-mobile-layout .acs-field-stack input,
+.acs-shell.acs-mobile-layout .acs-field-stack select,
+.acs-shell.acs-mobile-layout .acs-button-compact {
+  min-height: 44px;
+  font-size: 13px;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact-filter-bar {
+  flex-wrap: nowrap;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact-filter-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact-filter-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact summary {
+  min-height: 46px;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact-editor textarea.acs-artifact-content {
+  min-height: 42vh;
+  max-height: 62vh;
+  padding: 13px;
+  font-size: 13px;
+}
+
+.acs-shell.acs-mobile-layout .acs-resource-dock-tab {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout .acs-resource-drawer {
+  top: calc(56px + env(safe-area-inset-top, 0px));
+  width: 100%;
+  max-width: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-prompt-preview-panel,
+.acs-shell.acs-mobile-layout .acs-delivery-dialog {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-prompt-preview-note,
+.acs-shell.acs-mobile-layout .acs-prompt-message-list,
+.acs-shell.acs-mobile-layout .acs-delivery-body {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.acs-shell.acs-mobile-layout .acs-tour-card {
+  right: 8px !important;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+  left: 8px !important;
+  top: auto !important;
+  width: auto;
+  max-height: min(68dvh, 560px);
+}
+
+@media (max-width: 390px) {
+  .acs-shell.acs-mobile-layout .acs-brand-mark {
+    display: none;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-brand h1 {
+    max-width: 38vw;
+    font-size: 15px;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-topbar-actions {
+    gap: 1px;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-icon-button,
+  .acs-shell.acs-mobile-layout .acs-tour-launch,
+  .acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acs-shell.acs-mobile-layout .acs-rail,
+  .acs-shell.acs-mobile-layout .acs-inspector {
+    transition: none;
+  }
+}
+`;
+
 const TOUR_STEPS = Object.freeze([
     {
         selector: '.acs-brand',
@@ -4263,6 +4688,21 @@ function updateStudioViewportScale() {
         hostWindow.innerHeight || STUDIO_DESIGN_MIN_HEIGHT,
         hostWindow.visualViewport?.height || Number.POSITIVE_INFINITY,
     );
+    const coarsePointer = hostWindow.matchMedia?.('(pointer: coarse)')?.matches || false;
+    const useMobileLayout = viewportWidth <= 640 || (coarsePointer && viewportWidth <= 960);
+    shell.classList.toggle('acs-mobile-layout', useMobileLayout);
+
+    // 手机端改用真正的单栏布局，不再把桌面画布缩成难以点击的小字版本。
+    if (useMobileLayout) {
+        shell.classList.remove('acs-proportional-layout');
+        shell.dataset.layoutScale = '1';
+        for (const property of ['inset', 'top', 'left', 'width', 'height', 'transform']) {
+            studioWindow.style.removeProperty(property);
+        }
+        return;
+    }
+
+    setMobilePanel(null);
     const availableWidth = Math.max(1, viewportWidth - STUDIO_VIEWPORT_MARGIN);
     const availableHeight = Math.max(1, viewportHeight - STUDIO_VIEWPORT_MARGIN);
     const scale = Math.min(
@@ -5894,7 +6334,57 @@ function switchInspectorTab(name) {
     if (name !== 'settings') toggleResourceDrawer(false);
 }
 
+function installMobileLayoutUI() {
+    if (shell.querySelector('#acs-mobile-flow-toggle')) return;
+
+    const flowButton = document.createElement('button');
+    flowButton.id = 'acs-mobile-flow-toggle';
+    flowButton.className = 'acs-mobile-flow-toggle';
+    flowButton.type = 'button';
+    flowButton.title = '打开项目与创作步骤';
+    flowButton.setAttribute('aria-label', '打开项目与创作步骤');
+    flowButton.setAttribute('aria-expanded', 'false');
+    flowButton.innerHTML = '<i class="fa-solid fa-list-check" aria-hidden="true"></i>';
+
+    const inspectorButton = shell.querySelector('#acs-inspector-toggle');
+    inspectorButton.before(flowButton);
+
+    const scrim = document.createElement('button');
+    scrim.id = 'acs-mobile-scrim';
+    scrim.className = 'acs-mobile-scrim';
+    scrim.type = 'button';
+    scrim.setAttribute('aria-label', '关闭侧栏');
+    shell.querySelector('.acs-window').append(scrim);
+}
+
+function setMobilePanel(panel = null) {
+    if (!shell) return;
+    const flowOpen = panel === 'flow';
+    const inspectorOpen = panel === 'inspector';
+    const inspector = shell.querySelector('.acs-inspector');
+    const flowButton = shell.querySelector('#acs-mobile-flow-toggle');
+    const inspectorButton = shell.querySelector('#acs-inspector-toggle');
+
+    shell.classList.toggle('is-mobile-flow-open', flowOpen);
+    shell.classList.toggle('is-mobile-panel-open', flowOpen || inspectorOpen);
+    inspector?.classList.toggle('is-mobile-open', inspectorOpen);
+    flowButton?.setAttribute('aria-expanded', String(flowOpen));
+    inspectorButton?.setAttribute('aria-expanded', String(inspectorOpen));
+    if (flowButton) flowButton.title = flowOpen ? '关闭项目与创作步骤' : '打开项目与创作步骤';
+    if (inspectorButton) inspectorButton.title = inspectorOpen ? '关闭产物与设置' : '打开产物与设置';
+}
+
+function toggleMobileFlow() {
+    const opened = !shell.classList.contains('is-mobile-flow-open');
+    setMobilePanel(opened ? 'flow' : null);
+}
+
 function toggleMobileInspector() {
+    if (shell.classList.contains('acs-mobile-layout')) {
+        const opened = !shell.querySelector('.acs-inspector').classList.contains('is-mobile-open');
+        setMobilePanel(opened ? 'inspector' : null);
+        return;
+    }
     const inspector = shell.querySelector('.acs-inspector');
     const button = shell.querySelector('#acs-inspector-toggle');
     const opened = inspector.classList.toggle('is-mobile-open');
@@ -5911,6 +6401,7 @@ function captureTourWorkspace() {
         inspectorTab: shell.querySelector('[data-acs-tab].is-active')?.dataset.acsTab || 'structure',
         projectMenuOpen: shell.querySelector('#acs-project-menu')?.classList.contains('is-open') || false,
         resourceDrawerOpen: shell.querySelector('#acs-resource-drawer')?.classList.contains('is-open') || false,
+        mobileFlowOpen: shell.classList.contains('is-mobile-flow-open'),
         mobileInspectorOpen: inspector?.classList.contains('is-mobile-open') || false,
         artifactPanelExpanded,
         stepRailScrollTop: shell.querySelector('#acs-step-rail')?.scrollTop || 0,
@@ -5920,6 +6411,10 @@ function captureTourWorkspace() {
 }
 
 function setTourMobileInspector(open) {
+    if (shell.classList.contains('acs-mobile-layout')) {
+        setMobilePanel(open ? 'inspector' : null);
+        return;
+    }
     const inspector = shell.querySelector('.acs-inspector');
     const button = shell.querySelector('#acs-inspector-toggle');
     inspector.classList.toggle('is-mobile-open', open);
@@ -5938,7 +6433,11 @@ function restoreTourWorkspace() {
     renderAll();
     switchInspectorTab(previous.inspectorTab);
     if (previous.inspectorTab === 'settings' && previous.resourceDrawerOpen) toggleResourceDrawer(true);
-    setTourMobileInspector(previous.mobileInspectorOpen);
+    if (shell.classList.contains('acs-mobile-layout')) {
+        setMobilePanel(previous.mobileFlowOpen ? 'flow' : (previous.mobileInspectorOpen ? 'inspector' : null));
+    } else {
+        setTourMobileInspector(previous.mobileInspectorOpen);
+    }
     if (previous.artifactPanelExpanded) toggleArtifactPanel(true);
     toggleProjectMenu(previous.projectMenuOpen);
     hostWindow.requestAnimationFrame(() => {
@@ -5950,6 +6449,11 @@ function restoreTourWorkspace() {
 
 function ensureTourInspectorVisible() {
     if (hostWindow.matchMedia?.('(max-width: 860px)').matches) setTourMobileInspector(true);
+}
+
+function ensureTourFlowVisible() {
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel('flow');
+    else setTourMobileInspector(false);
 }
 
 function applyTourScene(step) {
@@ -5970,7 +6474,7 @@ function applyTourScene(step) {
             toggleResourceDrawer(true);
             break;
         case 'projects':
-            setTourMobileInspector(false);
+            ensureTourFlowVisible();
             toggleProjectMenu(true);
             break;
         case 'brief':
@@ -5979,7 +6483,7 @@ function applyTourScene(step) {
             renderOverviewState();
             break;
         case 'route':
-            setTourMobileInspector(false);
+            ensureTourFlowVisible();
             project.currentStep = 1;
             project.ui.collapsedPhases = PHASES.slice(1).map(phase => phase.id);
             renderStepRail();
@@ -6011,7 +6515,7 @@ function applyTourScene(step) {
             shell.querySelector('.acs-inspector').scrollTop = 0;
             break;
         case 'output':
-            setTourMobileInspector(false);
+            ensureTourFlowVisible();
             switchInspectorTab('structure');
             project.currentStep = 24;
             project.ui.overviewCollapsed = true;
@@ -6021,7 +6525,7 @@ function applyTourScene(step) {
             renderOverviewState();
             break;
         case 'autotask':
-            setTourMobileInspector(false);
+            ensureTourFlowVisible();
             switchInspectorTab('structure');
             project.currentStep = 25;
             project.ui.overviewCollapsed = true;
@@ -6483,7 +6987,10 @@ function bindStudioEvents() {
             return;
         }
         const button = event.target.closest('[data-step]');
-        if (button) selectStep(Number(button.dataset.step));
+        if (button) {
+            selectStep(Number(button.dataset.step));
+            if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
+        }
     });
     shell.querySelector('#acs-toggle-overview').addEventListener('click', toggleOverview);
     shell.querySelector('#acs-turns').addEventListener('click', event => {
@@ -6551,6 +7058,8 @@ function bindStudioEvents() {
     shell.querySelector('[data-resource-drawer-close]').addEventListener('click', () => toggleResourceDrawer(false));
     for (const tab of shell.querySelectorAll('.acs-resource-drawer-tab')) tab.addEventListener('click', () => renderResourceDrawer(tab.dataset.resourceKind));
     shell.querySelector('#acs-inspector-toggle').addEventListener('click', toggleMobileInspector);
+    shell.querySelector('#acs-mobile-flow-toggle').addEventListener('click', toggleMobileFlow);
+    shell.querySelector('#acs-mobile-scrim').addEventListener('click', () => setMobilePanel(null));
     shell.querySelector('#acs-new-project').addEventListener('click', newProject);
     shell.querySelector('#acs-fetch-models').addEventListener('click', fetchCustomModels);
     shell.querySelector('#acs-expand-artifacts').addEventListener('click', () => toggleArtifactPanel());
@@ -6576,6 +7085,7 @@ function bindStudioEvents() {
         const switchButton = event.target.closest('[data-project-id]');
         if (switchButton) {
             switchProject(switchButton.dataset.projectId);
+            if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
             return;
         }
         if (event.target.closest('#acs-project-menu-new')) newProject();
@@ -6720,7 +7230,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}`;
     document.head.append(style);
 }
 
@@ -6741,15 +7251,16 @@ async function ensureStudioLoaded() {
     shell = container.querySelector('#auto-card-studio');
     shell.dataset.acsRuntime = SCRIPT_RUNTIME_MARK;
     document.body.append(shell);
-    updateStudioViewportScale();
     installStepHelpUI();
     installResourceManagerUI();
     installProjectLibraryUI();
     installStudioToolsUI();
     installConversationNavigation();
     installDeliveryUI();
+    installMobileLayoutUI();
     installStyledSelects();
     installCustomModelPicker();
+    updateStudioViewportScale();
     bindStudioEvents();
     renderAll();
     await inspectEnvironment();
@@ -6812,6 +7323,7 @@ function closeStudio() {
     toggleProjectMenu(false);
     closeStyledSelects();
     toggleCustomModelOptions(false);
+    setMobilePanel(null);
     shell.classList.remove('is-open');
     shell.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('acs-no-scroll');
@@ -6841,6 +7353,10 @@ function handleHostKeydown(event) {
     }
     if (artifactPanelExpanded) {
         toggleArtifactPanel(false);
+        return;
+    }
+    if (shell.classList.contains('is-mobile-panel-open')) {
+        setMobilePanel(null);
         return;
     }
     closeStudio();
