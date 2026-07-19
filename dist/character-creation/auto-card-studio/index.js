@@ -1390,10 +1390,12 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-4';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-5';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
+const UPDATE_NOTES_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/updates.json`;
+const TEST_BRANCH_COMPARE_URL = (from, to) => `https://api.github.com/repos/NightingNine/sillytavern-scripts/compare/${from}...${to}`;
 const STUDIO_DESIGN_MIN_WIDTH = 1360;
 const STUDIO_DESIGN_MIN_HEIGHT = 760;
 const STUDIO_VIEWPORT_MARGIN = 24;
@@ -1498,6 +1500,7 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-import-actions .acs-button { min-height:34px; padding:6px 9px; font-size:9px; }
 .acs-resource-dock-tab { position:absolute; top:48%; right:0; z-index:17; display:none; width:25px; min-height:104px; padding:9px 5px; border:1px solid rgba(217,119,87,.42); border-right:0; border-radius:9px 0 0 9px; background:#38352f; color:var(--acs-cyan); cursor:pointer; font:700 9px/1.45 var(--acs-body); writing-mode:vertical-rl; letter-spacing:.08em; box-shadow:-8px 8px 24px rgba(10,9,8,.24); }
 .acs-shell.is-settings-view .acs-resource-dock-tab { display:block; }
+.acs-resource-drawer-scrim { position:absolute; inset:72px 0 0; z-index:17; border:0; background:rgba(18,16,14,.16); backdrop-filter:blur(1px); cursor:default; }
 .acs-resource-drawer { position:absolute; top:72px; right:0; bottom:0; z-index:18; display:grid; grid-template-rows:auto auto minmax(0,1fr); width:min(430px,88vw); border-left:1px solid rgba(217,119,87,.32); background:#2b2925; box-shadow:-24px 0 60px rgba(10,9,8,.45); transform:translateX(102%); transition:transform 220ms ease; }
 .acs-resource-drawer.is-open { transform:translateX(0); }
 .acs-resource-drawer-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:18px 19px 14px; border-bottom:1px solid var(--acs-line-soft); }
@@ -1506,11 +1509,25 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-drawer-tabs { display:grid; grid-template-columns:1fr 1fr; padding:0 16px; border-bottom:1px solid var(--acs-line-soft); }
 .acs-resource-drawer-tab { padding:11px 8px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--acs-muted); cursor:pointer; font-size:10px; }.acs-resource-drawer-tab.is-active{border-color:var(--acs-cyan);color:var(--acs-text)}
 .acs-resource-list { min-height:0; overflow:auto; padding:13px 16px 20px; scrollbar-width:thin; scrollbar-color:var(--acs-line) transparent; }
-.acs-resource-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 11px; border:1px solid var(--acs-line-soft); border-radius:9px; background:#34312c; }.acs-resource-item+.acs-resource-item{margin-top:7px}
+.acs-resource-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 11px; border:1px solid var(--acs-line-soft); border-radius:9px; background:#34312c; transition:border-color 140ms ease,background 140ms ease,transform 140ms ease; }.acs-resource-item+.acs-resource-item{margin-top:7px}
+.acs-resource-item.is-editable { cursor:pointer; }.acs-resource-item.is-editable:hover{border-color:rgba(217,119,87,.38);background:#3a3731;transform:translateX(-2px)}
 .acs-resource-item-copy{min-width:0}.acs-resource-item-copy strong,.acs-resource-item-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.acs-resource-item-copy strong{color:var(--acs-text-soft);font-size:10px}.acs-resource-item-copy small{margin-top:4px;color:var(--acs-muted);font:700 8px/1 var(--acs-mono)}
 .acs-resource-switch { position:relative; width:34px; height:18px; }.acs-resource-switch input{position:absolute;opacity:0}.acs-resource-switch span{position:absolute;inset:0;border:1px solid var(--acs-line);border-radius:999px;background:#2b2925;cursor:pointer}.acs-resource-switch span::after{position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:50%;background:var(--acs-muted);content:"";transition:transform 140ms ease,background 140ms ease}.acs-resource-switch input:checked+span{border-color:rgba(147,189,145,.48);background:rgba(147,189,145,.1)}.acs-resource-switch input:checked+span::after{transform:translateX(16px);background:var(--acs-green)}
 .acs-resource-empty { padding:24px 12px; color:var(--acs-muted); font-size:10px; line-height:1.65; text-align:center; }
-@media(max-width:860px){.acs-resource-drawer{top:64px;width:min(420px,94vw)}.acs-resource-dock-tab{top:44%}}
+.acs-resource-editor-overlay,.acs-update-notes-overlay{position:absolute;inset:0;z-index:70;display:grid;padding:clamp(12px,4vh,42px);place-items:center;background:rgba(18,16,14,.76);backdrop-filter:blur(10px)}
+.acs-resource-editor-dialog,.acs-update-notes-dialog{display:grid;width:min(820px,94vw);max-height:min(820px,90vh);overflow:hidden;border:1px solid rgba(217,119,87,.36);border-radius:18px;background:#302e29;box-shadow:0 30px 90px rgba(10,9,8,.62);animation:acs-confirm-in 160ms ease-out}
+.acs-resource-editor-dialog{grid-template-rows:auto minmax(0,1fr) auto}
+.acs-resource-editor-head,.acs-update-notes-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px 17px;border-bottom:1px solid var(--acs-line-soft);background:linear-gradient(120deg,rgba(217,119,87,.09),transparent 58%)}
+.acs-resource-editor-head p,.acs-resource-editor-head h2,.acs-update-notes-head p,.acs-update-notes-head h2{margin:0}.acs-resource-editor-head p,.acs-update-notes-head p{color:var(--acs-cyan);font:700 8px/1 var(--acs-mono);letter-spacing:.15em}.acs-resource-editor-head h2,.acs-update-notes-head h2{margin-top:7px;color:var(--acs-text);font:500 23px/1.25 var(--acs-display)}
+.acs-resource-editor-close,.acs-update-notes-close{display:grid;width:34px;height:34px;flex:0 0 auto;place-items:center;border:1px solid var(--acs-line);border-radius:9px;background:transparent;color:var(--acs-muted);cursor:pointer}
+.acs-resource-editor-body{display:grid;min-height:0;padding:18px 22px}.acs-resource-editor-body textarea{width:100%;min-height:360px;resize:vertical;padding:15px;border:1px solid var(--acs-line);border-radius:11px;background:#292722;color:var(--acs-text);font:12px/1.72 var(--acs-mono);scrollbar-width:thin;scrollbar-color:var(--acs-line) transparent}
+.acs-resource-editor-actions,.acs-update-notes-actions{display:flex;justify-content:flex-end;gap:8px;padding:13px 18px;border-top:1px solid var(--acs-line-soft);background:#292722}
+.acs-update-notes-dialog{grid-template-rows:auto minmax(0,1fr) auto;width:min(680px,94vw)}
+.acs-update-notes-summary{display:block;margin-top:7px;color:var(--acs-muted);font:700 9px/1.4 var(--acs-mono)}
+.acs-update-notes-list{min-height:0;overflow:auto;padding:16px 22px 22px;scrollbar-width:thin;scrollbar-color:var(--acs-line) transparent}
+.acs-update-note{position:relative;padding:14px 15px 14px 18px;border:1px solid var(--acs-line-soft);border-radius:11px;background:#34312c}.acs-update-note+.acs-update-note{margin-top:10px}.acs-update-note::before{position:absolute;top:17px;left:-4px;width:7px;height:7px;border-radius:50%;background:var(--acs-cyan);box-shadow:0 0 0 4px #302e29;content:""}.acs-update-note strong{display:block;color:var(--acs-text);font-size:12px}.acs-update-note small{display:block;margin-top:4px;color:var(--acs-cyan);font:700 8px/1 var(--acs-mono)}.acs-update-note ul{margin:10px 0 0;padding-left:18px;color:var(--acs-text-soft);font-size:10px;line-height:1.65}.acs-update-note li+li{margin-top:4px}
+@media(max-width:860px){.acs-resource-drawer{top:64px;width:min(420px,94vw)}.acs-resource-drawer-scrim{inset:64px 0 0}.acs-resource-dock-tab{top:44%}}
+@media(max-width:560px){.acs-resource-editor-overlay,.acs-update-notes-overlay{padding:0}.acs-resource-editor-dialog,.acs-update-notes-dialog{width:100%;height:100vh;height:100dvh;max-height:none;border:0;border-radius:0}.acs-resource-editor-head,.acs-update-notes-head{padding-top:max(18px,env(safe-area-inset-top,0px));padding-right:17px;padding-left:17px}.acs-resource-editor-body{padding:14px 13px}.acs-resource-editor-body textarea{min-height:100%;resize:none;font-size:13px}.acs-resource-editor-actions,.acs-update-notes-actions{padding-bottom:max(13px,env(safe-area-inset-bottom,0px))}.acs-update-notes-list{padding-right:14px;padding-left:14px}}
 @media(prefers-reduced-motion:reduce){.acs-resource-drawer,.acs-resource-switch span::after{transition:none}}
 `;
 
@@ -2881,6 +2898,9 @@ let promptPreviewMessages = [];
 let promptTokenRenderEpoch = 0;
 let deliveryArtifacts = [];
 let confirmDialogResolver = null;
+let updateDialogResolver = null;
+let resourceEditorPrompt = null;
+let automaticUpdateChecked = false;
 let artifactFilterScope = 'all';
 let artifactFilterQuery = '';
 const artifactSaveTimers = new Map();
@@ -4734,6 +4754,47 @@ function showStudioConfirm({ title = '请确认', message = '', confirmLabel = '
     overlay.setAttribute('aria-hidden', 'false');
     overlay.querySelector('[data-confirm-result="true"]')?.focus({ preventScroll: true });
     return new Promise(resolve => { confirmDialogResolver = resolve; });
+}
+
+function closeUpdateNotes(result = false) {
+    const overlay = shell?.querySelector('#acs-update-notes-overlay');
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    const resolve = updateDialogResolver;
+    updateDialogResolver = null;
+    resolve?.(Boolean(result));
+}
+
+function showUpdateNotes({ currentLabel, targetLabel, entries }) {
+    const overlay = shell?.querySelector('#acs-update-notes-overlay');
+    if (!overlay) return Promise.resolve(false);
+    if (updateDialogResolver) closeUpdateNotes(false);
+    overlay.querySelector('#acs-update-notes-summary').textContent = `${currentLabel}  →  ${targetLabel}`;
+    const list = overlay.querySelector('#acs-update-notes-list');
+    list.replaceChildren();
+    const safeEntries = entries.length ? entries : [{ label: targetLabel, title: '版本更新', changes: ['包含功能改进与问题修复。'] }];
+    for (const entry of safeEntries) {
+        const card = document.createElement('article');
+        card.className = 'acs-update-note';
+        const title = document.createElement('strong');
+        title.textContent = entry.title || '版本更新';
+        const label = document.createElement('small');
+        label.textContent = entry.label || targetLabel;
+        const changes = document.createElement('ul');
+        changes.replaceChildren(...(entry.changes?.length ? entry.changes : ['功能改进与问题修复。']).map(text => {
+            const item = document.createElement('li');
+            item.textContent = text;
+            return item;
+        }));
+        card.append(title, label, changes);
+        list.append(card);
+    }
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    list.scrollTop = 0;
+    overlay.querySelector('[data-update-result="true"]')?.focus({ preventScroll: true });
+    return new Promise(resolve => { updateDialogResolver = resolve; });
 }
 
 function toggleProjectMenu(force) {
@@ -7117,7 +7178,53 @@ function installResourceManagerUI() {
       <header class="acs-resource-drawer-head"><div><p>LOCAL RESOURCES</p><h2>预设与正则条目</h2></div><button class="acs-resource-drawer-close" type="button" data-resource-drawer-close aria-label="关闭"><i class="fa-solid fa-xmark"></i></button></header>
       <div class="acs-resource-drawer-tabs"><button class="acs-resource-drawer-tab is-active" type="button" data-resource-kind="prompts">预设条目</button><button class="acs-resource-drawer-tab" type="button" data-resource-kind="regexes">正则条目</button></div>
       <div id="acs-resource-list" class="acs-resource-list"></div>`;
-    shell.querySelector('.acs-window').append(drawer);
+    const drawerScrim = document.createElement('button');
+    drawerScrim.id = 'acs-resource-drawer-scrim';
+    drawerScrim.className = 'acs-resource-drawer-scrim';
+    drawerScrim.type = 'button';
+    drawerScrim.hidden = true;
+    drawerScrim.setAttribute('aria-label', '关闭预设与正则条目侧栏');
+    shell.querySelector('.acs-window').append(drawerScrim, drawer);
+
+    const editor = document.createElement('div');
+    editor.id = 'acs-resource-editor-overlay';
+    editor.className = 'acs-resource-editor-overlay';
+    editor.hidden = true;
+    editor.setAttribute('aria-hidden', 'true');
+    editor.innerHTML = `
+      <section class="acs-resource-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-resource-editor-title">
+        <header class="acs-resource-editor-head">
+          <div><p>PRESET ENTRY</p><h2 id="acs-resource-editor-title">编辑预设条目</h2></div>
+          <button class="acs-resource-editor-close" type="button" data-resource-editor-close aria-label="关闭编辑窗口"><i class="fa-solid fa-xmark"></i></button>
+        </header>
+        <div class="acs-resource-editor-body">
+          <textarea id="acs-resource-editor-content" spellcheck="false" aria-label="预设条目内容"></textarea>
+        </div>
+        <footer class="acs-resource-editor-actions">
+          <button class="acs-button" type="button" data-resource-editor-close>取消</button>
+          <button id="acs-save-resource-entry" class="acs-button acs-button-publish" type="button"><i class="fa-solid fa-floppy-disk"></i>保存条目</button>
+        </footer>
+      </section>`;
+    shell.append(editor);
+
+    const updateOverlay = document.createElement('div');
+    updateOverlay.id = 'acs-update-notes-overlay';
+    updateOverlay.className = 'acs-update-notes-overlay';
+    updateOverlay.hidden = true;
+    updateOverlay.setAttribute('aria-hidden', 'true');
+    updateOverlay.innerHTML = `
+      <section class="acs-update-notes-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-update-notes-title">
+        <header class="acs-update-notes-head">
+          <div><p>UPDATE MANIFEST</p><h2 id="acs-update-notes-title">本次更新内容</h2><span id="acs-update-notes-summary" class="acs-update-notes-summary"></span></div>
+          <button class="acs-update-notes-close" type="button" data-update-result="false" aria-label="暂不更新"><i class="fa-solid fa-xmark"></i></button>
+        </header>
+        <div id="acs-update-notes-list" class="acs-update-notes-list"></div>
+        <footer class="acs-update-notes-actions">
+          <button class="acs-button" type="button" data-update-result="false">暂不更新</button>
+          <button class="acs-button acs-button-publish" type="button" data-update-result="true"><i class="fa-solid fa-arrow-up-right-dots"></i>立即更新</button>
+        </footer>
+      </section>`;
+    shell.append(updateOverlay);
 }
 
 function toggleResourceDrawer(force) {
@@ -7125,6 +7232,8 @@ function toggleResourceDrawer(force) {
     const open = typeof force === 'boolean' ? force : !drawer.classList.contains('is-open');
     drawer.classList.toggle('is-open', open);
     drawer.setAttribute('aria-hidden', String(!open));
+    const scrim = shell.querySelector('#acs-resource-drawer-scrim');
+    if (scrim) scrim.hidden = !open;
     if (open) renderResourceDrawer();
 }
 
@@ -7146,6 +7255,13 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
     for (const item of items) {
         const row = document.createElement('div');
         row.className = 'acs-resource-item';
+        if (kind === 'prompts') {
+            row.classList.add('is-editable');
+            row.dataset.presetEntryId = item.id;
+            row.tabIndex = 0;
+            row.setAttribute('role', 'button');
+            row.setAttribute('aria-label', `查看并编辑预设条目：${item.name}`);
+        }
         const copy = document.createElement('div');
         copy.className = 'acs-resource-item-copy';
         const name = document.createElement('strong');
@@ -7155,6 +7271,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
         copy.append(name, meta);
         const label = document.createElement('label');
         label.className = 'acs-resource-switch';
+        label.addEventListener('click', event => event.stopPropagation());
         const input = document.createElement('input');
         input.type = 'checkbox';
         input.checked = kind === 'prompts' ? item.enabled !== false : !item.disabled;
@@ -7173,6 +7290,37 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
         row.append(copy, label);
         list.append(row);
     }
+}
+
+function openResourceEditor(promptId) {
+    const prompt = (studioResources.preset?.prompts || []).find(item => String(item.id) === String(promptId));
+    const overlay = shell?.querySelector('#acs-resource-editor-overlay');
+    if (!prompt || !overlay) return;
+    resourceEditorPrompt = prompt;
+    overlay.querySelector('#acs-resource-editor-title').textContent = prompt.name || '未命名预设条目';
+    overlay.querySelector('#acs-resource-editor-content').value = prompt.content || '';
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.querySelector('#acs-resource-editor-content')?.focus({ preventScroll: true });
+}
+
+function closeResourceEditor() {
+    const overlay = shell?.querySelector('#acs-resource-editor-overlay');
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    resourceEditorPrompt = null;
+}
+
+async function saveResourceEditor() {
+    if (!resourceEditorPrompt) return;
+    const content = shell.querySelector('#acs-resource-editor-content').value;
+    resourceEditorPrompt.content = content;
+    await writeResourceRecord('preset', studioResources.preset);
+    closeResourceEditor();
+    renderResourceDrawer('prompts');
+    renderCurrentStep();
+    notify('success', '预设条目已保存。');
 }
 
 async function importPresetFile(event) {
@@ -7229,6 +7377,12 @@ async function importRegexFile(event) {
 
 function bindStudioEvents() {
     for (const close of shell.querySelectorAll('[data-acs-close]')) close.addEventListener('click', closeStudio);
+    shell.addEventListener('pointerdown', event => {
+        const drawer = shell.querySelector('#acs-resource-drawer');
+        if (!drawer?.classList.contains('is-open')) return;
+        if (event.target.closest('#acs-resource-drawer, #acs-resource-dock-tab, #acs-open-resource-drawer-inline')) return;
+        toggleResourceDrawer(false);
+    });
     shell.querySelector('#acs-step-rail').addEventListener('click', event => {
         const phaseToggle = event.target.closest('[data-phase-toggle]');
         if (phaseToggle) {
@@ -7305,7 +7459,33 @@ function bindStudioEvents() {
     shell.querySelector('#acs-resource-dock-tab').addEventListener('click', () => toggleResourceDrawer());
     shell.querySelector('#acs-open-resource-drawer-inline').addEventListener('click', () => toggleResourceDrawer(true));
     shell.querySelector('[data-resource-drawer-close]').addEventListener('click', () => toggleResourceDrawer(false));
+    shell.querySelector('#acs-resource-drawer-scrim').addEventListener('click', () => toggleResourceDrawer(false));
     for (const tab of shell.querySelectorAll('.acs-resource-drawer-tab')) tab.addEventListener('click', () => renderResourceDrawer(tab.dataset.resourceKind));
+    shell.querySelector('#acs-resource-list').addEventListener('click', event => {
+        const row = event.target.closest('[data-preset-entry-id]');
+        if (row && !event.target.closest('.acs-resource-switch')) openResourceEditor(row.dataset.presetEntryId);
+    });
+    shell.querySelector('#acs-resource-list').addEventListener('keydown', event => {
+        const row = event.target.closest('[data-preset-entry-id]');
+        if (row && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            openResourceEditor(row.dataset.presetEntryId);
+        }
+    });
+    shell.querySelector('#acs-resource-editor-overlay').addEventListener('click', event => {
+        if (event.target === event.currentTarget || event.target.closest('[data-resource-editor-close]')) closeResourceEditor();
+    });
+    shell.querySelector('#acs-resource-editor-overlay').addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeResourceEditor();
+    });
+    shell.querySelector('#acs-save-resource-entry').addEventListener('click', () => { void saveResourceEditor(); });
+    shell.querySelector('#acs-update-notes-overlay').addEventListener('click', event => {
+        const result = event.target.closest('[data-update-result]');
+        if (result) closeUpdateNotes(result.dataset.updateResult === 'true');
+    });
+    shell.querySelector('#acs-update-notes-overlay').addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeUpdateNotes(false);
+    });
     shell.querySelector('#acs-inspector-toggle').addEventListener('click', toggleMobileInspector);
     shell.querySelector('#acs-mobile-flow-toggle').addEventListener('click', toggleMobileFlow);
     shell.querySelector('#acs-mobile-scrim').addEventListener('click', () => setMobilePanel(null));
@@ -7554,6 +7734,7 @@ async function openStudio() {
             ? shell.querySelector('#acs-user-input')
             : shell.querySelector('#acs-project-brief');
         initialFocus.focus();
+        hostWindow.setTimeout(() => { void maybeOfferAutomaticUpdate(); }, 0);
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 打开失败', error);
         showStudioRuntimeError(error);
@@ -7577,6 +7758,10 @@ function closeStudio() {
     }
     if (tourActive) closeTour(false);
     closePromptPreview();
+    closeStepHelp();
+    closeResourceEditor();
+    closeUpdateNotes(false);
+    toggleResourceDrawer(false);
     if (artifactPanelExpanded) toggleArtifactPanel(false);
     toggleProjectMenu(false);
     closeStyledSelects();
@@ -7767,6 +7952,72 @@ async function getLatestPublishedVersion(forceRefresh = false) {
     return version;
 }
 
+async function fetchUpdateManifest(ref) {
+    const response = await hostWindow.fetch(UPDATE_NOTES_URL_BY_REF(ref), { cache: 'no-store' });
+    if (!response.ok) throw new Error(`更新说明请求失败：HTTP ${response.status}`);
+    const manifest = await response.json();
+    if (!manifest || typeof manifest !== 'object') throw new Error('更新说明格式无效');
+    return manifest;
+}
+
+function normalizeManifestEntry(entry, fallbackLabel) {
+    return {
+        label: String(entry?.label || entry?.version || fallbackLabel),
+        title: String(entry?.title || '版本更新'),
+        changes: Array.isArray(entry?.changes) ? entry.changes.map(String).filter(Boolean) : [],
+    };
+}
+
+async function collectTestUpdateEntries(currentRevision, targetRevision) {
+    try {
+        const manifest = await fetchUpdateManifest(targetRevision);
+        const builds = Array.isArray(manifest.testBuilds) ? manifest.testBuilds : [];
+        const currentIndex = builds.findIndex(entry => entry?.label === TEST_BRANCH_BUILD_LABEL);
+        const selected = currentIndex >= 0 ? builds.slice(currentIndex + 1) : builds.slice(-1);
+        if (selected.length) return selected.map(entry => normalizeManifestEntry(entry, targetRevision.slice(0, 7)));
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 测试版更新说明读取失败，尝试读取提交记录。', error);
+    }
+
+    if (/^[0-9a-f]{40}$/i.test(currentRevision) && /^[0-9a-f]{40}$/i.test(targetRevision)) {
+        try {
+            const response = await hostWindow.fetch(TEST_BRANCH_COMPARE_URL(currentRevision, targetRevision), {
+                cache: 'no-store',
+                headers: { Accept: 'application/vnd.github+json' },
+            });
+            if (response.ok) {
+                const commits = (await response.json())?.commits || [];
+                return commits.map(commit => {
+                    const lines = String(commit?.commit?.message || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+                    return {
+                        label: `测试构建 ${String(commit?.sha || '').slice(0, 7)}`,
+                        title: lines[0] || '测试版更新',
+                        changes: lines.slice(1),
+                    };
+                });
+            }
+        } catch (error) {
+            console.warn('[A.U.T.O Card Studio] 测试分支提交记录读取失败。', error);
+        }
+    }
+    return [];
+}
+
+async function collectPublishedUpdateEntries(latestVersion) {
+    try {
+        const manifest = await fetchUpdateManifest(`auto-card-studio-v${latestVersion}`);
+        const releases = Array.isArray(manifest.releases) ? manifest.releases : [];
+        return releases
+            .filter(entry => /^\d+\.\d+\.\d+$/.test(String(entry?.version || '')))
+            .filter(entry => compareVersions(entry.version, AUTO_CARD_STUDIO_VERSION) > 0 && compareVersions(entry.version, latestVersion) <= 0)
+            .sort((left, right) => compareVersions(left.version, right.version))
+            .map(entry => normalizeManifestEntry(entry, `v${entry.version}`));
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 正式版更新说明读取失败。', error);
+        return [];
+    }
+}
+
 function showUpdateFeedback(message, state = '', duration = 3200) {
     const button = shell?.querySelector('#acs-check-update');
     const feedback = shell?.querySelector('#acs-update-feedback');
@@ -7815,6 +8066,18 @@ async function checkForUpdatesManually() {
                 return;
             }
 
+            const currentRevision = String(localStorage.getItem(TEST_BRANCH_PIN_KEY) || '').trim();
+            const entries = await collectTestUpdateEntries(currentRevision, revision);
+            const confirmed = await showUpdateNotes({
+                currentLabel: studioVersionLabel(),
+                targetLabel: `测试构建 ${revision.slice(0, 7)}`,
+                entries,
+            });
+            if (!confirmed) {
+                showUpdateFeedback('已暂缓本次更新', 'current');
+                return;
+            }
+
             localStorage.setItem(TEST_BRANCH_PIN_KEY, revision);
             hostWindow.sessionStorage.setItem(TEST_BRANCH_UPDATE_KEY, revision);
             showUpdateFeedback(`正在载入测试构建 ${revision.slice(0, 7)}…`, 'checking', 0);
@@ -7833,6 +8096,16 @@ async function checkForUpdatesManually() {
 
         const scriptResponse = await hostWindow.fetch(VERSIONED_SCRIPT_URL(latestVersion), { cache: 'no-store' });
         if (!scriptResponse.ok) throw new Error(`新版脚本尚未就绪：HTTP ${scriptResponse.status}`);
+        const entries = await collectPublishedUpdateEntries(latestVersion);
+        const confirmed = await showUpdateNotes({
+            currentLabel: `v${AUTO_CARD_STUDIO_VERSION}`,
+            targetLabel: `v${latestVersion}`,
+            entries,
+        });
+        if (!confirmed) {
+            showUpdateFeedback('已暂缓本次更新', 'current');
+            return;
+        }
         showUpdateFeedback(`发现 v${latestVersion}，正在更新…`, 'checking', 0);
         notify('info', `发现新版本 v${latestVersion}，即将刷新并重新打开创作台。`);
         hostWindow.sessionStorage.setItem(UPDATE_REOPEN_KEY, latestVersion);
@@ -7844,6 +8117,18 @@ async function checkForUpdatesManually() {
     } finally {
         isCheckingForUpdate = false;
         if (button.isConnected) button.disabled = false;
+    }
+}
+
+async function maybeOfferAutomaticUpdate() {
+    if (TEST_BRANCH_UPDATE_MODE || automaticUpdateChecked || !shell?.classList.contains('is-open')) return;
+    automaticUpdateChecked = true;
+    try {
+        const latestVersion = await getLatestPublishedVersion();
+        if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) > 0) await checkForUpdatesManually();
+    } catch (error) {
+        // 自动检查失败不打断创作；用户仍可通过顶部按钮手动检查。
+        console.warn('[A.U.T.O Card Studio] 自动更新检查失败。', error);
     }
 }
 
@@ -7885,22 +8170,7 @@ async function startStudioWithAutoUpdate() {
         return;
     }
 
-    try {
-        const latestVersion = await getLatestPublishedVersion();
-        if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) > 0) {
-            console.info(`[A.U.T.O Card Studio] 发现新版本 ${latestVersion}，正在从 ${AUTO_CARD_STUDIO_VERSION} 自动更新。`);
-            try {
-                await import(VERSIONED_SCRIPT_URL(latestVersion));
-                return;
-            } catch (error) {
-                // 新版本加载失败时继续启动当前版本，保证创作台仍然可用。
-                console.warn(`[A.U.T.O Card Studio] 新版本 ${latestVersion} 加载失败，回退到 ${AUTO_CARD_STUDIO_VERSION}。`, error);
-            }
-        }
-    } catch (error) {
-        // GitHub 暂时不可用时不阻塞创作台，只跳过本次更新检查。
-        console.warn(`[A.U.T.O Card Studio] 自动更新检查失败，继续使用 ${AUTO_CARD_STUDIO_VERSION}。`, error);
-    }
+    // 正式版在创作台打开后再检查；发现更新时先展示完整更新内容，由用户确认后加载。
     startStudioRuntime();
 }
 
