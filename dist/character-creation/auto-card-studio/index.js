@@ -1694,7 +1694,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-22';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-23';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -7228,6 +7228,31 @@ function createReorgSourceModel(artifacts = collectDeliveryArtifacts()) {
     return { entries, blockById };
 }
 
+function reorgSelectionSignature(artifacts = []) {
+    // 只记录产物身份与交付位置，不包含正文。这样正文修订后仍可沿用分组，增删或替换产物则会失效。
+    const identities = artifacts
+        .filter(item => item?.target?.kind === 'worldbook')
+        .map(item => ({
+            id: String(item.id || ''),
+            tag: String(item.tag || ''),
+            step: Number(item.step) || 0,
+            targetKind: String(item.target?.kind || ''),
+            targetName: String(item.target?.name || ''),
+        }))
+        .sort((left, right) => (
+            left.id.localeCompare(right.id, 'zh-CN')
+            || left.tag.localeCompare(right.tag, 'zh-CN')
+            || left.targetName.localeCompare(right.targetName, 'zh-CN')
+        ));
+    return JSON.stringify(identities);
+}
+
+function cachedReorgMatchesSelection(selectedArtifacts) {
+    const cachedSignature = project.autoReorg?.selectionSignature;
+    if (!cachedSignature) return false;
+    return cachedSignature === reorgSelectionSignature(selectedArtifacts);
+}
+
 function buildReorgStructureReport(artifacts) {
     const model = createReorgSourceModel(artifacts || collectDeliveryArtifacts());
     const report = {
@@ -7493,7 +7518,12 @@ async function generateDeliveryReorgPlan(selectedArtifacts) {
     const planResult = reorgPlanFromResponse(response);
 
     // 重组是发布阶段的内部过程，不占用左侧创作步骤。
-    project.autoReorg = { response, plan: planResult.plan, updatedAt: new Date().toISOString() };
+    project.autoReorg = {
+        response,
+        plan: planResult.plan,
+        selectionSignature: reorgSelectionSignature(selectedArtifacts),
+        updatedAt: new Date().toISOString(),
+    };
     saveProject();
     return planResult;
 }
@@ -7504,9 +7534,12 @@ async function ensureDeliveryReorg(selectedArtifacts) {
         return { applied: true, entries: [], usedArtifacts: 0, omittedArtifacts: 0, unresolvedBlockIds: [] };
     }
 
-    // 先复用仍与本次选择完整匹配的方案；任何部分匹配都视为过期并重新生成。
-    let build = applyReorgPlan(selectedWorldbook, deliveryArtifacts, latestReorgPlanResult());
-    if (isCompleteReorgBuild(build, selectedWorldbook)) return build;
+    // 只有产物身份与交付位置完全一致时才复用。旧缓存没有结构指纹，会在首次发布时自动重建。
+    let build = null;
+    if (cachedReorgMatchesSelection(selectedWorldbook)) {
+        build = applyReorgPlan(selectedWorldbook, deliveryArtifacts, latestReorgPlanResult());
+        if (isCompleteReorgBuild(build, selectedWorldbook)) return build;
+    }
 
     notify('info', '正在根据本次勾选的产物自动执行世界书重组…');
     const generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook);
