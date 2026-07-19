@@ -1,7 +1,7 @@
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
 const TEST_SCRIPT_PATH = 'dist/character-creation/auto-card-studio/index.js';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
-const FALLBACK_REVISION = '1dee360a3d498767c74e2aca35713abd102d7754';
+const FALLBACK_REVISION = 'af5f2e5b6ac09d2f354ec299f6ec0b8dbafda15e';
 
 const hostWindow = window.parent;
 
