@@ -309,6 +309,135 @@ const CONVERSATION_NAV_CSS = `
 }
 `;
 
+const COMPACT_STAGE_HEADER_CSS = `
+/* 步骤标题始终保持为紧凑控制条；创作母题从其下方展开。 */
+.acs-stage-heading,
+.acs-shell.acs-proportional-layout .acs-stage-heading,
+.acs-stage.is-overview-collapsed .acs-stage-heading,
+.acs-shell.acs-proportional-layout .acs-stage.is-overview-collapsed .acs-stage-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--acs-line-soft);
+  background: #2b2925;
+  cursor: pointer;
+}
+
+.acs-stage-heading:hover { background: #302d28; }
+
+.acs-stage-heading:focus-visible {
+  outline: 2px solid var(--acs-cyan);
+  outline-offset: -2px;
+}
+
+.acs-stage-heading > div:first-child,
+.acs-stage.is-overview-collapsed .acs-stage-heading > div:first-child {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.acs-stage-heading .acs-eyebrow,
+.acs-stage.is-overview-collapsed .acs-stage-heading .acs-eyebrow {
+  margin: 0;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.acs-stage-heading h2,
+.acs-shell.acs-proportional-layout .acs-stage-heading h2,
+.acs-stage.is-overview-collapsed .acs-stage-heading h2,
+.acs-shell.acs-proportional-layout .acs-stage.is-overview-collapsed .acs-stage-heading h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--acs-text);
+  font-family: var(--acs-body);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-stage-heading .acs-step-goal,
+.acs-stage.is-overview-collapsed .acs-step-goal {
+  display: block;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  overflow: hidden;
+  padding-left: 11px;
+  border-left: 1px solid var(--acs-line-soft);
+  color: var(--acs-muted);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-brief-panel {
+  max-height: 260px;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 220ms ease, margin 220ms ease, padding 220ms ease, opacity 160ms ease, transform 220ms ease, border-color 160ms ease;
+}
+
+.acs-stage.is-overview-collapsed .acs-brief-panel {
+  max-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-7px);
+}
+
+@media (max-width: 860px) {
+  .acs-shell.acs-mobile-layout .acs-stage-heading,
+  .acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px;
+    min-height: 54px;
+    padding: 6px 7px 6px 9px;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-stage-heading > div:first-child,
+  .acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading > div:first-child {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 3px 7px;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-stage-heading h2,
+  .acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading h2 {
+    font-size: 11px;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-stage-heading .acs-step-goal,
+  .acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-step-goal {
+    grid-column: 1 / -1;
+    padding: 0;
+    border: 0;
+    font-size: 8px;
+    line-height: 1.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acs-brief-panel { transition: none; }
+}
+`;
+
 const PROJECT_LIBRARY_CSS = `
 .acs-project-identity {
   position: relative;
@@ -1430,7 +1559,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-17';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-20';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -5712,9 +5841,13 @@ function renderOverviewState() {
     const briefPanel = shell.querySelector('#acs-brief-panel');
     const button = shell.querySelector('#acs-toggle-overview');
     const icon = button.querySelector('i');
+    const heading = shell.querySelector('.acs-stage-heading');
 
     stage.classList.toggle('is-overview-collapsed', collapsed);
-    briefPanel.hidden = collapsed;
+    // 保持节点存在，才能让母题区域完成向下展开与向上收起的过渡。
+    briefPanel.hidden = false;
+    briefPanel.setAttribute('aria-hidden', String(collapsed));
+    heading?.setAttribute('aria-expanded', String(!collapsed));
     button.setAttribute('aria-expanded', String(!collapsed));
     button.title = collapsed ? '展开创作概览' : '收起创作概览';
     button.querySelector('span').textContent = collapsed ? '展开概览' : '收起概览';
@@ -8444,6 +8577,18 @@ function bindStudioEvents() {
         }
     });
     shell.querySelector('#acs-toggle-overview').addEventListener('click', toggleOverview);
+    const stageHeading = shell.querySelector('.acs-stage-heading');
+    stageHeading.setAttribute('role', 'button');
+    stageHeading.setAttribute('tabindex', '0');
+    stageHeading.setAttribute('aria-controls', 'acs-brief-panel');
+    stageHeading.addEventListener('click', event => {
+        if (!event.target.closest('button')) toggleOverview();
+    });
+    stageHeading.addEventListener('keydown', event => {
+        if (event.target !== stageHeading || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        toggleOverview();
+    });
     shell.querySelector('#acs-turns').addEventListener('click', event => {
         const retry = event.target.closest('[data-retry-turn]');
         if (retry) retryLatestUserInput(Number(retry.dataset.retryTurn));
@@ -8747,7 +8892,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}`;
     document.head.append(style);
 }
 
