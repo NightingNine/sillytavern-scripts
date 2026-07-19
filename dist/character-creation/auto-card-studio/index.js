@@ -6172,9 +6172,10 @@ function logGenerationDiagnostic(phase, detail) {
  * 用于保留渠道实际返回的错误正文；不会读取请求 body 或修改原始 Response。
  */
 function captureGenerationHttpResponse() {
-    const originalFetch = globalThis.fetch;
     let captured = null;
     const watchedPath = '/api/backends/chat-completions/generate';
+    const fetchTargets = [...new Set([globalThis, hostWindow])]
+        .filter(target => typeof target?.fetch === 'function');
     const safePath = value => {
         try {
             const parsed = new URL(value, globalThis.location?.origin);
@@ -6183,33 +6184,45 @@ function captureGenerationHttpResponse() {
             return String(value || '');
         }
     };
-    const proxyFetch = async (...args) => {
-        const response = await originalFetch(...args);
-        const request = args[0];
-        const requestUrl = typeof request === 'string' ? request : request?.url;
-        if (safePath(requestUrl).includes(watchedPath)) {
-            captured = {
-                status: response.status,
-                status_text: response.statusText,
-                content_type: response.headers?.get?.('content-type') || '',
-            };
-            if (!response.ok) {
-                try {
-                    const body = await response.clone().text();
-                    captured.response_body = body.length > 4000 ? `${body.slice(0, 4000)}…[已截断]` : body;
-                } catch (error) {
-                    captured.response_body = `[无法读取响应正文：${String(error?.message || error)}]`;
+    const wrappers = [];
+    for (const target of fetchTargets) {
+        const originalFetch = target.fetch;
+        const proxyFetch = async (...args) => {
+            const response = await originalFetch.apply(target, args);
+            const request = args[0];
+            const requestUrl = typeof request === 'string' ? request : request?.url;
+            if (safePath(requestUrl).includes(watchedPath)) {
+                captured = {
+                    status: response.status,
+                    status_text: response.statusText,
+                    content_type: response.headers?.get?.('content-type') || '',
+                    request_window: target === hostWindow ? 'SillyTavern 主页面' : '酒馆助手 iframe',
+                };
+                if (!response.ok) {
+                    try {
+                        const body = await response.clone().text();
+                        captured.response_body = body.length > 4000 ? `${body.slice(0, 4000)}…[已截断]` : body;
+                    } catch (error) {
+                        captured.response_body = `[无法读取响应正文：${String(error?.message || error)}]`;
+                    }
                 }
             }
+            return response;
+        };
+        try {
+            target.fetch = proxyFetch;
+            wrappers.push({ target, originalFetch, proxyFetch });
+        } catch (error) {
+            console.warn('[A.U.T.O Card Studio] 无法安装生成响应诊断监听器。', error);
         }
-        return response;
-    };
-    globalThis.fetch = proxyFetch;
+    }
     return {
         read: () => captured,
         stop: () => {
             // 不覆盖其他脚本后来安装的 fetch 包装器。
-            if (globalThis.fetch === proxyFetch) globalThis.fetch = originalFetch;
+            for (const { target, originalFetch, proxyFetch } of wrappers) {
+                if (target.fetch === proxyFetch) target.fetch = originalFetch;
+            }
         },
     };
 }
