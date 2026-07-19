@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.14 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.15 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.14';
+const AUTO_CARD_STUDIO_VERSION = '0.6.15';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1744,6 +1744,23 @@ const DELIVERY_DIALOG_CSS = `
   .acs-delivery-item { grid-template-columns: 22px minmax(0, 1fr); }
   .acs-delivery-item-meta { grid-column: 2; grid-auto-flow: column; justify-content: start; }
 }
+`;
+
+const CONFIRM_DIALOG_CSS = `
+.acs-confirm-overlay { position:absolute; inset:0; z-index:60; display:grid; padding:18px; place-items:center; background:rgba(18,16,14,.74); backdrop-filter:blur(9px); }
+.acs-confirm-dialog { width:min(430px,calc(100vw - 32px)); overflow:hidden; border:1px solid rgba(217,119,87,.38); border-radius:17px; background:#302e29; box-shadow:0 28px 80px rgba(10,9,8,.62); animation:acs-confirm-in 160ms ease-out; }
+.acs-confirm-body { display:grid; grid-template-columns:38px minmax(0,1fr); gap:13px; padding:21px 21px 18px; }
+.acs-confirm-icon { display:grid; width:38px; height:38px; place-items:center; border:1px solid rgba(217,119,87,.3); border-radius:11px; background:rgba(217,119,87,.1); color:var(--acs-cyan); }
+.acs-confirm-copy h2 { margin:1px 0 7px; color:var(--acs-text); font:500 20px/1.25 var(--acs-display); }
+.acs-confirm-copy p { margin:0; color:var(--acs-text-soft); font-size:11px; line-height:1.7; white-space:pre-line; }
+.acs-confirm-actions { display:flex; justify-content:flex-end; gap:8px; padding:13px 18px; border-top:1px solid var(--acs-line-soft); background:#292722; }
+.acs-confirm-actions .acs-button { min-width:84px; }
+.acs-confirm-actions .acs-button-publish { width:auto; margin-top:0; }
+.acs-confirm-dialog.is-danger { border-color:rgba(217,132,127,.42); }
+.acs-confirm-dialog.is-danger .acs-confirm-icon { border-color:rgba(217,132,127,.32); background:rgba(217,132,127,.1); color:var(--acs-red); }
+@keyframes acs-confirm-in { from { opacity:0; transform:translateY(8px) scale(.985); } to { opacity:1; transform:none; } }
+@media(max-width:560px){.acs-confirm-overlay{padding:10px}.acs-confirm-body{padding:18px 17px 16px}.acs-confirm-actions{padding:12px 15px}}
+@media(prefers-reduced-motion:reduce){.acs-confirm-dialog{animation:none}}
 `;
 
 const TOUR_STEPS = Object.freeze([
@@ -2205,6 +2222,7 @@ let renderedArtifactGroups = [];
 let promptPreviewMessages = [];
 let promptTokenRenderEpoch = 0;
 let deliveryArtifacts = [];
+let confirmDialogResolver = null;
 let artifactFilterScope = 'all';
 let artifactFilterQuery = '';
 const artifactSaveTimers = new Map();
@@ -3870,6 +3888,29 @@ function installDeliveryUI() {
     const updateButton = shell.querySelector('#acs-check-update');
     if (updateButton) updateButton.title = `检查更新（当前 v${AUTO_CARD_STUDIO_VERSION}）`;
 
+    if (!shell.querySelector('#acs-confirm-overlay')) {
+        const confirmOverlay = document.createElement('div');
+        confirmOverlay.id = 'acs-confirm-overlay';
+        confirmOverlay.className = 'acs-confirm-overlay';
+        confirmOverlay.hidden = true;
+        confirmOverlay.setAttribute('aria-hidden', 'true');
+        confirmOverlay.innerHTML = `
+          <section class="acs-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-confirm-title" aria-describedby="acs-confirm-message">
+            <div class="acs-confirm-body">
+              <span class="acs-confirm-icon" aria-hidden="true"><i class="fa-solid fa-circle-question"></i></span>
+              <div class="acs-confirm-copy">
+                <h2 id="acs-confirm-title">请确认</h2>
+                <p id="acs-confirm-message"></p>
+              </div>
+            </div>
+            <footer class="acs-confirm-actions">
+              <button class="acs-button" type="button" data-confirm-result="false">取消</button>
+              <button class="acs-button acs-button-publish" type="button" data-confirm-result="true">确认</button>
+            </footer>
+          </section>`;
+        shell.append(confirmOverlay);
+    }
+
     if (shell.querySelector('#acs-delivery-overlay')) return;
     const overlay = document.createElement('div');
     overlay.id = 'acs-delivery-overlay';
@@ -3909,6 +3950,34 @@ function installDeliveryUI() {
         </footer>
       </section>`;
     shell.append(overlay);
+}
+
+function closeStudioConfirm(result = false) {
+    const overlay = shell?.querySelector('#acs-confirm-overlay');
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    const resolve = confirmDialogResolver;
+    confirmDialogResolver = null;
+    resolve?.(Boolean(result));
+}
+
+function showStudioConfirm({ title = '请确认', message = '', confirmLabel = '确认', cancelLabel = '取消', danger = false } = {}) {
+    const overlay = shell?.querySelector('#acs-confirm-overlay');
+    if (!overlay) return Promise.resolve(false);
+    if (confirmDialogResolver) closeStudioConfirm(false);
+    overlay.querySelector('#acs-confirm-title').textContent = title;
+    overlay.querySelector('#acs-confirm-message').textContent = message;
+    overlay.querySelector('[data-confirm-result="true"]').textContent = confirmLabel;
+    overlay.querySelector('[data-confirm-result="false"]').textContent = cancelLabel;
+    overlay.querySelector('.acs-confirm-dialog').classList.toggle('is-danger', danger);
+    overlay.querySelector('.acs-confirm-icon i').className = danger
+        ? 'fa-solid fa-triangle-exclamation'
+        : 'fa-solid fa-circle-question';
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.querySelector('[data-confirm-result="true"]')?.focus({ preventScroll: true });
+    return new Promise(resolve => { confirmDialogResolver = resolve; });
 }
 
 function toggleProjectMenu(force) {
@@ -3965,14 +4034,19 @@ function switchProject(projectId) {
     notify('success', `已切换到“${project.name}”。`);
 }
 
-function deleteProject(projectId) {
+async function deleteProject(projectId) {
     if (isGenerating) {
         notify('warning', '请先停止当前生成，再删除项目。');
         return;
     }
     const target = projectLibrary.projects.find(item => item.id === projectId);
     if (!target) return;
-    if (!hostWindow.confirm(`删除项目“${target.name}”？\n\n本地项目内容将被永久删除，此操作无法撤销。`)) return;
+    if (!await showStudioConfirm({
+        title: '删除项目？',
+        message: `“${target.name}”将被永久删除。`,
+        confirmLabel: '删除',
+        danger: true,
+    })) return;
 
     for (const timer of artifactSaveTimers.values()) hostWindow.clearTimeout(timer);
     artifactSaveTimers.clear();
@@ -5229,8 +5303,7 @@ function createRegexId() {
         || `auto-card-studio-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-// Step24“输出格式”的通用配套正则。状态栏显示正则包含项目专属 HTML，
-// 因此继续由 Step23 动态生成，不把附件中的示例状态栏混入其他角色卡。
+// Step24“输出格式”的通用配套正则；状态栏显示正则由 Step23 按项目动态生成。
 const OUTPUT_FORMAT_REGEX_BUNDLE = Object.freeze([
     ['7ccce287-970f-48e2-a151-0dddc79d3ab2', '🕹️去除conception', '/<CONTEXT_conception>[\\s\\S]*?</CONTEXT_conception>/gs', [1, 2], true, true, null],
     ['139f6568-218c-40bc-9d05-53888efeab67', '🧩不发送剧情', '/<NARRATIVE>[\\s\\S]*?</NARRATIVE>/gs', [1, 2], false, true, 5],
@@ -5454,32 +5527,32 @@ async function confirmProjectDelivery() {
     if (!selectedArtifacts.length) return;
 
     const hasOutputFormat = selectedArtifacts.some(item => item.step === 24 && item.tag === 'SYS_output_format');
-    const includeOutputFormatBundle = hasOutputFormat && hostWindow.confirm(
-        '你已选择导出“输出格式”。是否同时把配套的 9 条正则载入角色卡局部正则？\n\n'
-        + '这些正则负责隐藏或移除构思、摘要、选项、变量更新、状态栏数据等结构标签。\n'
-        + '“显示状态栏”仍会使用 Step23 为当前项目生成的专属正则，不会载入示例角色卡的状态栏。\n\n'
-        + '选择“取消”只是不载入这组配套正则，角色卡仍会继续发布。'
-    );
+    const includeOutputFormatBundle = hasOutputFormat && await showStudioConfirm({
+        title: '导出配套正则？',
+        message: '将 9 条输出格式正则载入角色卡局部正则。',
+        confirmLabel: '载入正则',
+        cancelLabel: '不载入',
+    });
+
+    const existingCharacters = helper.getCharacterNames?.() || [];
+    const existingWorldbooks = helper.getWorldbookNames?.() || [];
+    const overwritten = [];
+    if (existingCharacters.includes(characterName)) overwritten.push(`角色卡“${characterName}”`);
+    if (existingWorldbooks.includes(worldbookName)) overwritten.push(`世界书“${worldbookName}”`);
+    const createMessage = overwritten.length
+        ? `将更新${overwritten.join('和')}，是否继续？`
+        : `将创建角色卡“${characterName}”和世界书“${worldbookName}”，是否继续？`;
+    if (!await showStudioConfirm({
+        title: overwritten.length ? '确认更新？' : '确认创建？',
+        message: createMessage,
+        confirmLabel: overwritten.length ? '确认更新' : '确认创建',
+    })) return;
 
     const button = shell.querySelector('#acs-confirm-delivery');
     button.disabled = true;
     button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在自动重组';
     try {
         const worldbookBuild = await ensureDeliveryReorg(selectedArtifacts);
-        const existingCharacters = helper.getCharacterNames?.() || [];
-        const existingWorldbooks = helper.getWorldbookNames?.() || [];
-        const overwritten = [];
-        if (existingCharacters.includes(characterName)) overwritten.push(`角色卡“${characterName}”`);
-        if (existingWorldbooks.includes(worldbookName)) overwritten.push(`世界书“${worldbookName}”`);
-        const regexArtifacts = selectedArtifacts.filter(item => item.target.kind.startsWith('character_regex_'));
-        const message = (overwritten.length
-            ? `将用已选择的 ${selectedArtifacts.length} 项产物更新${overwritten.join('和')}。已有头像与其他扩展数据会保留，是否继续？`
-            : `将用已选择的 ${selectedArtifacts.length} 项产物创建角色卡“${characterName}”及世界书“${worldbookName}”，是否继续？`)
-            + `\n\n自动重组已通过校验，将创建 ${worldbookBuild.entries.length} 个世界书条目。`
-            + (regexArtifacts.length ? '\n状态栏产物将写入角色卡局部正则“🕹️显示状态栏”。' : '')
-            + (includeOutputFormatBundle ? `\n输出格式配套正则包将写入角色卡局部正则（${OUTPUT_FORMAT_REGEX_BUNDLE.length} 条）。` : '');
-        if (!hostWindow.confirm(message)) return;
-
         button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在创建';
         let existing = {};
         if (existingCharacters.includes(characterName)) {
@@ -6259,6 +6332,14 @@ function bindStudioEvents() {
     shell.querySelector('#acs-delivery-overlay').addEventListener('click', event => {
         if (event.target === event.currentTarget) closeDeliveryDialog();
     });
+    shell.querySelector('#acs-confirm-overlay').addEventListener('click', event => {
+        const result = event.target.closest('[data-confirm-result]');
+        if (result) closeStudioConfirm(result.dataset.confirmResult === 'true');
+        else if (event.target === event.currentTarget) closeStudioConfirm(false);
+    });
+    shell.querySelector('#acs-confirm-overlay').addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeStudioConfirm(false);
+    });
     shell.querySelector('#acs-download-dossier').addEventListener('click', downloadDossier);
     shell.querySelector('#acs-save-project').addEventListener('click', exportProjectJson);
     shell.querySelector('#acs-import-project-button').addEventListener('click', () => {
@@ -6452,7 +6533,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}`;
     document.head.append(style);
 }
 
