@@ -1390,7 +1390,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-12';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-13';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2397,19 +2397,38 @@ body.acs-no-scroll {
   background: #302e29;
 }
 
-/* 手机端步骤改为左侧常驻图标栏，避免再额外生成“项目与步骤”顶栏按钮。 */
+/* 手机端步骤使用“航站轨道 + 完整抽屉”：平时只占窄栏，需要时从左侧展开。 */
 .acs-shell.acs-mobile-layout .acs-workspace {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-columns: 68px minmax(0, 1fr);
 }
 
 .acs-shell.acs-mobile-layout .acs-rail {
   position: relative;
   grid-column: 1;
-  width: 58px;
-  min-width: 58px;
+  z-index: 2;
+  display: flex;
+  width: 68px;
+  min-width: 68px;
+  overflow: hidden;
+  border-right-color: rgba(232, 224, 212, 0.1);
+  background:
+    linear-gradient(180deg, rgba(217, 119, 87, 0.07), transparent 150px),
+    #292722;
   transform: none;
   box-shadow: none;
+  transition: width 220ms cubic-bezier(.2,.75,.25,1), box-shadow 220ms ease;
+}
+
+.acs-shell.acs-mobile-layout .acs-rail::after {
+  position: absolute;
+  top: 62px;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(transparent, rgba(217, 119, 87, 0.2) 18%, rgba(232, 224, 212, 0.08) 72%, transparent);
+  content: "";
+  pointer-events: none;
 }
 
 .acs-shell.acs-mobile-layout .acs-stage {
@@ -2417,6 +2436,89 @@ body.acs-no-scroll {
   inset: auto;
   grid-column: 2;
   width: auto;
+}
+
+.acs-mobile-rail-head {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-head {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: 0 0 58px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid rgba(232, 224, 212, 0.08);
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading {
+  display: none;
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading span,
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading strong {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading span {
+  color: var(--acs-cyan);
+  font-family: var(--acs-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading strong {
+  margin-top: 3px;
+  color: var(--acs-text-soft);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 46px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid rgba(217, 119, 87, 0.24);
+  border-radius: 14px;
+  outline: 0;
+  background: linear-gradient(145deg, rgba(217, 119, 87, 0.14), rgba(56, 53, 47, 0.72));
+  color: var(--acs-cyan);
+  cursor: pointer;
+  place-items: center;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035), 0 6px 16px rgba(10, 9, 8, 0.18);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-toggle i {
+  font-size: 14px;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-current {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 2px solid #292722;
+  border-radius: 999px;
+  background: var(--acs-cyan);
+  color: var(--acs-void);
+  font-family: var(--acs-mono);
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1;
+  place-items: center;
 }
 
 .acs-shell.acs-mobile-layout .acs-project-identity,
@@ -2429,15 +2531,43 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-step-rail {
-  padding: 10px 6px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding: 4px 8px calc(14px + env(safe-area-inset-bottom, 0px));
+  scroll-padding-top: 8px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-group + .acs-phase-group {
+  margin-top: 8px;
 }
 
 .acs-shell.acs-mobile-layout .acs-phase-toggle {
+  display: grid;
   grid-template-columns: 1fr;
-  width: 42px;
-  min-height: 30px;
+  width: 46px;
+  min-height: 22px;
   margin: 0 auto;
-  padding: 6px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(208, 200, 189, 0.56);
+  place-items: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle::before {
+  content: attr(data-mobile-label);
+  font-family: var(--acs-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle > i {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-group.is-current-phase > .acs-phase-toggle {
+  background: rgba(217, 119, 87, 0.1);
+  color: var(--acs-cyan);
 }
 
 .acs-shell.acs-mobile-layout .acs-phase-steps {
@@ -2445,13 +2575,165 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-phase-steps::before {
-  left: 15px;
+  top: 0;
+  bottom: 0;
+  left: 22px;
+  opacity: 0.24;
 }
 
 .acs-shell.acs-mobile-layout .acs-step-button {
-  grid-template-columns: 30px;
-  width: 42px;
+  grid-template-columns: 46px;
+  width: 46px;
+  min-height: 34px;
   margin: 0 auto;
+  padding: 2px 0;
+  border-radius: 12px;
+  place-items: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button.is-active {
+  background: linear-gradient(90deg, rgba(217, 119, 87, 0.2), rgba(217, 119, 87, 0.07));
+}
+
+.acs-shell.acs-mobile-layout .acs-step-node {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border-color: rgba(171, 162, 151, 0.42);
+  background: #2f2c27;
+  color: var(--acs-muted);
+  font-family: var(--acs-mono);
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-node::before {
+  content: attr(data-mobile-number);
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button.is-complete .acs-step-node::before {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button.is-complete .acs-step-node {
+  color: var(--acs-void);
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button.is-active .acs-step-node {
+  border-color: var(--acs-cyan);
+  background: var(--acs-cyan);
+  color: var(--acs-void);
+  box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.1), 0 5px 14px rgba(217, 119, 87, 0.24);
+}
+
+/* 展开后恢复完整项目、阶段与步骤信息，作为适合触控的左侧抽屉。 */
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 16;
+  width: min(86vw, 340px);
+  min-width: min(86vw, 340px);
+  border-right-color: rgba(217, 119, 87, 0.24);
+  box-shadow: 22px 0 54px rgba(10, 9, 8, 0.48);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-head {
+  justify-content: space-between;
+  padding: 8px 12px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-heading {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-toggle {
+  width: 40px;
+  height: 40px;
+  border-color: var(--acs-line);
+  border-radius: 12px;
+  background: rgba(56, 53, 47, 0.84);
+  color: var(--acs-text-soft);
+  box-shadow: none;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-current {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-identity,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-name,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-number,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-title,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-progress,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-quiet-action {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-progress-row {
+  display: flex;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-rail {
+  padding: 10px 8px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle {
+  grid-template-columns: minmax(0, 1fr) auto 13px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 7px 9px 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--acs-muted);
+  place-items: initial;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle::before {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle > i {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-group.is-current-phase > .acs-phase-toggle {
+  border-color: rgba(217, 119, 87, 0.18);
+  background: rgba(217, 119, 87, 0.07);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-steps {
+  padding-left: 10px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-steps::before {
+  top: 3px;
+  bottom: 5px;
+  left: 20px;
+  opacity: 0.38;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-button {
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 4px 7px 4px 0;
+  place-items: initial;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-node {
+  width: 15px;
+  height: 15px;
+  margin-left: 6px;
+  font-size: 7px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-node::before {
+  display: none;
 }
 
 @media (max-width: 390px) {
@@ -3598,11 +3880,13 @@ function renderStepRail() {
         section.className = 'acs-phase-group';
         section.dataset.phase = phase.id;
         section.classList.toggle('is-collapsed', collapsed);
+        section.classList.toggle('is-current-phase', phaseSteps.some(step => step.number === project.currentStep));
 
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = 'acs-phase-toggle';
         toggle.dataset.phaseToggle = phase.id;
+        toggle.dataset.mobileLabel = phase.label.split('·')[0].trim();
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute('aria-controls', `acs-phase-${phase.id}`);
         toggle.innerHTML = `
@@ -3632,6 +3916,7 @@ function renderStepRail() {
 
             const node = document.createElement('span');
             node.className = 'acs-step-node';
+            node.dataset.mobileNumber = String(step.number).padStart(2, '0');
             if (state.status === 'accepted') node.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
             const name = document.createElement('span');
             name.className = 'acs-step-name';
@@ -3655,6 +3940,9 @@ function renderStepRail() {
         section.append(toggle, steps);
         rail.append(section);
     }
+
+    const mobileCurrent = shell.querySelector('.acs-mobile-rail-current');
+    if (mobileCurrent) mobileCurrent.textContent = String(project.currentStep).padStart(2, '0');
 }
 
 function togglePhase(phaseId) {
@@ -6705,14 +6993,31 @@ function switchInspectorTab(name) {
 }
 
 function installMobileLayoutUI() {
-    if (shell.querySelector('#acs-mobile-scrim')) return;
+    if (!shell.querySelector('#acs-mobile-scrim')) {
+        const scrim = document.createElement('button');
+        scrim.id = 'acs-mobile-scrim';
+        scrim.className = 'acs-mobile-scrim';
+        scrim.type = 'button';
+        scrim.setAttribute('aria-label', '关闭侧栏');
+        shell.querySelector('.acs-window').append(scrim);
+    }
 
-    const scrim = document.createElement('button');
-    scrim.id = 'acs-mobile-scrim';
-    scrim.className = 'acs-mobile-scrim';
-    scrim.type = 'button';
-    scrim.setAttribute('aria-label', '关闭侧栏');
-    shell.querySelector('.acs-window').append(scrim);
+    if (!shell.querySelector('#acs-mobile-rail-toggle')) {
+        const railHead = document.createElement('div');
+        railHead.className = 'acs-mobile-rail-head';
+        railHead.innerHTML = `
+            <div class="acs-mobile-rail-heading">
+                <span>Station map</span>
+                <strong>创作流程 · 29 站</strong>
+            </div>
+            <button id="acs-mobile-rail-toggle" class="acs-mobile-rail-toggle" type="button" aria-expanded="false" title="展开完整步骤">
+                <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                <span class="acs-mobile-rail-current">${String(project?.currentStep || 1).padStart(2, '0')}</span>
+                <span class="acs-visually-hidden">展开完整步骤</span>
+            </button>
+        `;
+        shell.querySelector('.acs-rail')?.prepend(railHead);
+    }
 }
 
 function setMobilePanel(panel = null) {
@@ -6721,18 +7026,27 @@ function setMobilePanel(panel = null) {
     const inspectorOpen = panel === 'inspector';
     const inspector = shell.querySelector('.acs-inspector');
     const inspectorButton = shell.querySelector('#acs-inspector-toggle');
+    const flowButton = shell.querySelector('#acs-mobile-rail-toggle');
 
-    // 步骤导航改为手机端常驻窄栏，不再额外占用顶栏按钮。
-    shell.classList.remove('is-mobile-flow-open');
-    shell.classList.toggle('is-mobile-panel-open', inspectorOpen);
+    shell.classList.toggle('is-mobile-flow-open', flowOpen);
+    shell.classList.toggle('is-mobile-panel-open', flowOpen || inspectorOpen);
     inspector?.classList.toggle('is-mobile-open', inspectorOpen);
     inspectorButton?.setAttribute('aria-expanded', String(inspectorOpen));
     if (inspectorButton) inspectorButton.title = inspectorOpen ? '关闭产物与设置' : '打开产物与设置';
+
+    if (flowButton) {
+        flowButton.setAttribute('aria-expanded', String(flowOpen));
+        flowButton.title = flowOpen ? '收起完整步骤' : '展开完整步骤';
+        const icon = flowButton.querySelector('i');
+        if (icon) icon.className = flowOpen ? 'fa-solid fa-chevron-left' : 'fa-solid fa-list-check';
+        const label = flowButton.querySelector('.acs-visually-hidden');
+        if (label) label.textContent = flowOpen ? '收起完整步骤' : '展开完整步骤';
+    }
 }
 
 function toggleMobileFlow() {
-    // 兼容旧引导调用：步骤栏已常驻，无需再切换。
-    setMobilePanel(null);
+    if (!shell.classList.contains('acs-mobile-layout')) return;
+    setMobilePanel(shell.classList.contains('is-mobile-flow-open') ? null : 'flow');
 }
 
 function toggleMobileInspector() {
@@ -7575,6 +7889,7 @@ function bindStudioEvents() {
     shell.querySelector('#acs-update-notes-overlay').addEventListener('keydown', event => {
         if (event.key === 'Escape') closeUpdateNotes(false);
     });
+    shell.querySelector('#acs-mobile-rail-toggle').addEventListener('click', toggleMobileFlow);
     shell.querySelector('#acs-inspector-toggle').addEventListener('click', toggleMobileInspector);
     shell.querySelector('#acs-mobile-scrim').addEventListener('click', () => setMobilePanel(null));
     shell.querySelector('#acs-new-project').addEventListener('click', newProject);
