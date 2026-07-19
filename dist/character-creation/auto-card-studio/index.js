@@ -1385,6 +1385,10 @@ const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytaver
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
 const TOUR_COMPLETED_KEY = 'auto-card-studio:tour-completed:v1';
+// 测试分支不参与正式版版本号比较；手动更新直接重新拉取本分支的最新脚本。
+const TEST_BRANCH_UPDATE_MODE = true;
+const TEST_BRANCH_SCRIPT_URL = 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-mobile-test/dist/character-creation/auto-card-studio/index.js';
+const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const STUDIO_DESIGN_MIN_WIDTH = 1360;
@@ -7744,6 +7748,20 @@ async function checkForUpdatesManually() {
     button.disabled = true;
     showUpdateFeedback('正在检查新版本…', 'checking', 0);
     try {
+        if (TEST_BRANCH_UPDATE_MODE) {
+            // 测试脚本固定指向分支名，使用唯一查询参数避开浏览器与 CDN 的旧缓存。
+            const refreshToken = String(Date.now());
+            const testScriptUrl = `${TEST_BRANCH_SCRIPT_URL}?update=${refreshToken}`;
+            const testResponse = await hostWindow.fetch(testScriptUrl, { cache: 'no-store' });
+            if (!testResponse.ok) throw new Error(`测试分支脚本请求失败：HTTP ${testResponse.status}`);
+
+            hostWindow.sessionStorage.setItem(TEST_BRANCH_UPDATE_KEY, refreshToken);
+            showUpdateFeedback('已获取测试分支，正在重新载入…', 'checking', 0);
+            notify('info', '已获取测试分支最新脚本，正在重新打开创作台。');
+            hostWindow.setTimeout(() => hostWindow.location.reload(), 650);
+            return;
+        }
+
         // 手动检查明确绕过六小时缓存，保证用户看到远端最新结果。
         const latestVersion = await getLatestPublishedVersion(true);
         if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) <= 0) {
@@ -7785,6 +7803,20 @@ function startStudioRuntime() {
 }
 
 async function startStudioWithAutoUpdate() {
+    if (TEST_BRANCH_UPDATE_MODE) {
+        const refreshToken = hostWindow.sessionStorage.getItem(TEST_BRANCH_UPDATE_KEY);
+        if (refreshToken) {
+            hostWindow.sessionStorage.removeItem(TEST_BRANCH_UPDATE_KEY);
+            try {
+                // 页面重载后由旧脚本接力导入带缓存标记的最新测试分支，避免一直命中旧文件。
+                await import(`${TEST_BRANCH_SCRIPT_URL}?update=${encodeURIComponent(refreshToken)}`);
+                return;
+            } catch (error) {
+                console.warn('[A.U.T.O Card Studio] 测试分支更新加载失败，继续使用当前脚本。', error);
+            }
+        }
+    }
+
     try {
         const latestVersion = await getLatestPublishedVersion();
         if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) > 0) {
