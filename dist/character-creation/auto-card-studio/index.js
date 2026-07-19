@@ -1390,7 +1390,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-5';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-6';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1510,7 +1510,7 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-drawer-tab { padding:11px 8px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--acs-muted); cursor:pointer; font-size:10px; }.acs-resource-drawer-tab.is-active{border-color:var(--acs-cyan);color:var(--acs-text)}
 .acs-resource-list { min-height:0; overflow:auto; padding:13px 16px 20px; scrollbar-width:thin; scrollbar-color:var(--acs-line) transparent; }
 .acs-resource-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 11px; border:1px solid var(--acs-line-soft); border-radius:9px; background:#34312c; transition:border-color 140ms ease,background 140ms ease,transform 140ms ease; }.acs-resource-item+.acs-resource-item{margin-top:7px}
-.acs-resource-item.is-editable { cursor:pointer; }.acs-resource-item.is-editable:hover{border-color:rgba(217,119,87,.38);background:#3a3731;transform:translateX(-2px)}
+.acs-resource-item.is-editable { cursor:pointer; }.acs-resource-item.is-editable:hover{border-color:rgba(217,119,87,.38);background:#3a3731;transform:translateX(-2px)}.acs-resource-item.is-empty .acs-resource-item-copy strong{color:var(--acs-muted);font-style:italic}.acs-resource-item.is-empty .acs-resource-item-copy small{color:var(--acs-gold)}
 .acs-resource-item-copy{min-width:0}.acs-resource-item-copy strong,.acs-resource-item-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.acs-resource-item-copy strong{color:var(--acs-text-soft);font-size:10px}.acs-resource-item-copy small{margin-top:4px;color:var(--acs-muted);font:700 8px/1 var(--acs-mono)}
 .acs-resource-switch { position:relative; width:34px; height:18px; }.acs-resource-switch input{position:absolute;opacity:0}.acs-resource-switch span{position:absolute;inset:0;border:1px solid var(--acs-line);border-radius:999px;background:#2b2925;cursor:pointer}.acs-resource-switch span::after{position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:50%;background:var(--acs-muted);content:"";transition:transform 140ms ease,background 140ms ease}.acs-resource-switch input:checked+span{border-color:rgba(147,189,145,.48);background:rgba(147,189,145,.1)}.acs-resource-switch input:checked+span::after{transform:translateX(16px);background:var(--acs-green)}
 .acs-resource-empty { padding:24px 12px; color:var(--acs-muted); font-size:10px; line-height:1.65; text-align:center; }
@@ -7243,7 +7243,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
     const list = shell.querySelector('#acs-resource-list');
     list.replaceChildren();
     const items = kind === 'prompts'
-        ? (studioResources.preset?.prompts || []).filter(prompt => !ALL_PRESET_STEP_PROMPT_IDS.has(prompt.id) && !PLACEHOLDER_IDS.has(prompt.id) && prompt.content.trim())
+        ? (studioResources.preset?.prompts || []).filter(prompt => !ALL_PRESET_STEP_PROMPT_IDS.has(prompt.id) && !PLACEHOLDER_IDS.has(prompt.id))
         : studioResources.regexes;
     if (!items.length) {
         const empty = document.createElement('div');
@@ -7257,6 +7257,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
         row.className = 'acs-resource-item';
         if (kind === 'prompts') {
             row.classList.add('is-editable');
+            row.classList.toggle('is-empty', !item.content.trim());
             row.dataset.presetEntryId = item.id;
             row.tabIndex = 0;
             row.setAttribute('role', 'button');
@@ -7267,7 +7268,11 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
         const name = document.createElement('strong');
         name.textContent = kind === 'prompts' ? item.name : item.scriptName;
         const meta = document.createElement('small');
-        meta.textContent = kind === 'prompts' ? `${String(item.role || 'system').toUpperCase()} · ≈${estimateTokenCount(item.content)} tokens` : `${item.findRegex || '无查找表达式'}`;
+        meta.textContent = kind === 'prompts'
+            ? (item.content.trim()
+                ? `${String(item.role || 'system').toUpperCase()} · ≈${estimateTokenCount(item.content)} tokens`
+                : `${String(item.role || 'system').toUpperCase()} · 空条目`)
+            : `${item.findRegex || '无查找表达式'}`;
         copy.append(name, meta);
         const label = document.createElement('label');
         label.className = 'acs-resource-switch';
@@ -7296,7 +7301,6 @@ function openResourceEditor(promptId) {
     const prompt = (studioResources.preset?.prompts || []).find(item => String(item.id) === String(promptId));
     const overlay = shell?.querySelector('#acs-resource-editor-overlay');
     if (!prompt || !overlay) return;
-    toggleResourceDrawer(false);
     resourceEditorPrompt = prompt;
     overlay.querySelector('#acs-resource-editor-title').textContent = prompt.name || '未命名预设条目';
     overlay.querySelector('#acs-resource-editor-content').value = prompt.content || '';
@@ -7381,6 +7385,8 @@ function bindStudioEvents() {
     shell.addEventListener('pointerdown', event => {
         const drawer = shell.querySelector('#acs-resource-drawer');
         if (!drawer?.classList.contains('is-open')) return;
+        // 编辑窗口覆盖在条目列表之上时，列表保持展开，方便保存后继续切换条目。
+        if (!shell.querySelector('#acs-resource-editor-overlay')?.hidden) return;
         if (event.target.closest('#acs-resource-drawer, #acs-resource-dock-tab, #acs-open-resource-drawer-inline')) return;
         toggleResourceDrawer(false);
     });
