@@ -1380,13 +1380,22 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.17';
+const AUTO_CARD_STUDIO_VERSION = '0.6.18';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
 const TOUR_COMPLETED_KEY = 'auto-card-studio:tour-completed:v1';
+// 测试分支不参与正式版版本号比较；手动更新直接重新拉取本分支的最新脚本。
+const TEST_BRANCH_UPDATE_MODE = false;
+const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
+const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
+const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-16';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
+const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
+const UPDATE_NOTES_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/updates.json`;
+const TEST_BRANCH_COMPARE_URL = (from, to) => `https://api.github.com/repos/NightingNine/sillytavern-scripts/compare/${from}...${to}`;
 const STUDIO_DESIGN_MIN_WIDTH = 1360;
 const STUDIO_DESIGN_MIN_HEIGHT = 760;
 const STUDIO_VIEWPORT_MARGIN = 24;
@@ -1491,6 +1500,7 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-import-actions .acs-button { min-height:34px; padding:6px 9px; font-size:9px; }
 .acs-resource-dock-tab { position:absolute; top:48%; right:0; z-index:17; display:none; width:25px; min-height:104px; padding:9px 5px; border:1px solid rgba(217,119,87,.42); border-right:0; border-radius:9px 0 0 9px; background:#38352f; color:var(--acs-cyan); cursor:pointer; font:700 9px/1.45 var(--acs-body); writing-mode:vertical-rl; letter-spacing:.08em; box-shadow:-8px 8px 24px rgba(10,9,8,.24); }
 .acs-shell.is-settings-view .acs-resource-dock-tab { display:block; }
+.acs-resource-drawer-scrim { position:absolute; inset:72px 0 0; z-index:17; border:0; background:rgba(18,16,14,.16); backdrop-filter:blur(1px); cursor:default; }
 .acs-resource-drawer { position:absolute; top:72px; right:0; bottom:0; z-index:18; display:grid; grid-template-rows:auto auto minmax(0,1fr); width:min(430px,88vw); border-left:1px solid rgba(217,119,87,.32); background:#2b2925; box-shadow:-24px 0 60px rgba(10,9,8,.45); transform:translateX(102%); transition:transform 220ms ease; }
 .acs-resource-drawer.is-open { transform:translateX(0); }
 .acs-resource-drawer-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:18px 19px 14px; border-bottom:1px solid var(--acs-line-soft); }
@@ -1499,11 +1509,26 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-drawer-tabs { display:grid; grid-template-columns:1fr 1fr; padding:0 16px; border-bottom:1px solid var(--acs-line-soft); }
 .acs-resource-drawer-tab { padding:11px 8px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--acs-muted); cursor:pointer; font-size:10px; }.acs-resource-drawer-tab.is-active{border-color:var(--acs-cyan);color:var(--acs-text)}
 .acs-resource-list { min-height:0; overflow:auto; padding:13px 16px 20px; scrollbar-width:thin; scrollbar-color:var(--acs-line) transparent; }
-.acs-resource-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 11px; border:1px solid var(--acs-line-soft); border-radius:9px; background:#34312c; }.acs-resource-item+.acs-resource-item{margin-top:7px}
+.acs-resource-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 11px; border:1px solid var(--acs-line-soft); border-radius:9px; background:#34312c; transition:border-color 140ms ease,background 140ms ease,transform 140ms ease; }.acs-resource-item+.acs-resource-item{margin-top:7px}
+.acs-resource-item.is-editable { cursor:pointer; }.acs-resource-item.is-editable:hover{border-color:rgba(217,119,87,.38);background:#3a3731;transform:translateX(-2px)}.acs-resource-item.is-empty .acs-resource-item-copy strong{color:var(--acs-muted);font-style:italic}.acs-resource-item.is-empty .acs-resource-item-copy small{color:var(--acs-gold)}
 .acs-resource-item-copy{min-width:0}.acs-resource-item-copy strong,.acs-resource-item-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.acs-resource-item-copy strong{color:var(--acs-text-soft);font-size:10px}.acs-resource-item-copy small{margin-top:4px;color:var(--acs-muted);font:700 8px/1 var(--acs-mono)}
 .acs-resource-switch { position:relative; width:34px; height:18px; }.acs-resource-switch input{position:absolute;opacity:0}.acs-resource-switch span{position:absolute;inset:0;border:1px solid var(--acs-line);border-radius:999px;background:#2b2925;cursor:pointer}.acs-resource-switch span::after{position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:50%;background:var(--acs-muted);content:"";transition:transform 140ms ease,background 140ms ease}.acs-resource-switch input:checked+span{border-color:rgba(147,189,145,.48);background:rgba(147,189,145,.1)}.acs-resource-switch input:checked+span::after{transform:translateX(16px);background:var(--acs-green)}
 .acs-resource-empty { padding:24px 12px; color:var(--acs-muted); font-size:10px; line-height:1.65; text-align:center; }
-@media(max-width:860px){.acs-resource-drawer{top:64px;width:min(420px,94vw)}.acs-resource-dock-tab{top:44%}}
+.acs-resource-editor-overlay,.acs-update-notes-overlay{position:absolute;inset:0;z-index:70;display:grid;padding:clamp(12px,4vh,42px);place-items:center;background:rgba(18,16,14,.76);backdrop-filter:blur(10px)}
+.acs-resource-editor-dialog,.acs-update-notes-dialog{display:grid;width:min(820px,94vw);max-height:min(820px,90vh);overflow:hidden;border:1px solid rgba(217,119,87,.36);border-radius:18px;background:#302e29;box-shadow:0 30px 90px rgba(10,9,8,.62);animation:acs-confirm-in 160ms ease-out}
+.acs-resource-editor-dialog{grid-template-rows:auto minmax(0,1fr) auto}
+.acs-resource-editor-head,.acs-update-notes-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px 17px;border-bottom:1px solid var(--acs-line-soft);background:linear-gradient(120deg,rgba(217,119,87,.09),transparent 58%)}
+.acs-resource-editor-head p,.acs-resource-editor-head h2,.acs-update-notes-head p,.acs-update-notes-head h2{margin:0}.acs-resource-editor-head p,.acs-update-notes-head p{color:var(--acs-cyan);font:700 8px/1 var(--acs-mono);letter-spacing:.15em}.acs-resource-editor-head h2,.acs-update-notes-head h2{margin-top:7px;color:var(--acs-text);font:500 23px/1.25 var(--acs-display)}
+.acs-resource-editor-close,.acs-update-notes-close{display:grid;width:34px;height:34px;flex:0 0 auto;place-items:center;border:1px solid var(--acs-line);border-radius:9px;background:transparent;color:var(--acs-muted);cursor:pointer}
+.acs-resource-editor-body{display:grid;min-height:0;padding:18px 22px}.acs-resource-editor-body textarea{width:100%;min-height:360px;resize:vertical;padding:15px;border:1px solid var(--acs-line);border-radius:11px;background:#292722;color:var(--acs-text);font-family:var(--acs-body);font-size:12px;font-weight:450;line-height:1.78;letter-spacing:.008em;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;scrollbar-width:thin;scrollbar-color:var(--acs-line) transparent}
+.acs-resource-editor-actions,.acs-update-notes-actions{display:flex;justify-content:flex-end;gap:8px;padding:13px 18px;border-top:1px solid var(--acs-line-soft);background:#292722}.acs-update-notes-actions{justify-content:center}
+.acs-update-notes-actions{align-items:center}.acs-update-notes-actions .acs-button{width:auto;min-width:104px;min-height:36px;margin:0;padding:7px 14px;white-space:nowrap}.acs-update-notes-actions .acs-button-publish{width:auto;margin-top:0}
+.acs-update-notes-dialog{grid-template-rows:auto minmax(0,1fr) auto;width:min(680px,94vw)}
+.acs-update-notes-summary{display:block;margin-top:7px;color:var(--acs-muted);font:700 9px/1.4 var(--acs-mono)}
+.acs-update-notes-list{min-height:0;overflow:auto;padding:16px 22px 22px;scrollbar-width:thin;scrollbar-color:var(--acs-line) transparent}
+.acs-update-note{position:relative;padding:14px 15px 14px 18px;border:1px solid var(--acs-line-soft);border-radius:11px;background:#34312c}.acs-update-note+.acs-update-note{margin-top:10px}.acs-update-note::before{position:absolute;top:17px;left:-4px;width:7px;height:7px;border-radius:50%;background:var(--acs-cyan);box-shadow:0 0 0 4px #302e29;content:""}.acs-update-note strong{display:block;color:var(--acs-text);font-size:12px}.acs-update-note small{display:block;margin-top:4px;color:var(--acs-cyan);font:700 8px/1 var(--acs-mono)}.acs-update-note ul{margin:10px 0 0;padding-left:18px;color:var(--acs-text-soft);font-size:10px;line-height:1.65}.acs-update-note li+li{margin-top:4px}
+@media(max-width:860px){.acs-resource-drawer{top:64px;width:min(420px,94vw)}.acs-resource-drawer-scrim{inset:64px 0 0}.acs-resource-dock-tab{top:44%}}
+@media(max-width:560px){.acs-resource-editor-overlay,.acs-update-notes-overlay{padding:0}.acs-resource-editor-dialog,.acs-update-notes-dialog{width:100%;height:100vh;height:100dvh;max-height:none;border:0;border-radius:0}.acs-resource-editor-head,.acs-update-notes-head{padding-top:max(18px,env(safe-area-inset-top,0px));padding-right:17px;padding-left:17px}.acs-resource-editor-body{padding:14px 13px}.acs-resource-editor-body textarea{min-height:100%;resize:none;font-size:13px}.acs-resource-editor-actions,.acs-update-notes-actions{padding-bottom:max(13px,env(safe-area-inset-bottom,0px))}.acs-update-notes-actions{padding-right:13px;padding-left:13px}.acs-update-notes-actions .acs-button{min-width:0}.acs-update-notes-list{padding-right:14px;padding-left:14px}}
 @media(prefers-reduced-motion:reduce){.acs-resource-drawer,.acs-resource-switch span::after{transition:none}}
 `;
 
@@ -1767,6 +1792,1196 @@ const CONFIRM_DIALOG_CSS = `
 @keyframes acs-confirm-in { from { opacity:0; transform:translateY(8px) scale(.985); } to { opacity:1; transform:none; } }
 @media(max-width:560px){.acs-confirm-overlay{padding:10px}.acs-confirm-body{padding:18px 17px 16px}.acs-confirm-actions{padding:12px 15px}}
 @media(prefers-reduced-motion:reduce){.acs-confirm-dialog{animation:none}}
+`;
+
+const MOBILE_ADAPTATION_CSS = `
+/* 手机端使用真正的单栏工作区；步骤和检查器分别作为左右抽屉。 */
+/* 所有文字输入框沿用对话与产物区的清晰排版，覆盖宿主主题的输入样式。 */
+.acs-shell textarea,
+.acs-shell input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+.acs-shell select {
+  font-family: var(--acs-body) !important;
+  font-weight: 450;
+  letter-spacing: 0.008em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 锁住宿主页面的横向溢出，避免创作台底部出现浏览器滚动条。 */
+html.acs-no-scroll,
+body.acs-no-scroll {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+#auto-card-studio.acs-shell {
+  overflow: clip;
+}
+
+/* SillyTavern 手机端会对根页面施加变换，fixed 容器不能再依赖百分比高度。 */
+#auto-card-studio.acs-shell.acs-mobile-layout {
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  overflow: hidden !important;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+.acs-mobile-flow-toggle,
+.acs-mobile-scrim {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-window {
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  border: 0;
+  border-radius: 0;
+  transform: none !important;
+  grid-template-rows: calc(50px + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
+}
+
+.acs-shell.acs-mobile-layout .acs-topbar {
+  min-width: 0;
+  padding: env(safe-area-inset-top, 0px) 6px 0 8px;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand {
+  min-width: 0;
+  gap: 4px;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand-mark {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand > div {
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand h1 {
+  overflow: hidden;
+  max-width: 27vw;
+  font-size: 14px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout .acs-brand .acs-eyebrow,
+.acs-shell.acs-mobile-layout .acs-dependency,
+.acs-shell.acs-mobile-layout .acs-update-feedback {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout .acs-topbar-actions {
+  flex: 0 0 auto;
+  gap: 1px;
+}
+
+.acs-shell.acs-mobile-layout .acs-icon-button,
+.acs-shell.acs-mobile-layout .acs-tour-launch,
+.acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.acs-shell.acs-mobile-layout #acs-save-project,
+.acs-shell.acs-mobile-layout #acs-tour-launch,
+.acs-shell.acs-mobile-layout #acs-step-help {
+  flex: 0 0 auto;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 手机端保留导出和检查更新入口；窄屏时均使用紧凑图标。 */
+.acs-shell.acs-mobile-layout #acs-save-project,
+.acs-shell.acs-mobile-layout #acs-check-update {
+  display: grid;
+}
+
+.acs-shell.acs-mobile-layout .acs-update-control {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.acs-shell.acs-mobile-layout .acs-tour-launch span {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
+  border: 1px solid var(--acs-line);
+  background: rgba(56, 53, 47, 0.84);
+  color: var(--acs-muted);
+  cursor: pointer;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-flow-toggle i {
+  display: block;
+  color: currentColor;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-flow-toggle[aria-expanded="true"],
+.acs-shell.acs-mobile-layout #acs-inspector-toggle[aria-expanded="true"] {
+  border-color: rgba(217, 119, 87, 0.52);
+  background: var(--acs-cyan-soft);
+  color: var(--acs-cyan);
+}
+
+.acs-shell.acs-mobile-layout .acs-workspace {
+  position: relative;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-rail,
+.acs-shell.acs-mobile-layout .acs-inspector {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 16;
+  display: grid;
+  height: auto;
+  box-shadow: 0 0 46px rgba(10, 9, 8, 0.5);
+  transition: transform 220ms cubic-bezier(.2,.75,.25,1);
+}
+
+.acs-shell.acs-mobile-layout .acs-rail {
+  left: 0;
+  width: min(86vw, 340px);
+  transform: translateX(-104%);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-rail {
+  transform: translateX(0);
+}
+
+.acs-shell.acs-mobile-layout .acs-inspector,
+.acs-shell.acs-mobile-layout .acs-inspector.is-expanded {
+  right: 0;
+  left: auto;
+  width: min(94vw, 420px);
+  background: #292722;
+  transform: translateX(104%);
+}
+
+.acs-shell.acs-mobile-layout .acs-inspector.is-mobile-open,
+.acs-shell.acs-mobile-layout .acs-inspector.is-expanded {
+  display: grid;
+  transform: translateX(0);
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-scrim {
+  position: absolute;
+  inset: calc(50px + env(safe-area-inset-top, 0px)) 0 0;
+  z-index: 15;
+  border: 0;
+  background: rgba(15, 13, 11, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-panel-open .acs-mobile-scrim {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-overlay,
+.acs-shell.acs-mobile-layout #acs-step-help-overlay,
+.acs-shell.acs-mobile-layout #acs-prompt-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 10090;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
+  overscroll-behavior: contain;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-overlay {
+  overflow: auto;
+}
+
+.acs-shell.acs-mobile-layout .acs-tour-card,
+.acs-shell.acs-mobile-layout .acs-step-help-dialog {
+  max-width: 100%;
+  max-height: min(76dvh, 620px);
+  overscroll-behavior: contain;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-help-dialog {
+  width: 100%;
+}
+
+/* 说明在手机端改为完整页面，标题和关闭按钮不会被内容滚出屏幕。 */
+.acs-shell.acs-mobile-layout #acs-step-help-overlay {
+  display: block;
+  padding: 0;
+}
+
+.acs-shell.acs-mobile-layout #acs-step-help-overlay .acs-step-help-dialog {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  overscroll-behavior: contain;
+}
+
+.acs-shell.acs-mobile-layout #acs-step-help-overlay .acs-step-help-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-top: max(18px, env(safe-area-inset-top, 0px));
+  background: #2b2925;
+}
+
+.acs-shell.acs-mobile-layout #acs-step-help-overlay .acs-step-help-body {
+  padding-bottom: max(28px, calc(18px + env(safe-area-inset-bottom, 0px)));
+}
+
+.acs-shell.acs-mobile-layout .acs-project-identity {
+  padding: 14px 13px 12px;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-title-field,
+.acs-shell.acs-mobile-layout .acs-progress-row,
+.acs-shell.acs-mobile-layout .acs-step-name,
+.acs-shell.acs-mobile-layout .acs-step-number,
+.acs-shell.acs-mobile-layout .acs-quiet-action,
+.acs-shell.acs-mobile-layout .acs-phase-title,
+.acs-shell.acs-mobile-layout .acs-phase-progress {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout .acs-progress-row {
+  display: flex;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-rail {
+  padding: 10px 8px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle {
+  grid-template-columns: minmax(0, 1fr) auto 13px;
+  width: 100%;
+  min-height: 38px;
+  margin: 0;
+  padding: 7px 9px 7px 12px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-steps {
+  padding-left: 10px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-steps::before {
+  left: 20px;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button {
+  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  width: 100%;
+  min-height: 43px;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading {
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px 7px;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading h2 {
+  font-size: clamp(18px, 5.3vw, 22px);
+  line-height: 1.14;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading-actions {
+  gap: 5px;
+}
+
+.acs-shell.acs-mobile-layout .acs-state-chip,
+.acs-shell.acs-mobile-layout .acs-overview-toggle span,
+.acs-shell.acs-mobile-layout .acs-clear-step-button span {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-overview-toggle,
+.acs-shell.acs-mobile-layout .acs-clear-step-button,
+.acs-shell.acs-mobile-layout .acs-step-help-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-goal {
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.acs-shell.acs-mobile-layout .acs-brief-panel {
+  margin: 0 10px 7px;
+  padding: 8px;
+}
+
+.acs-shell.acs-mobile-layout .acs-brief-panel textarea {
+  min-height: 58px;
+  max-height: 21vh;
+  font-size: 11px;
+}
+
+.acs-shell.acs-mobile-layout .acs-conversation {
+  padding: 8px 10px 10px;
+  scroll-padding-bottom: 14px;
+}
+
+.acs-shell.acs-mobile-layout .acs-empty-turns {
+  width: 100%;
+  padding: 14px 3px;
+}
+
+.acs-shell.acs-mobile-layout .acs-empty-turns h3 {
+  font-size: 19px;
+}
+
+.acs-shell.acs-mobile-layout .acs-guide-prompts {
+  grid-template-columns: 1fr;
+}
+
+.acs-shell.acs-mobile-layout .acs-guide-prompts li {
+  min-height: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-turn {
+  max-width: 100%;
+}
+
+.acs-shell.acs-mobile-layout .acs-turn-content {
+  font-size: 11.5px;
+  line-height: 1.64;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer {
+  padding: 7px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout .acs-composer textarea {
+  min-height: 52px;
+  max-height: 22vh;
+  font-size: 12px;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-actions {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-actions > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-actions .acs-button {
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 7px;
+  font-size: 10px;
+}
+
+.acs-shell.acs-mobile-layout .acs-button-confirm {
+  grid-column: 1 / -1;
+}
+
+.acs-shell.acs-mobile-layout .acs-conversation-nav {
+  right: 12px;
+  bottom: 8px;
+}
+
+.acs-shell.acs-mobile-layout .acs-tabs {
+  padding: 5px 8px 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-tab {
+  min-height: 38px;
+}
+
+.acs-shell.acs-mobile-layout .acs-tab-panel {
+  padding: 12px 10px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout .acs-field-grid,
+.acs-shell.acs-mobile-layout .acs-model-picker {
+  grid-template-columns: 1fr;
+}
+
+.acs-shell.acs-mobile-layout .acs-field-stack input,
+.acs-shell.acs-mobile-layout .acs-field-stack select,
+.acs-shell.acs-mobile-layout .acs-button-compact {
+  min-height: 38px;
+  font-size: 11px;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact-filter-bar {
+  flex-wrap: nowrap;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact-filter-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact-filter-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact summary {
+  min-height: 40px;
+}
+
+.acs-shell.acs-mobile-layout .acs-artifact-editor textarea.acs-artifact-content {
+  min-height: 42vh;
+  max-height: 62vh;
+  padding: 11px;
+  font-size: 11.5px;
+}
+
+.acs-shell.acs-mobile-layout .acs-resource-dock-tab {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout .acs-resource-drawer {
+  top: calc(50px + env(safe-area-inset-top, 0px));
+  width: 100%;
+  max-width: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-prompt-preview-panel,
+.acs-shell.acs-mobile-layout .acs-delivery-dialog {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+}
+
+/* 提示词预览在手机上独占视图，避免被步骤或产物抽屉遮住。 */
+.acs-shell.acs-mobile-layout #acs-prompt-preview {
+  display: grid;
+  padding: 0;
+}
+
+.acs-shell.acs-mobile-layout #acs-preview-prompt {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 预览内容很多时，手机端保持独立滚动区，避免整个页面失去响应。 */
+.acs-shell.acs-mobile-layout #acs-prompt-preview .acs-prompt-preview-backdrop {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout #acs-prompt-preview .acs-prompt-preview-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.acs-shell.acs-mobile-layout #acs-prompt-preview .acs-prompt-preview-head {
+  padding-top: max(14px, env(safe-area-inset-top, 0px));
+}
+
+.acs-shell.acs-mobile-layout #acs-prompt-preview .acs-prompt-message-list {
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: max(24px, calc(14px + env(safe-area-inset-bottom, 0px)));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 手机端使用抽屉浏览产物，不显示桌面端的放大模式。 */
+.acs-shell.acs-mobile-layout #acs-expand-artifacts {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout .acs-prompt-preview-note,
+.acs-shell.acs-mobile-layout .acs-prompt-message-list,
+.acs-shell.acs-mobile-layout .acs-delivery-body {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+/* 新手引导不再套用桌面端浮动定位，手机上始终完整显示。 */
+.acs-shell.acs-mobile-layout #acs-tour-overlay {
+  display: block;
+  padding: 0;
+  background: #2b2925;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-spotlight {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card {
+  position: relative !important;
+  inset: auto !important;
+  display: flex;
+  flex-direction: column;
+  width: 100% !important;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card .acs-tour-card-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: max(16px, env(safe-area-inset-top, 0px)) 17px 13px;
+  border-bottom: 1px solid var(--acs-line-soft);
+  background: #302e29;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-content {
+  display: contents;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-eyebrow {
+  margin: 20px 17px 0;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card > h2,
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-description,
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-points,
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-action-note,
+.acs-shell.acs-mobile-layout #acs-tour-card > .acs-tour-dots {
+  margin-right: 17px;
+  margin-left: 17px;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card .acs-tour-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: auto 0 0;
+  padding: 12px 17px max(14px, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--acs-line-soft);
+  background: #302e29;
+}
+
+/* 手机端步骤使用“航站轨道 + 完整抽屉”：平时只占窄栏，需要时从左侧展开。 */
+.acs-shell.acs-mobile-layout .acs-workspace {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+
+.acs-shell.acs-mobile-layout .acs-rail {
+  position: relative;
+  grid-column: 1;
+  z-index: 2;
+  display: flex;
+  width: 56px;
+  min-width: 56px;
+  overflow: hidden;
+  border-right-color: rgba(232, 224, 212, 0.1);
+  background:
+    linear-gradient(180deg, rgba(217, 119, 87, 0.07), transparent 150px),
+    #292722;
+  transform: none;
+  box-shadow: none;
+  transition: width 220ms cubic-bezier(.2,.75,.25,1), box-shadow 220ms ease;
+}
+
+.acs-shell.acs-mobile-layout .acs-rail::after {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(transparent, rgba(217, 119, 87, 0.2) 18%, rgba(232, 224, 212, 0.08) 72%, transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  width: auto;
+}
+
+.acs-mobile-rail-head {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-head {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: 0 0 50px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px 5px;
+  border-bottom: 1px solid rgba(232, 224, 212, 0.08);
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading {
+  display: none;
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading span,
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading strong {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading span {
+  color: var(--acs-cyan);
+  font-family: var(--acs-mono);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-heading strong {
+  margin-top: 2px;
+  color: var(--acs-text-soft);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 38px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(217, 119, 87, 0.24);
+  border-radius: 11px;
+  outline: 0;
+  background: linear-gradient(145deg, rgba(217, 119, 87, 0.14), rgba(56, 53, 47, 0.72));
+  color: var(--acs-cyan);
+  cursor: pointer;
+  place-items: center;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035), 0 6px 16px rgba(10, 9, 8, 0.18);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-toggle i {
+  font-size: 12px;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-rail-current {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border: 2px solid #292722;
+  border-radius: 999px;
+  background: var(--acs-cyan);
+  color: var(--acs-void);
+  font-family: var(--acs-mono);
+  font-size: 6px;
+  font-weight: 800;
+  line-height: 1;
+  place-items: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-identity,
+.acs-shell.acs-mobile-layout .acs-step-name,
+.acs-shell.acs-mobile-layout .acs-step-number,
+.acs-shell.acs-mobile-layout .acs-phase-title,
+.acs-shell.acs-mobile-layout .acs-phase-progress,
+.acs-shell.acs-mobile-layout .acs-quiet-action {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-rail {
+  padding: 3px 5px calc(12px + env(safe-area-inset-bottom, 0px));
+  scroll-padding-top: 6px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-group + .acs-phase-group {
+  margin-top: 5px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 42px;
+  min-height: 18px;
+  margin: 0 auto;
+  padding: 1px 3px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(208, 200, 189, 0.56);
+  place-items: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle::before {
+  content: attr(data-mobile-label);
+  font-family: var(--acs-mono);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle > i {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-group.is-current-phase > .acs-phase-toggle {
+  background: rgba(217, 119, 87, 0.1);
+  color: var(--acs-cyan);
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-steps {
+  padding-left: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-steps::before {
+  top: 0;
+  bottom: 0;
+  left: 21px;
+  opacity: 0.24;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button {
+  grid-template-columns: 42px;
+  width: 42px;
+  min-height: 29px;
+  margin: 0 auto;
+  padding: 2px 0;
+  border-radius: 10px;
+  place-items: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button.is-active {
+  background: linear-gradient(90deg, rgba(217, 119, 87, 0.2), rgba(217, 119, 87, 0.07));
+}
+
+.acs-shell.acs-mobile-layout .acs-step-node {
+  position: relative;
+  width: 19px;
+  height: 19px;
+  margin: 0;
+  border-color: rgba(171, 162, 151, 0.42);
+  background: #2f2c27;
+  color: var(--acs-muted);
+  font-family: var(--acs-mono);
+  font-size: 6px;
+  font-weight: 700;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-node::before {
+  content: attr(data-mobile-number);
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button.is-complete .acs-step-node::before {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button.is-complete .acs-step-node {
+  color: var(--acs-void);
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button.is-active .acs-step-node {
+  border-color: var(--acs-cyan);
+  background: var(--acs-cyan);
+  color: var(--acs-void);
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1), 0 4px 10px rgba(217, 119, 87, 0.22);
+}
+
+/* 展开后恢复完整项目、阶段与步骤信息，作为适合触控的左侧抽屉。 */
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 16;
+  width: min(82vw, 310px);
+  min-width: min(82vw, 310px);
+  border-right-color: rgba(217, 119, 87, 0.24);
+  box-shadow: 22px 0 54px rgba(10, 9, 8, 0.48);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-head {
+  justify-content: space-between;
+  padding: 6px 10px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-heading {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-toggle {
+  width: 34px;
+  height: 34px;
+  border-color: var(--acs-line);
+  border-radius: 10px;
+  background: rgba(56, 53, 47, 0.84);
+  color: var(--acs-text-soft);
+  box-shadow: none;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-current {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-identity,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-name,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-number,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-title,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-progress,
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-quiet-action {
+  display: block;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-identity {
+  padding: 9px 10px 8px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-title-field label {
+  margin: 0 0 4px 3px;
+  font-size: 7px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-name-control {
+  grid-template-columns: 27px minmax(0, 1fr) 24px;
+  min-height: 40px;
+  padding: 4px 5px;
+  border-radius: 13px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-title-icon {
+  width: 27px;
+  height: 27px;
+  border-radius: 9px;
+  font-size: 9px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-name-control input {
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-name-control > i {
+  width: 24px;
+  height: 24px;
+  font-size: 8px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-progress-row {
+  display: flex;
+  margin-top: 7px;
+  font-size: 8px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-progress-track {
+  margin-top: 4px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-rail {
+  padding: 7px 7px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle {
+  grid-template-columns: minmax(0, 1fr) max-content 12px;
+  gap: 5px;
+  align-items: center;
+  justify-items: stretch;
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 5px 7px 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--acs-muted);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle::before {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle > i {
+  display: block;
+  justify-self: center;
+  font-size: 7px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-title {
+  min-width: 0;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  width: auto;
+  min-width: 28px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 6.5px;
+  line-height: 1;
+  white-space: nowrap;
+  aspect-ratio: auto;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-group.is-current-phase > .acs-phase-toggle {
+  border-color: rgba(217, 119, 87, 0.18);
+  background: rgba(217, 119, 87, 0.07);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-steps {
+  padding-left: 8px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-steps::before {
+  top: 3px;
+  bottom: 5px;
+  left: 18px;
+  opacity: 0.38;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-button {
+  grid-template-columns: 24px minmax(0, 1fr) 20px;
+  align-items: center;
+  justify-items: stretch;
+  width: 100%;
+  min-height: 36px;
+  margin: 1px 0;
+  padding: 3px 6px 3px 0;
+  border-radius: 9px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-node {
+  align-self: center;
+  justify-self: start;
+  width: 13px;
+  height: 13px;
+  margin-left: 4px;
+  font-size: 6px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-name {
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-number {
+  align-self: center;
+  font-size: 7px;
+  line-height: 1;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-button.is-active {
+  background: linear-gradient(90deg, rgba(217, 119, 87, 0.17), rgba(217, 119, 87, 0.045));
+  box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.68);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-button.is-active .acs-step-node {
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.09);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-core-step-badge {
+  margin-left: 5px;
+  padding: 1px 4px;
+  font-size: 6px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-quiet-action {
+  min-height: 36px;
+  margin: 6px 10px 10px;
+  padding: 7px;
+  border-radius: 9px;
+  font-size: 10px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-node::before {
+  display: none;
+}
+
+/* 项目库在手机端属于步骤抽屉的上一级视图，不再套用桌面悬浮层。 */
+.acs-shell.acs-mobile-layout.is-mobile-project-menu-open .acs-project-identity {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  flex-direction: column;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-project-menu-open .acs-step-rail,
+.acs-shell.acs-mobile-layout.is-mobile-project-menu-open #acs-new-project {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-menu {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: 1;
+  width: 100%;
+  margin-top: 8px;
+  border-radius: 12px;
+  box-shadow: none;
+  transform: translateY(-7px);
+  transform-origin: top center;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-menu.is-open { transform: translateY(0); }
+.acs-shell.acs-mobile-layout .acs-project-menu::before { display: none; }
+.acs-shell.acs-mobile-layout .acs-project-menu-head,
+.acs-shell.acs-mobile-layout .acs-project-menu-foot { padding: 9px 10px; }
+.acs-shell.acs-mobile-layout .acs-project-list { max-height: none; padding: 6px; overflow: visible; }
+.acs-shell.acs-mobile-layout .acs-project-row { grid-template-columns: minmax(0, 1fr) 34px; }
+.acs-shell.acs-mobile-layout .acs-project-switch { padding: 8px 7px 8px 9px; }
+.acs-shell.acs-mobile-layout .acs-project-switch strong { font-size: 11px; }
+.acs-shell.acs-mobile-layout .acs-project-switch small { margin-top: 3px; font-size: 7px; }
+.acs-shell.acs-mobile-layout .acs-project-delete { width: 30px; height: 30px; opacity: 0.82; }
+.acs-shell.acs-mobile-layout .acs-project-menu-new {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* 收起概览后的步骤标题仍完整占用剩余空间。 */
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+  min-height: 44px;
+  padding: 6px 7px 6px 9px;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading > div:first-child {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  overflow: hidden;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading .acs-eyebrow {
+  font-size: 7px;
+  letter-spacing: 0.12em;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading h2 {
+  overflow: visible;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading-actions { gap: 3px; }
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-overview-toggle,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-clear-step-button,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-step-help-button {
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+}
+
+/* 预设条目编辑器与更新公告保持同一种紧凑、居中的操作区。 */
+.acs-shell.acs-mobile-layout .acs-resource-editor-actions {
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding-right: 13px;
+  padding-left: 13px;
+}
+
+.acs-shell.acs-mobile-layout .acs-resource-editor-actions .acs-button {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 108px;
+  min-height: 36px;
+  margin: 0;
+  padding: 7px 14px;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout .acs-resource-editor-actions .acs-button-publish { min-width: 154px; }
+
+@media (max-width: 390px) {
+  .acs-shell.acs-mobile-layout .acs-brand-mark {
+    display: none;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-brand h1 {
+    max-width: 26vw;
+    font-size: 13px;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-topbar-actions {
+    gap: 1px;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-icon-button,
+  .acs-shell.acs-mobile-layout .acs-tour-launch,
+  .acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (max-width: 350px) {
+  .acs-shell.acs-mobile-layout .acs-brand > div {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acs-shell.acs-mobile-layout .acs-rail,
+  .acs-shell.acs-mobile-layout .acs-inspector {
+    transition: none;
+  }
+}
 `;
 
 const TOUR_STEPS = Object.freeze([
@@ -2253,6 +3468,8 @@ let connectionSettings = loadConnectionSettings();
 let customApiKey = '';
 let availableCustomModels = [];
 let shell = null;
+let studioOpenPromise = null;
+let studioScrollLockState = null;
 let helper = null;
 let launcherInstallTimer = null;
 let isGenerating = false;
@@ -2271,6 +3488,11 @@ let promptPreviewMessages = [];
 let promptTokenRenderEpoch = 0;
 let deliveryArtifacts = [];
 let confirmDialogResolver = null;
+let updateDialogResolver = null;
+let resourceEditorPrompt = null;
+let automaticUpdateChecked = false;
+let backgroundUpdatePromise = null;
+let pendingAutomaticUpdate = null;
 let artifactFilterScope = 'all';
 let artifactFilterQuery = '';
 const artifactSaveTimers = new Map();
@@ -2872,11 +4094,13 @@ function renderStepRail() {
         section.className = 'acs-phase-group';
         section.dataset.phase = phase.id;
         section.classList.toggle('is-collapsed', collapsed);
+        section.classList.toggle('is-current-phase', phaseSteps.some(step => step.number === project.currentStep));
 
         const toggle = document.createElement('button');
         toggle.type = 'button';
         toggle.className = 'acs-phase-toggle';
         toggle.dataset.phaseToggle = phase.id;
+        toggle.dataset.mobileLabel = phase.label.split('·')[0].trim();
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute('aria-controls', `acs-phase-${phase.id}`);
         toggle.innerHTML = `
@@ -2906,6 +4130,7 @@ function renderStepRail() {
 
             const node = document.createElement('span');
             node.className = 'acs-step-node';
+            node.dataset.mobileNumber = String(step.number).padStart(2, '0');
             if (state.status === 'accepted') node.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i>';
             const name = document.createElement('span');
             name.className = 'acs-step-name';
@@ -2929,6 +4154,9 @@ function renderStepRail() {
         section.append(toggle, steps);
         rail.append(section);
     }
+
+    const mobileCurrent = shell.querySelector('.acs-mobile-rail-current');
+    if (mobileCurrent) mobileCurrent.textContent = String(project.currentStep).padStart(2, '0');
 }
 
 function togglePhase(phaseId) {
@@ -3817,9 +5045,15 @@ async function copyArtifact(button) {
 }
 
 function toggleArtifactPanel(force) {
-    artifactPanelExpanded = typeof force === 'boolean' ? force : !artifactPanelExpanded;
     const inspector = shell.querySelector('.acs-inspector');
     const button = shell.querySelector('#acs-expand-artifacts');
+    // 仅手机端停用放大；桌面端保持既有的放大产物工作区。
+    if (shell.classList.contains('acs-mobile-layout')) {
+        artifactPanelExpanded = false;
+        inspector?.classList.remove('is-expanded');
+        return;
+    }
+    artifactPanelExpanded = typeof force === 'boolean' ? force : !artifactPanelExpanded;
     inspector.classList.toggle('is-expanded', artifactPanelExpanded);
     button.classList.toggle('is-active', artifactPanelExpanded);
     button.setAttribute('aria-pressed', String(artifactPanelExpanded));
@@ -4026,7 +5260,7 @@ function installDeliveryUI() {
     const publishNote = shell.querySelector('#acs-publish-note');
     if (publishNote) publishNote.textContent = '点击创建后可逐项勾选；默认选择所有已确认产物。';
     const updateButton = shell.querySelector('#acs-check-update');
-    if (updateButton) updateButton.title = `检查更新（当前 v${AUTO_CARD_STUDIO_VERSION}）`;
+    if (updateButton) updateButton.title = `检查更新（当前 ${studioVersionLabel()}）`;
 
     if (!shell.querySelector('#acs-confirm-overlay')) {
         const confirmOverlay = document.createElement('div');
@@ -4120,6 +5354,47 @@ function showStudioConfirm({ title = '请确认', message = '', confirmLabel = '
     return new Promise(resolve => { confirmDialogResolver = resolve; });
 }
 
+function closeUpdateNotes(result = false) {
+    const overlay = shell?.querySelector('#acs-update-notes-overlay');
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    const resolve = updateDialogResolver;
+    updateDialogResolver = null;
+    resolve?.(Boolean(result));
+}
+
+function showUpdateNotes({ currentLabel, targetLabel, entries }) {
+    const overlay = shell?.querySelector('#acs-update-notes-overlay');
+    if (!overlay) return Promise.resolve(false);
+    if (updateDialogResolver) closeUpdateNotes(false);
+    overlay.querySelector('#acs-update-notes-summary').textContent = `${currentLabel}  →  ${targetLabel}`;
+    const list = overlay.querySelector('#acs-update-notes-list');
+    list.replaceChildren();
+    const safeEntries = entries.length ? entries : [{ label: targetLabel, title: '版本更新', changes: ['包含功能改进与问题修复。'] }];
+    for (const entry of safeEntries) {
+        const card = document.createElement('article');
+        card.className = 'acs-update-note';
+        const title = document.createElement('strong');
+        title.textContent = entry.title || '版本更新';
+        const label = document.createElement('small');
+        label.textContent = entry.label || targetLabel;
+        const changes = document.createElement('ul');
+        changes.replaceChildren(...(entry.changes?.length ? entry.changes : ['功能改进与问题修复。']).map(text => {
+            const item = document.createElement('li');
+            item.textContent = text;
+            return item;
+        }));
+        card.append(title, label, changes);
+        list.append(card);
+    }
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    list.scrollTop = 0;
+    overlay.querySelector('[data-update-result="true"]')?.focus({ preventScroll: true });
+    return new Promise(resolve => { updateDialogResolver = resolve; });
+}
+
 function toggleProjectMenu(force) {
     const menu = shell.querySelector('#acs-project-menu');
     const icon = shell.querySelector('.acs-project-title-icon');
@@ -4132,6 +5407,10 @@ function toggleProjectMenu(force) {
     icon.setAttribute('title', opened ? '收起项目库' : '打开项目库');
     icon.setAttribute('aria-label', opened ? '收起项目库' : '打开项目库');
     icon.querySelector('i').className = opened ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder';
+    shell.classList.toggle(
+        'is-mobile-project-menu-open',
+        opened && shell.classList.contains('acs-mobile-layout'),
+    );
     if (opened) {
         renderProjectMenu();
         menu.hidden = false;
@@ -4263,6 +5542,21 @@ function updateStudioViewportScale() {
         hostWindow.innerHeight || STUDIO_DESIGN_MIN_HEIGHT,
         hostWindow.visualViewport?.height || Number.POSITIVE_INFINITY,
     );
+    // 仅在真正窄屏时启用手机抽屉；桌面触控屏或浏览器缩放不能误触发手机顶栏。
+    const useMobileLayout = viewportWidth <= 640;
+    shell.classList.toggle('acs-mobile-layout', useMobileLayout);
+
+    // 手机端改用真正的单栏布局，不再把桌面画布缩成难以点击的小字版本。
+    if (useMobileLayout) {
+        shell.classList.remove('acs-proportional-layout');
+        shell.dataset.layoutScale = '1';
+        for (const property of ['inset', 'top', 'left', 'width', 'height', 'transform']) {
+            studioWindow.style.removeProperty(property);
+        }
+        return;
+    }
+
+    setMobilePanel(null);
     const availableWidth = Math.max(1, viewportWidth - STUDIO_VIEWPORT_MARGIN);
     const availableHeight = Math.max(1, viewportHeight - STUDIO_VIEWPORT_MARGIN);
     const scale = Math.min(
@@ -4532,15 +5826,27 @@ function closePromptPreview() {
     shell.querySelector('#acs-preview-prompt')?.focus({ preventScroll: true });
 }
 
+function ensurePromptMessageContent(body) {
+    if (!body || body.dataset.rendered === 'true') return;
+    const index = Number(body.dataset.promptMessageIndex);
+    const message = promptPreviewMessages[index];
+    if (!message) return;
+    const content = document.createElement('pre');
+    content.textContent = repairExpandedCharacterMacro(message.content);
+    body.append(content);
+    body.dataset.rendered = 'true';
+}
+
 function renderPromptPreview(messages, step) {
     promptPreviewMessages = messages;
     const renderEpoch = ++promptTokenRenderEpoch;
     const list = shell.querySelector('#acs-prompt-message-list');
+    const deferMessageBodies = shell.classList.contains('acs-mobile-layout');
     list.replaceChildren();
     shell.querySelector('#acs-prompt-preview-summary').textContent = `Step ${step.number} · ${messages.length} 条消息 · 正在统计 tokens · ${connectionDisplayName()}`;
 
     const currentStepIndex = messages.findIndex(message => String(message.name || '').startsWith(`Step${step.number}`));
-    const initiallyOpenIndex = currentStepIndex >= 0 ? currentStepIndex : messages.length - 1;
+    const initiallyOpenIndex = deferMessageBodies ? -1 : (currentStepIndex >= 0 ? currentStepIndex : messages.length - 1);
     messages.forEach((message, index) => {
         const item = document.createElement('article');
         item.className = 'acs-prompt-message';
@@ -4572,16 +5878,15 @@ function renderPromptPreview(messages, step) {
         const body = document.createElement('div');
         body.className = 'acs-prompt-message-body';
         body.hidden = true;
-        const content = document.createElement('pre');
-        content.textContent = repairExpandedCharacterMacro(message.content);
-        body.append(content);
+        body.dataset.promptMessageIndex = String(index);
+        if (!deferMessageBodies) ensurePromptMessageContent(body);
         item.append(toggle, body);
         list.append(item);
 
         if (index === initiallyOpenIndex) setPromptMessageOpen(item, true, false);
     });
 
-    void Promise.all(messages.map(message => measureTokenCount(message.content))).then(metrics => {
+    const renderTokenMetrics = () => Promise.all(messages.map(message => measureTokenCount(message.content))).then(metrics => {
         if (renderEpoch !== promptTokenRenderEpoch || !shell) return;
         let total = 0;
         let approximate = false;
@@ -4598,6 +5903,9 @@ function renderPromptPreview(messages, step) {
         const totalMetric = formatTokenMetric({ count: total, approximate });
         shell.querySelector('#acs-prompt-preview-summary').textContent = `Step ${step.number} · ${messages.length} 条消息 · ${totalMetric} · ${connectionDisplayName()}`;
     });
+    // 手机端先显示预览外壳，token 统计延后一帧，避免长上下文阻塞打开动画。
+    if (deferMessageBodies) hostWindow.setTimeout(() => { void renderTokenMetrics(); }, 0);
+    else void renderTokenMetrics();
 }
 
 function setPromptMessageOpen(item, open, scroll = true) {
@@ -4606,6 +5914,7 @@ function setPromptMessageOpen(item, open, scroll = true) {
     const body = item.querySelector('.acs-prompt-message-body');
     item.classList.toggle('is-open', open);
     toggle?.setAttribute('aria-expanded', String(open));
+    if (open) ensurePromptMessageContent(body);
     if (body) body.hidden = !open;
     if (open && scroll) {
         const reducedMotion = hostWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -4626,23 +5935,30 @@ function togglePromptMessage(toggle) {
 }
 
 function openPromptPreview() {
-    const preset = getAutoPresetSafe();
-    if (!preset) {
-        notify('warning', '未找到固定的 A.U.T.O v2.0 预设，暂时无法组装提示词。');
-        return;
-    }
-    const step = STEPS[project.currentStep - 1];
-    const state = project.steps[step.number];
-    const userInput = resolvedCurrentUserInput(step, state);
-    const messages = buildOrderedPrompts(preset, step, { previewUserInput: userInput });
-    renderPromptPreview(messages, step);
-    toggleProjectMenu(false);
-    closeStyledSelects();
+    try {
+        const preset = getAutoPresetSafe();
+        if (!preset) {
+            notify('warning', '请先导入 A.U.T.O 预设。');
+            return;
+        }
+        const step = STEPS[project.currentStep - 1];
+        const state = project.steps[step.number];
+        const userInput = resolvedCurrentUserInput(step, state);
+        const messages = buildOrderedPrompts(preset, step, { previewUserInput: userInput });
+        toggleProjectMenu(false);
+        closeStyledSelects();
+        // 手机端先收起步骤／产物抽屉，确保预览可见且可操作。
+        if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
 
-    const preview = shell.querySelector('#acs-prompt-preview');
-    preview.hidden = false;
-    preview.setAttribute('aria-hidden', 'false');
-    preview.querySelector('button[data-prompt-preview-close]')?.focus({ preventScroll: true });
+        const preview = shell.querySelector('#acs-prompt-preview');
+        preview.hidden = false;
+        preview.setAttribute('aria-hidden', 'false');
+        preview.querySelector('button[data-prompt-preview-close]')?.focus({ preventScroll: true });
+        renderPromptPreview(messages, step);
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 打开提示词预览失败', error);
+        notify('error', '提示词预览打开失败，请重试。');
+    }
 }
 
 async function copyPromptPreview() {
@@ -5894,7 +7210,70 @@ function switchInspectorTab(name) {
     if (name !== 'settings') toggleResourceDrawer(false);
 }
 
+function installMobileLayoutUI() {
+    if (!shell.querySelector('#acs-mobile-scrim')) {
+        const scrim = document.createElement('button');
+        scrim.id = 'acs-mobile-scrim';
+        scrim.className = 'acs-mobile-scrim';
+        scrim.type = 'button';
+        scrim.setAttribute('aria-label', '关闭侧栏');
+        shell.querySelector('.acs-window').append(scrim);
+    }
+
+    if (!shell.querySelector('#acs-mobile-rail-toggle')) {
+        const railHead = document.createElement('div');
+        railHead.className = 'acs-mobile-rail-head';
+        railHead.innerHTML = `
+            <div class="acs-mobile-rail-heading">
+                <span>Station map</span>
+                <strong>创作流程 · 29 站</strong>
+            </div>
+            <button id="acs-mobile-rail-toggle" class="acs-mobile-rail-toggle" type="button" aria-expanded="false" title="展开完整步骤">
+                <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                <span class="acs-mobile-rail-current">${String(project?.currentStep || 1).padStart(2, '0')}</span>
+                <span class="acs-visually-hidden">展开完整步骤</span>
+            </button>
+        `;
+        shell.querySelector('.acs-rail')?.prepend(railHead);
+    }
+}
+
+function setMobilePanel(panel = null) {
+    if (!shell) return;
+    const flowOpen = panel === 'flow';
+    const inspectorOpen = panel === 'inspector';
+    const inspector = shell.querySelector('.acs-inspector');
+    const inspectorButton = shell.querySelector('#acs-inspector-toggle');
+    const flowButton = shell.querySelector('#acs-mobile-rail-toggle');
+
+    shell.classList.toggle('is-mobile-flow-open', flowOpen);
+    shell.classList.toggle('is-mobile-panel-open', flowOpen || inspectorOpen);
+    if (!flowOpen) toggleProjectMenu(false);
+    inspector?.classList.toggle('is-mobile-open', inspectorOpen);
+    inspectorButton?.setAttribute('aria-expanded', String(inspectorOpen));
+    if (inspectorButton) inspectorButton.title = inspectorOpen ? '关闭产物与设置' : '打开产物与设置';
+
+    if (flowButton) {
+        flowButton.setAttribute('aria-expanded', String(flowOpen));
+        flowButton.title = flowOpen ? '收起完整步骤' : '展开完整步骤';
+        const icon = flowButton.querySelector('i');
+        if (icon) icon.className = flowOpen ? 'fa-solid fa-chevron-left' : 'fa-solid fa-list-check';
+        const label = flowButton.querySelector('.acs-visually-hidden');
+        if (label) label.textContent = flowOpen ? '收起完整步骤' : '展开完整步骤';
+    }
+}
+
+function toggleMobileFlow() {
+    if (!shell.classList.contains('acs-mobile-layout')) return;
+    setMobilePanel(shell.classList.contains('is-mobile-flow-open') ? null : 'flow');
+}
+
 function toggleMobileInspector() {
+    if (shell.classList.contains('acs-mobile-layout')) {
+        const opened = !shell.querySelector('.acs-inspector').classList.contains('is-mobile-open');
+        setMobilePanel(opened ? 'inspector' : null);
+        return;
+    }
     const inspector = shell.querySelector('.acs-inspector');
     const button = shell.querySelector('#acs-inspector-toggle');
     const opened = inspector.classList.toggle('is-mobile-open');
@@ -5911,6 +7290,7 @@ function captureTourWorkspace() {
         inspectorTab: shell.querySelector('[data-acs-tab].is-active')?.dataset.acsTab || 'structure',
         projectMenuOpen: shell.querySelector('#acs-project-menu')?.classList.contains('is-open') || false,
         resourceDrawerOpen: shell.querySelector('#acs-resource-drawer')?.classList.contains('is-open') || false,
+        mobileFlowOpen: shell.classList.contains('is-mobile-flow-open'),
         mobileInspectorOpen: inspector?.classList.contains('is-mobile-open') || false,
         artifactPanelExpanded,
         stepRailScrollTop: shell.querySelector('#acs-step-rail')?.scrollTop || 0,
@@ -5920,6 +7300,10 @@ function captureTourWorkspace() {
 }
 
 function setTourMobileInspector(open) {
+    if (shell.classList.contains('acs-mobile-layout')) {
+        setMobilePanel(open ? 'inspector' : null);
+        return;
+    }
     const inspector = shell.querySelector('.acs-inspector');
     const button = shell.querySelector('#acs-inspector-toggle');
     inspector.classList.toggle('is-mobile-open', open);
@@ -5938,7 +7322,11 @@ function restoreTourWorkspace() {
     renderAll();
     switchInspectorTab(previous.inspectorTab);
     if (previous.inspectorTab === 'settings' && previous.resourceDrawerOpen) toggleResourceDrawer(true);
-    setTourMobileInspector(previous.mobileInspectorOpen);
+    if (shell.classList.contains('acs-mobile-layout')) {
+        setMobilePanel(previous.mobileFlowOpen ? 'flow' : (previous.mobileInspectorOpen ? 'inspector' : null));
+    } else {
+        setTourMobileInspector(previous.mobileInspectorOpen);
+    }
     if (previous.artifactPanelExpanded) toggleArtifactPanel(true);
     toggleProjectMenu(previous.projectMenuOpen);
     hostWindow.requestAnimationFrame(() => {
@@ -5950,6 +7338,11 @@ function restoreTourWorkspace() {
 
 function ensureTourInspectorVisible() {
     if (hostWindow.matchMedia?.('(max-width: 860px)').matches) setTourMobileInspector(true);
+}
+
+function ensureTourFlowVisible() {
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
+    else setTourMobileInspector(false);
 }
 
 function applyTourScene(step) {
@@ -5970,7 +7363,7 @@ function applyTourScene(step) {
             toggleResourceDrawer(true);
             break;
         case 'projects':
-            setTourMobileInspector(false);
+            ensureTourFlowVisible();
             toggleProjectMenu(true);
             break;
         case 'brief':
@@ -5979,7 +7372,7 @@ function applyTourScene(step) {
             renderOverviewState();
             break;
         case 'route':
-            setTourMobileInspector(false);
+            ensureTourFlowVisible();
             project.currentStep = 1;
             project.ui.collapsedPhases = PHASES.slice(1).map(phase => phase.id);
             renderStepRail();
@@ -6011,7 +7404,7 @@ function applyTourScene(step) {
             shell.querySelector('.acs-inspector').scrollTop = 0;
             break;
         case 'output':
-            setTourMobileInspector(false);
+            ensureTourFlowVisible();
             switchInspectorTab('structure');
             project.currentStep = 24;
             project.ui.overviewCollapsed = true;
@@ -6021,7 +7414,7 @@ function applyTourScene(step) {
             renderOverviewState();
             break;
         case 'autotask':
-            setTourMobileInspector(false);
+            ensureTourFlowVisible();
             switchInspectorTab('structure');
             project.currentStep = 25;
             project.ui.overviewCollapsed = true;
@@ -6053,12 +7446,30 @@ function currentTourTarget(step) {
     return step.fallbackSelector ? shell?.querySelector(step.fallbackSelector) : null;
 }
 
+function syncMobileTourContent(card) {
+    const actionBar = card?.querySelector('.acs-tour-actions');
+    if (!card || !actionBar) return;
+    const content = card.querySelector('#acs-tour-content');
+    if (content) {
+        // 早期测试版曾动态包裹引导内容；统一还原，避免手机浏览器在重排后丢失点击或滚动。
+        while (content.firstChild) card.insertBefore(content.firstChild, actionBar);
+        content.remove();
+    }
+}
+
 function positionTourStep() {
     if (!tourActive || !shell?.isConnected) return;
+    const card = shell.querySelector('#acs-tour-card');
+    if (!card) return;
+    if (shell.classList.contains('acs-mobile-layout')) {
+        // 手机端不做聚光与跟随定位，避免将引导卡片推到可视区域外。
+        card.style.removeProperty('left');
+        card.style.removeProperty('top');
+        return;
+    }
     const step = TOUR_STEPS[tourStepIndex];
     const target = currentTourTarget(step);
     const spotlight = shell.querySelector('#acs-tour-spotlight');
-    const card = shell.querySelector('#acs-tour-card');
     if (!target || !spotlight || !card) return;
 
     const targetRect = target.getBoundingClientRect();
@@ -6096,6 +7507,7 @@ function renderTourStep() {
     if (!tourActive) return;
     const step = TOUR_STEPS[tourStepIndex];
     const card = shell.querySelector('#acs-tour-card');
+    syncMobileTourContent(card);
     applyTourScene(step);
     shell.querySelector('#acs-tour-eyebrow').textContent = step.eyebrow;
     shell.querySelector('#acs-tour-title').textContent = step.title;
@@ -6130,6 +7542,8 @@ function renderTourStep() {
     actionNote.textContent = step.actionNote || '';
     actionNote.hidden = !step.actionNote;
 
+    if (shell.classList.contains('acs-mobile-layout')) card.scrollTop = 0;
+
     const dots = shell.querySelector('#acs-tour-dots');
     dots.replaceChildren(...TOUR_STEPS.map((_, index) => {
         const dot = document.createElement('span');
@@ -6162,18 +7576,30 @@ function renderTourStep() {
 
 function startTour() {
     if (!shell?.classList.contains('is-open') || tourActive) return;
-    flushPendingProjectEdits();
-    tourRestoreState = captureTourWorkspace();
-    if (artifactPanelExpanded) toggleArtifactPanel(false);
-    toggleProjectMenu(false);
-    closeStyledSelects();
-    tourStepIndex = 0;
-    tourActive = true;
     const overlay = shell.querySelector('#acs-tour-overlay');
-    overlay.hidden = false;
-    overlay.setAttribute('aria-hidden', 'false');
-    shell.classList.add('is-touring');
-    renderTourStep();
+    try {
+        flushPendingProjectEdits();
+        tourRestoreState = captureTourWorkspace();
+        // 手机端先收起抽屉，避免引导浮层被残留的侧栏状态干扰。
+        if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
+        if (artifactPanelExpanded) toggleArtifactPanel(false);
+        toggleProjectMenu(false);
+        closeStyledSelects();
+        tourStepIndex = 0;
+        tourActive = true;
+        overlay.hidden = false;
+        overlay.setAttribute('aria-hidden', 'false');
+        shell.classList.add('is-touring');
+        renderTourStep();
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 打开新手引导失败', error);
+        tourActive = false;
+        overlay.hidden = true;
+        overlay.setAttribute('aria-hidden', 'true');
+        shell.classList.remove('is-touring');
+        restoreTourWorkspace();
+        notify('error', `新手引导打开失败：${error?.message || error}`);
+    }
 }
 
 function closeTour(completed = false) {
@@ -6286,6 +7712,8 @@ function openStepHelp() {
     const note = STEP_TUTORIAL_NOTES[project.currentStep - 1];
     const overlay = shell.querySelector('#acs-step-help-overlay');
     if (!step || !note || !overlay) return;
+    // 说明窗口在手机端独占当前视图，先关闭步骤／产物抽屉。
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
     shell.querySelector('#acs-step-help-kicker').textContent = `STEP ${String(step.number).padStart(2, '0')} / ${STEPS.length}`;
     shell.querySelector('#acs-step-help-title').textContent = step.name;
     shell.querySelector('#acs-step-help-stage').textContent = `${note.stage} · ${step.goal}`;
@@ -6293,6 +7721,7 @@ function openStepHelp() {
     shell.querySelector('#acs-step-help-workflow').textContent = note.workflow;
     shell.querySelector('#acs-step-help-deliverable').textContent = note.deliverable;
     shell.querySelector('#acs-step-help-caution').textContent = note.caution;
+    overlay.querySelector('.acs-step-help-dialog')?.scrollTo({ top: 0, behavior: 'auto' });
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
     overlay.querySelector('[data-step-help-close]')?.focus({ preventScroll: true });
@@ -6364,7 +7793,53 @@ function installResourceManagerUI() {
       <header class="acs-resource-drawer-head"><div><p>LOCAL RESOURCES</p><h2>预设与正则条目</h2></div><button class="acs-resource-drawer-close" type="button" data-resource-drawer-close aria-label="关闭"><i class="fa-solid fa-xmark"></i></button></header>
       <div class="acs-resource-drawer-tabs"><button class="acs-resource-drawer-tab is-active" type="button" data-resource-kind="prompts">预设条目</button><button class="acs-resource-drawer-tab" type="button" data-resource-kind="regexes">正则条目</button></div>
       <div id="acs-resource-list" class="acs-resource-list"></div>`;
-    shell.querySelector('.acs-window').append(drawer);
+    const drawerScrim = document.createElement('button');
+    drawerScrim.id = 'acs-resource-drawer-scrim';
+    drawerScrim.className = 'acs-resource-drawer-scrim';
+    drawerScrim.type = 'button';
+    drawerScrim.hidden = true;
+    drawerScrim.setAttribute('aria-label', '关闭预设与正则条目侧栏');
+    shell.querySelector('.acs-window').append(drawerScrim, drawer);
+
+    const editor = document.createElement('div');
+    editor.id = 'acs-resource-editor-overlay';
+    editor.className = 'acs-resource-editor-overlay';
+    editor.hidden = true;
+    editor.setAttribute('aria-hidden', 'true');
+    editor.innerHTML = `
+      <section class="acs-resource-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-resource-editor-title">
+        <header class="acs-resource-editor-head">
+          <div><p>PRESET ENTRY</p><h2 id="acs-resource-editor-title">编辑预设条目</h2></div>
+          <button class="acs-resource-editor-close" type="button" data-resource-editor-close aria-label="关闭编辑窗口"><i class="fa-solid fa-xmark"></i></button>
+        </header>
+        <div class="acs-resource-editor-body">
+          <textarea id="acs-resource-editor-content" spellcheck="false" aria-label="预设条目内容"></textarea>
+        </div>
+        <footer class="acs-resource-editor-actions">
+          <button class="acs-button" type="button" data-resource-editor-close>取消</button>
+          <button id="acs-save-resource-entry" class="acs-button acs-button-publish" type="button"><i class="fa-solid fa-floppy-disk"></i>保存条目</button>
+        </footer>
+      </section>`;
+    shell.append(editor);
+
+    const updateOverlay = document.createElement('div');
+    updateOverlay.id = 'acs-update-notes-overlay';
+    updateOverlay.className = 'acs-update-notes-overlay';
+    updateOverlay.hidden = true;
+    updateOverlay.setAttribute('aria-hidden', 'true');
+    updateOverlay.innerHTML = `
+      <section class="acs-update-notes-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-update-notes-title">
+        <header class="acs-update-notes-head">
+          <div><p>UPDATE MANIFEST</p><h2 id="acs-update-notes-title">本次更新内容</h2><span id="acs-update-notes-summary" class="acs-update-notes-summary"></span></div>
+          <button class="acs-update-notes-close" type="button" data-update-result="false" aria-label="暂不更新"><i class="fa-solid fa-xmark"></i></button>
+        </header>
+        <div id="acs-update-notes-list" class="acs-update-notes-list"></div>
+        <footer class="acs-update-notes-actions">
+          <button class="acs-button" type="button" data-update-result="false">暂不更新</button>
+          <button class="acs-button acs-button-publish" type="button" data-update-result="true"><i class="fa-solid fa-arrow-up-right-dots"></i>立即更新</button>
+        </footer>
+      </section>`;
+    shell.append(updateOverlay);
 }
 
 function toggleResourceDrawer(force) {
@@ -6372,6 +7847,8 @@ function toggleResourceDrawer(force) {
     const open = typeof force === 'boolean' ? force : !drawer.classList.contains('is-open');
     drawer.classList.toggle('is-open', open);
     drawer.setAttribute('aria-hidden', String(!open));
+    const scrim = shell.querySelector('#acs-resource-drawer-scrim');
+    if (scrim) scrim.hidden = !open;
     if (open) renderResourceDrawer();
 }
 
@@ -6381,7 +7858,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
     const list = shell.querySelector('#acs-resource-list');
     list.replaceChildren();
     const items = kind === 'prompts'
-        ? (studioResources.preset?.prompts || []).filter(prompt => !ALL_PRESET_STEP_PROMPT_IDS.has(prompt.id) && !PLACEHOLDER_IDS.has(prompt.id) && prompt.content.trim())
+        ? (studioResources.preset?.prompts || []).filter(prompt => !ALL_PRESET_STEP_PROMPT_IDS.has(prompt.id) && !PLACEHOLDER_IDS.has(prompt.id))
         : studioResources.regexes;
     if (!items.length) {
         const empty = document.createElement('div');
@@ -6393,15 +7870,28 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
     for (const item of items) {
         const row = document.createElement('div');
         row.className = 'acs-resource-item';
+        if (kind === 'prompts') {
+            row.classList.add('is-editable');
+            row.classList.toggle('is-empty', !item.content.trim());
+            row.dataset.presetEntryId = item.id;
+            row.tabIndex = 0;
+            row.setAttribute('role', 'button');
+            row.setAttribute('aria-label', `查看并编辑预设条目：${item.name}`);
+        }
         const copy = document.createElement('div');
         copy.className = 'acs-resource-item-copy';
         const name = document.createElement('strong');
         name.textContent = kind === 'prompts' ? item.name : item.scriptName;
         const meta = document.createElement('small');
-        meta.textContent = kind === 'prompts' ? `${String(item.role || 'system').toUpperCase()} · ≈${estimateTokenCount(item.content)} tokens` : `${item.findRegex || '无查找表达式'}`;
+        meta.textContent = kind === 'prompts'
+            ? (item.content.trim()
+                ? `${String(item.role || 'system').toUpperCase()} · ≈${estimateTokenCount(item.content)} tokens`
+                : `${String(item.role || 'system').toUpperCase()} · 空条目`)
+            : `${item.findRegex || '无查找表达式'}`;
         copy.append(name, meta);
         const label = document.createElement('label');
         label.className = 'acs-resource-switch';
+        label.addEventListener('click', event => event.stopPropagation());
         const input = document.createElement('input');
         input.type = 'checkbox';
         input.checked = kind === 'prompts' ? item.enabled !== false : !item.disabled;
@@ -6420,6 +7910,37 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
         row.append(copy, label);
         list.append(row);
     }
+}
+
+function openResourceEditor(promptId) {
+    const prompt = (studioResources.preset?.prompts || []).find(item => String(item.id) === String(promptId));
+    const overlay = shell?.querySelector('#acs-resource-editor-overlay');
+    if (!prompt || !overlay) return;
+    resourceEditorPrompt = prompt;
+    overlay.querySelector('#acs-resource-editor-title').textContent = prompt.name || '未命名预设条目';
+    overlay.querySelector('#acs-resource-editor-content').value = prompt.content || '';
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.querySelector('#acs-resource-editor-content')?.focus({ preventScroll: true });
+}
+
+function closeResourceEditor() {
+    const overlay = shell?.querySelector('#acs-resource-editor-overlay');
+    if (!overlay || overlay.hidden) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    resourceEditorPrompt = null;
+}
+
+async function saveResourceEditor() {
+    if (!resourceEditorPrompt) return;
+    const content = shell.querySelector('#acs-resource-editor-content').value;
+    resourceEditorPrompt.content = content;
+    await writeResourceRecord('preset', studioResources.preset);
+    closeResourceEditor();
+    renderResourceDrawer('prompts');
+    renderCurrentStep();
+    notify('success', '预设条目已保存。');
 }
 
 async function importPresetFile(event) {
@@ -6476,6 +7997,14 @@ async function importRegexFile(event) {
 
 function bindStudioEvents() {
     for (const close of shell.querySelectorAll('[data-acs-close]')) close.addEventListener('click', closeStudio);
+    shell.addEventListener('pointerdown', event => {
+        const drawer = shell.querySelector('#acs-resource-drawer');
+        if (!drawer?.classList.contains('is-open')) return;
+        // 编辑窗口覆盖在条目列表之上时，列表保持展开，方便保存后继续切换条目。
+        if (!shell.querySelector('#acs-resource-editor-overlay')?.hidden) return;
+        if (event.target.closest('#acs-resource-drawer, #acs-resource-dock-tab, #acs-open-resource-drawer-inline')) return;
+        toggleResourceDrawer(false);
+    });
     shell.querySelector('#acs-step-rail').addEventListener('click', event => {
         const phaseToggle = event.target.closest('[data-phase-toggle]');
         if (phaseToggle) {
@@ -6483,7 +8012,10 @@ function bindStudioEvents() {
             return;
         }
         const button = event.target.closest('[data-step]');
-        if (button) selectStep(Number(button.dataset.step));
+        if (button) {
+            selectStep(Number(button.dataset.step));
+            if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
+        }
     });
     shell.querySelector('#acs-toggle-overview').addEventListener('click', toggleOverview);
     shell.querySelector('#acs-turns').addEventListener('click', event => {
@@ -6549,8 +8081,36 @@ function bindStudioEvents() {
     shell.querySelector('#acs-resource-dock-tab').addEventListener('click', () => toggleResourceDrawer());
     shell.querySelector('#acs-open-resource-drawer-inline').addEventListener('click', () => toggleResourceDrawer(true));
     shell.querySelector('[data-resource-drawer-close]').addEventListener('click', () => toggleResourceDrawer(false));
+    shell.querySelector('#acs-resource-drawer-scrim').addEventListener('click', () => toggleResourceDrawer(false));
     for (const tab of shell.querySelectorAll('.acs-resource-drawer-tab')) tab.addEventListener('click', () => renderResourceDrawer(tab.dataset.resourceKind));
+    shell.querySelector('#acs-resource-list').addEventListener('click', event => {
+        const row = event.target.closest('[data-preset-entry-id]');
+        if (row && !event.target.closest('.acs-resource-switch')) openResourceEditor(row.dataset.presetEntryId);
+    });
+    shell.querySelector('#acs-resource-list').addEventListener('keydown', event => {
+        const row = event.target.closest('[data-preset-entry-id]');
+        if (row && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            openResourceEditor(row.dataset.presetEntryId);
+        }
+    });
+    shell.querySelector('#acs-resource-editor-overlay').addEventListener('click', event => {
+        if (event.target === event.currentTarget || event.target.closest('[data-resource-editor-close]')) closeResourceEditor();
+    });
+    shell.querySelector('#acs-resource-editor-overlay').addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeResourceEditor();
+    });
+    shell.querySelector('#acs-save-resource-entry').addEventListener('click', () => { void saveResourceEditor(); });
+    shell.querySelector('#acs-update-notes-overlay').addEventListener('click', event => {
+        const result = event.target.closest('[data-update-result]');
+        if (result) closeUpdateNotes(result.dataset.updateResult === 'true');
+    });
+    shell.querySelector('#acs-update-notes-overlay').addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeUpdateNotes(false);
+    });
+    shell.querySelector('#acs-mobile-rail-toggle').addEventListener('click', toggleMobileFlow);
     shell.querySelector('#acs-inspector-toggle').addEventListener('click', toggleMobileInspector);
+    shell.querySelector('#acs-mobile-scrim').addEventListener('click', () => setMobilePanel(null));
     shell.querySelector('#acs-new-project').addEventListener('click', newProject);
     shell.querySelector('#acs-fetch-models').addEventListener('click', fetchCustomModels);
     shell.querySelector('#acs-expand-artifacts').addEventListener('click', () => toggleArtifactPanel());
@@ -6576,6 +8136,7 @@ function bindStudioEvents() {
         const switchButton = event.target.closest('[data-project-id]');
         if (switchButton) {
             switchProject(switchButton.dataset.projectId);
+            if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
             return;
         }
         if (event.target.closest('#acs-project-menu-new')) newProject();
@@ -6716,11 +8277,44 @@ function bindStudioEvents() {
     });
 }
 
+// 创作台为固定全屏层；直接锁定根节点，避免宿主页面横向溢出露出滚动条。
+function setStudioPageScrollLock(locked) {
+    const targets = [document.documentElement, document.body];
+    if (locked) {
+        if (!studioScrollLockState) {
+            studioScrollLockState = targets.map(target => ({
+                target,
+                overflow: target.style.getPropertyValue('overflow'),
+                overflowPriority: target.style.getPropertyPriority('overflow'),
+                overflowX: target.style.getPropertyValue('overflow-x'),
+                overflowXPriority: target.style.getPropertyPriority('overflow-x'),
+                overflowY: target.style.getPropertyValue('overflow-y'),
+                overflowYPriority: target.style.getPropertyPriority('overflow-y'),
+            }));
+        }
+        for (const target of targets) {
+            target.classList.add('acs-no-scroll');
+            target.style.setProperty('overflow', 'hidden', 'important');
+            target.style.setProperty('overflow-x', 'hidden', 'important');
+            target.style.setProperty('overflow-y', 'hidden', 'important');
+        }
+        return;
+    }
+
+    for (const target of targets) target.classList.remove('acs-no-scroll');
+    for (const state of studioScrollLockState || []) {
+        state.target.style.setProperty('overflow', state.overflow, state.overflowPriority);
+        state.target.style.setProperty('overflow-x', state.overflowX, state.overflowXPriority);
+        state.target.style.setProperty('overflow-y', state.overflowY, state.overflowYPriority);
+    }
+    studioScrollLockState = null;
+}
+
 function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}`;
     document.head.append(style);
 }
 
@@ -6732,7 +8326,7 @@ async function ensureStudioLoaded() {
         // 删除旧插件留在当前页面中的隐藏界面，脚本版随后接管。
         existing.remove();
         document.querySelector('#auto-card-studio-launch')?.remove();
-        document.body.classList.remove('acs-no-scroll');
+        setStudioPageScrollLock(false);
     }
 
     ensureStudioStyle();
@@ -6741,15 +8335,16 @@ async function ensureStudioLoaded() {
     shell = container.querySelector('#auto-card-studio');
     shell.dataset.acsRuntime = SCRIPT_RUNTIME_MARK;
     document.body.append(shell);
-    updateStudioViewportScale();
     installStepHelpUI();
     installResourceManagerUI();
     installProjectLibraryUI();
     installStudioToolsUI();
     installConversationNavigation();
     installDeliveryUI();
+    installMobileLayoutUI();
     installStyledSelects();
     installCustomModelPicker();
+    updateStudioViewportScale();
     bindStudioEvents();
     renderAll();
     await inspectEnvironment();
@@ -6767,7 +8362,7 @@ function showStudioRuntimeError(error) {
         }
         shell.classList.add('is-open');
         shell.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('acs-no-scroll');
+        setStudioPageScrollLock(true);
         updateStudioViewportScale();
         let banner = shell.querySelector('#acs-runtime-error');
         if (!banner) {
@@ -6787,18 +8382,28 @@ async function openStudio() {
         await ensureStudioLoaded();
         shell.classList.add('is-open');
         shell.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('acs-no-scroll');
+        setStudioPageScrollLock(true);
         updateStudioViewportScale();
         renderAll();
         const initialFocus = project.ui.overviewCollapsed
             ? shell.querySelector('#acs-user-input')
             : shell.querySelector('#acs-project-brief');
         initialFocus.focus();
+        hostWindow.setTimeout(() => { void maybeOfferAutomaticUpdate(); }, 0);
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 打开失败', error);
         showStudioRuntimeError(error);
         notify('error', `无法打开创作台：${error?.message || error}`);
     }
+}
+
+function requestOpenStudio() {
+    if (!studioOpenPromise) {
+        studioOpenPromise = openStudio().finally(() => {
+            studioOpenPromise = null;
+        });
+    }
+    return studioOpenPromise;
 }
 
 function closeStudio() {
@@ -6808,13 +8413,18 @@ function closeStudio() {
     }
     if (tourActive) closeTour(false);
     closePromptPreview();
+    closeStepHelp();
+    closeResourceEditor();
+    closeUpdateNotes(false);
+    toggleResourceDrawer(false);
     if (artifactPanelExpanded) toggleArtifactPanel(false);
     toggleProjectMenu(false);
     closeStyledSelects();
     toggleCustomModelOptions(false);
+    setMobilePanel(null);
     shell.classList.remove('is-open');
     shell.setAttribute('aria-hidden', 'true');
-    document.body.classList.remove('acs-no-scroll');
+    setStudioPageScrollLock(false);
 }
 
 function handleHostKeydown(event) {
@@ -6843,6 +8453,10 @@ function handleHostKeydown(event) {
         toggleArtifactPanel(false);
         return;
     }
+    if (shell.classList.contains('is-mobile-panel-open')) {
+        setMobilePanel(null);
+        return;
+    }
     closeStudio();
 }
 
@@ -6856,7 +8470,7 @@ function cleanupScriptRuntime() {
     if (tourAnimationFrame) hostWindow.cancelAnimationFrame(tourAnimationFrame);
     if (tourSceneTimer) hostWindow.clearTimeout(tourSceneTimer);
     document.querySelector('#auto-card-studio-wand-launcher')?.remove();
-    document.body.classList.remove('acs-no-scroll');
+    setStudioPageScrollLock(false);
     if (shell?.dataset.acsRuntime === SCRIPT_RUNTIME_MARK) shell.remove();
     document.querySelector(`#${SCRIPT_STYLE_ID}`)?.remove();
     shell = null;
@@ -6864,6 +8478,7 @@ function cleanupScriptRuntime() {
 
 const TOOLBAR_LAUNCHER_NAME = '🔨';
 const LEGACY_TOOLBAR_LAUNCHER_NAME = '打开 A.U.T.O 创作台';
+const OPEN_HANDLER_KEY = '__autoCardStudioOpenHandler';
 
 function migrateToolbarLauncherName() {
     try {
@@ -6898,6 +8513,10 @@ function installToolbarLauncher() {
     button.dataset.autoCardStudioLauncher = 'true';
     button.title = '打开 A.U.T.O 角色卡创作台';
     button.setAttribute('aria-label', '打开 A.U.T.O 角色卡创作台');
+    if (button.dataset.autoCardStudioDirectBound !== 'true') {
+        button.dataset.autoCardStudioDirectBound = 'true';
+        button.addEventListener('click', () => hostWindow[OPEN_HANDLER_KEY]?.());
+    }
     // 按钮配置本身就是图标字符；这里不再等脚本加载后替换文字内容。
     return true;
 }
@@ -6916,7 +8535,7 @@ function installWandLauncher() {
             <div class="fa-fw fa-solid fa-hammer extensionsMenuExtensionButton" aria-hidden="true"></div>
             <span>A.U.T.O 角色卡创作台</span>
         `;
-        item.addEventListener('click', openStudio);
+        item.addEventListener('click', () => hostWindow[OPEN_HANDLER_KEY]?.());
         menu.append(item);
     }
     return true;
@@ -6951,6 +8570,13 @@ function compareVersions(left, right) {
     return 0;
 }
 
+function studioVersionLabel() {
+    if (!TEST_BRANCH_UPDATE_MODE) return `v${AUTO_CARD_STUDIO_VERSION}`;
+    const pinnedRevision = String(localStorage.getItem(TEST_BRANCH_PIN_KEY) || '').trim();
+    const revisionLabel = /^[0-9a-f]{40}$/i.test(pinnedRevision) ? ` · ${pinnedRevision.slice(0, 7)}` : '';
+    return `v${AUTO_CARD_STUDIO_VERSION} · ${TEST_BRANCH_BUILD_LABEL}${revisionLabel}`;
+}
+
 async function getLatestPublishedVersion(forceRefresh = false) {
     try {
         const cached = JSON.parse(localStorage.getItem(UPDATE_CACHE_KEY) || 'null');
@@ -6981,6 +8607,72 @@ async function getLatestPublishedVersion(forceRefresh = false) {
     return version;
 }
 
+async function fetchUpdateManifest(ref) {
+    const response = await hostWindow.fetch(UPDATE_NOTES_URL_BY_REF(ref), { cache: 'no-store' });
+    if (!response.ok) throw new Error(`更新说明请求失败：HTTP ${response.status}`);
+    const manifest = await response.json();
+    if (!manifest || typeof manifest !== 'object') throw new Error('更新说明格式无效');
+    return manifest;
+}
+
+function normalizeManifestEntry(entry, fallbackLabel) {
+    return {
+        label: String(entry?.label || entry?.version || fallbackLabel),
+        title: String(entry?.title || '版本更新'),
+        changes: Array.isArray(entry?.changes) ? entry.changes.map(String).filter(Boolean) : [],
+    };
+}
+
+async function collectTestUpdateEntries(currentRevision, targetRevision) {
+    try {
+        const manifest = await fetchUpdateManifest(targetRevision);
+        const builds = Array.isArray(manifest.testBuilds) ? manifest.testBuilds : [];
+        const currentIndex = builds.findIndex(entry => entry?.label === TEST_BRANCH_BUILD_LABEL);
+        const selected = currentIndex >= 0 ? builds.slice(currentIndex + 1) : builds.slice(-1);
+        if (selected.length) return selected.map(entry => normalizeManifestEntry(entry, targetRevision.slice(0, 7)));
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 测试版更新说明读取失败，尝试读取提交记录。', error);
+    }
+
+    if (/^[0-9a-f]{40}$/i.test(currentRevision) && /^[0-9a-f]{40}$/i.test(targetRevision)) {
+        try {
+            const response = await hostWindow.fetch(TEST_BRANCH_COMPARE_URL(currentRevision, targetRevision), {
+                cache: 'no-store',
+                headers: { Accept: 'application/vnd.github+json' },
+            });
+            if (response.ok) {
+                const commits = (await response.json())?.commits || [];
+                return commits.map(commit => {
+                    const lines = String(commit?.commit?.message || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+                    return {
+                        label: `测试构建 ${String(commit?.sha || '').slice(0, 7)}`,
+                        title: lines[0] || '测试版更新',
+                        changes: lines.slice(1),
+                    };
+                });
+            }
+        } catch (error) {
+            console.warn('[A.U.T.O Card Studio] 测试分支提交记录读取失败。', error);
+        }
+    }
+    return [];
+}
+
+async function collectPublishedUpdateEntries(latestVersion) {
+    try {
+        const manifest = await fetchUpdateManifest(`auto-card-studio-v${latestVersion}`);
+        const releases = Array.isArray(manifest.releases) ? manifest.releases : [];
+        return releases
+            .filter(entry => /^\d+\.\d+\.\d+$/.test(String(entry?.version || '')))
+            .filter(entry => compareVersions(entry.version, AUTO_CARD_STUDIO_VERSION) > 0 && compareVersions(entry.version, latestVersion) <= 0)
+            .sort((left, right) => compareVersions(left.version, right.version))
+            .map(entry => normalizeManifestEntry(entry, `v${entry.version}`));
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 正式版更新说明读取失败。', error);
+        return [];
+    }
+}
+
 function showUpdateFeedback(message, state = '', duration = 3200) {
     const button = shell?.querySelector('#acs-check-update');
     const feedback = shell?.querySelector('#acs-update-feedback');
@@ -6996,7 +8688,7 @@ function showUpdateFeedback(message, state = '', duration = 3200) {
         updateFeedbackTimer = hostWindow.setTimeout(() => {
             feedback.hidden = true;
             button.classList.remove('is-current', 'is-error');
-            button.title = `检查更新（当前 v${AUTO_CARD_STUDIO_VERSION}）`;
+            button.title = `检查更新（当前 ${studioVersionLabel()}）`;
             updateFeedbackTimer = null;
         }, duration);
     }
@@ -7011,6 +8703,44 @@ async function checkForUpdatesManually() {
     button.disabled = true;
     showUpdateFeedback('正在检查新版本…', 'checking', 0);
     try {
+        if (TEST_BRANCH_UPDATE_MODE) {
+            // 先读取分支最新提交，再加载不可变的提交地址，彻底绕开分支 CDN 缓存。
+            const branchResponse = await hostWindow.fetch(TEST_BRANCH_API_URL, {
+                cache: 'no-store',
+                headers: { Accept: 'application/vnd.github+json' },
+            });
+            if (!branchResponse.ok) throw new Error(`测试分支检查失败：HTTP ${branchResponse.status}`);
+            const revision = String((await branchResponse.json())?.commit?.sha || '').trim();
+            if (!/^[0-9a-f]{40}$/i.test(revision)) throw new Error('测试分支返回的提交编号无效');
+
+            const scriptResponse = await hostWindow.fetch(TEST_SCRIPT_URL_BY_REF(revision), { cache: 'no-store' });
+            if (!scriptResponse.ok) throw new Error(`测试脚本尚未就绪：HTTP ${scriptResponse.status}`);
+            if (localStorage.getItem(TEST_BRANCH_PIN_KEY) === revision) {
+                showUpdateFeedback(`已是测试版最新构建 ${revision.slice(0, 7)}`, 'current');
+                notify('success', `当前已是测试版最新构建 ${revision.slice(0, 7)}。`);
+                return;
+            }
+
+            const currentRevision = String(localStorage.getItem(TEST_BRANCH_PIN_KEY) || '').trim();
+            const entries = await collectTestUpdateEntries(currentRevision, revision);
+            const confirmed = await showUpdateNotes({
+                currentLabel: studioVersionLabel(),
+                targetLabel: `测试构建 ${revision.slice(0, 7)}`,
+                entries,
+            });
+            if (!confirmed) {
+                showUpdateFeedback('已暂缓本次更新', 'current');
+                return;
+            }
+
+            localStorage.setItem(TEST_BRANCH_PIN_KEY, revision);
+            hostWindow.sessionStorage.setItem(TEST_BRANCH_UPDATE_KEY, revision);
+            showUpdateFeedback(`正在载入测试构建 ${revision.slice(0, 7)}…`, 'checking', 0);
+            notify('info', `正在载入测试版 ${revision.slice(0, 7)}。`);
+            hostWindow.setTimeout(() => hostWindow.location.reload(), 650);
+            return;
+        }
+
         // 手动检查明确绕过六小时缓存，保证用户看到远端最新结果。
         const latestVersion = await getLatestPublishedVersion(true);
         if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) <= 0) {
@@ -7021,6 +8751,16 @@ async function checkForUpdatesManually() {
 
         const scriptResponse = await hostWindow.fetch(VERSIONED_SCRIPT_URL(latestVersion), { cache: 'no-store' });
         if (!scriptResponse.ok) throw new Error(`新版脚本尚未就绪：HTTP ${scriptResponse.status}`);
+        const entries = await collectPublishedUpdateEntries(latestVersion);
+        const confirmed = await showUpdateNotes({
+            currentLabel: `v${AUTO_CARD_STUDIO_VERSION}`,
+            targetLabel: `v${latestVersion}`,
+            entries,
+        });
+        if (!confirmed) {
+            showUpdateFeedback('已暂缓本次更新', 'current');
+            return;
+        }
         showUpdateFeedback(`发现 v${latestVersion}，正在更新…`, 'checking', 0);
         notify('info', `发现新版本 v${latestVersion}，即将刷新并重新打开创作台。`);
         hostWindow.sessionStorage.setItem(UPDATE_REOPEN_KEY, latestVersion);
@@ -7035,39 +8775,102 @@ async function checkForUpdatesManually() {
     }
 }
 
+async function maybeOfferAutomaticUpdate() {
+    if (!shell?.classList.contains('is-open')) return;
+    try {
+        // 复用脚本加载时已经启动的后台扫描，避免打开创作台时重复等待网络请求。
+        if (backgroundUpdatePromise) await backgroundUpdatePromise;
+        if (pendingAutomaticUpdate) {
+            pendingAutomaticUpdate = null;
+            await checkForUpdatesManually();
+        }
+    } catch (error) {
+        // 自动检查失败不打断创作；用户仍可通过顶部按钮手动检查。
+        console.warn('[A.U.T.O Card Studio] 自动更新检查失败。', error);
+    }
+}
+
+async function scanForUpdatesInBackground() {
+    if (automaticUpdateChecked) return pendingAutomaticUpdate;
+    automaticUpdateChecked = true;
+    try {
+        if (TEST_BRANCH_UPDATE_MODE) {
+            const response = await hostWindow.fetch(TEST_BRANCH_API_URL, {
+                cache: 'no-store',
+                headers: { Accept: 'application/vnd.github+json' },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const revision = String((await response.json())?.commit?.sha || '').trim();
+            if (!/^[0-9a-f]{40}$/i.test(revision)) throw new Error('测试分支返回的提交编号无效');
+            const loadedRevision = String(localStorage.getItem(TEST_BRANCH_PIN_KEY) || '').trim();
+            if (revision !== loadedRevision) pendingAutomaticUpdate = { mode: 'test', revision };
+        } else {
+            // 每次脚本加载都绕过上一次会话缓存，真正向版本目录查询一次。
+            const latestVersion = await getLatestPublishedVersion(true);
+            if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) > 0) {
+                pendingAutomaticUpdate = { mode: 'release', version: latestVersion };
+            }
+        }
+
+        if (pendingAutomaticUpdate) {
+            const button = shell?.querySelector('#acs-check-update');
+            if (button) {
+                button.classList.add('is-current');
+                button.title = '发现新版本，点击查看更新内容';
+                button.setAttribute('aria-label', '发现新版本，点击查看更新内容');
+            }
+        }
+        return pendingAutomaticUpdate;
+    } catch (error) {
+        // 后台扫描静默失败，不显示红色提示，也不影响创作台加载和手动检查。
+        console.warn('[A.U.T.O Card Studio] 后台版本扫描失败。', error);
+        return null;
+    }
+}
+
 function startStudioRuntime() {
+    hostWindow[OPEN_HANDLER_KEY] = requestOpenStudio;
     document.addEventListener('keydown', handleHostKeydown);
     hostWindow.addEventListener('resize', handleTourResize);
     hostWindow.visualViewport?.addEventListener('resize', handleTourResize);
     migrateToolbarLauncherName();
-    eventOn(getButtonEvent(TOOLBAR_LAUNCHER_NAME), openStudio);
+    eventOn(getButtonEvent(TOOLBAR_LAUNCHER_NAME), requestOpenStudio);
     // 首次升级时旧按钮可能已经渲染并持有旧事件，保留一次兼容绑定。
-    eventOn(getButtonEvent(LEGACY_TOOLBAR_LAUNCHER_NAME), openStudio);
+    eventOn(getButtonEvent(LEGACY_TOOLBAR_LAUNCHER_NAME), requestOpenStudio);
     installStudioLaunchers();
+    // 不阻塞脚本入口与创作台启动；每次载入脚本都独立扫描一次最新版。
+    backgroundUpdatePromise = new Promise(resolve => {
+        hostWindow.setTimeout(() => resolve(scanForUpdatesInBackground()), 0);
+    });
     window.addEventListener('pagehide', cleanupScriptRuntime, { once: true });
     if (hostWindow.sessionStorage.getItem(UPDATE_REOPEN_KEY)) {
         hostWindow.sessionStorage.removeItem(UPDATE_REOPEN_KEY);
-        hostWindow.setTimeout(openStudio, 0);
+        hostWindow.setTimeout(requestOpenStudio, 0);
     }
 }
 
 async function startStudioWithAutoUpdate() {
-    try {
-        const latestVersion = await getLatestPublishedVersion();
-        if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) > 0) {
-            console.info(`[A.U.T.O Card Studio] 发现新版本 ${latestVersion}，正在从 ${AUTO_CARD_STUDIO_VERSION} 自动更新。`);
+    if (TEST_BRANCH_UPDATE_MODE) {
+        const requestedRevision = String(
+            hostWindow.sessionStorage.getItem(TEST_BRANCH_UPDATE_KEY)
+            || localStorage.getItem(TEST_BRANCH_PIN_KEY)
+            || '',
+        ).trim();
+        hostWindow.sessionStorage.removeItem(TEST_BRANCH_UPDATE_KEY);
+        if (/^[0-9a-f]{40}$/i.test(requestedRevision) && !String(import.meta.url).includes(`@${requestedRevision}/`)) {
             try {
-                await import(VERSIONED_SCRIPT_URL(latestVersion));
+                await import(TEST_SCRIPT_URL_BY_REF(requestedRevision));
                 return;
             } catch (error) {
-                // 新版本加载失败时继续启动当前版本，保证创作台仍然可用。
-                console.warn(`[A.U.T.O Card Studio] 新版本 ${latestVersion} 加载失败，回退到 ${AUTO_CARD_STUDIO_VERSION}。`, error);
+                console.warn('[A.U.T.O Card Studio] 测试分支更新加载失败，继续使用当前脚本。', error);
             }
         }
-    } catch (error) {
-        // GitHub 暂时不可用时不阻塞创作台，只跳过本次更新检查。
-        console.warn(`[A.U.T.O Card Studio] 自动更新检查失败，继续使用 ${AUTO_CARD_STUDIO_VERSION}。`, error);
+        // 测试版只跟随测试分支，不参与正式版自动更新。
+        startStudioRuntime();
+        return;
     }
+
+    // 正式版在创作台打开后再检查；发现更新时先展示完整更新内容，由用户确认后加载。
     startStudioRuntime();
 }
 
