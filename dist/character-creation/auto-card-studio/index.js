@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.16 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.17 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1345,18 +1345,20 @@ const INTERACTIVE_TOUR_CSS = `
 }
 
 .acs-tour-dots {
+  display: grid;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+  gap: 4px;
   overflow: hidden;
 }
 
 .acs-tour-dot {
-  flex: 1 1 0;
-  width: auto;
-  max-width: 24px;
+  width: 100%;
+  max-width: none;
 }
 
 .acs-tour-dot.is-active {
-  width: auto;
-  flex-grow: 1.8;
+  width: 100%;
+  transform: scaleY(1.7);
 }
 
 @media (max-width: 560px) {
@@ -1378,7 +1380,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.16';
+const AUTO_CARD_STUDIO_VERSION = '0.6.17';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1773,114 +1775,156 @@ const TOUR_STEPS = Object.freeze([
         placement: 'bottom',
         scene: 'welcome',
         eyebrow: 'ORIENTATION 01',
-        title: '先认识这座角色锻造台',
-        description: 'A.U.T.O 不是一步出卡工具，而是一套分层设计流程：先锚定体验，再依次完成实体、状态机、描写、变量、输出、异步任务与交付。',
-        points: ['第一次使用建议完整走一遍；熟悉结构后可以按需要拆分步骤。', '你负责方向、检查与取舍，AI 按固定预设生成可交付产物。'],
-        actionNote: '接下来会自动打开各区域演示，不会修改你的项目内容。',
+        title: '先看懂 A.U.T.O 怎样制卡',
+        description: '创作台把 A.U.T.O 预设变成 29 个可对话、可返工的步骤：先确定体验，再设计世界、叙事、变量、装配、AutoTask，最后生成开场并发布。',
+        points: ['你负责提出方向、检查结果和决定取舍；AI 负责按当前步骤产出正式区块。', '引导会切换页面和展开区域，但不会生成内容、删除数据或发布角色卡。'],
+        actionNote: '完成引导后，界面会恢复到开始前的状态。',
+    },
+    {
+        selector: '.acs-resource-import-card',
+        fallbackSelector: '.acs-connection-section',
+        placement: 'left',
+        scene: 'resources',
+        eyebrow: 'RESOURCES 02',
+        title: '第一步不是生成，而是导入资源',
+        description: '在设置页导入完整的 A.U.T.O 预设。创作台会从中识别 29 个步骤、其他辅助提示词，以及预设内置的正则。也可以另行导入正则包。',
+        points: ['这些资源只属于创作台，不绑定 SillyTavern 当前预设，也不读取全局、预设或角色正则。', '缺少完整预设时仍可查看项目，但不能正式调用 AI 生成。'],
+        actionNote: '已自动切换到设置页的资源导入区域。',
+    },
+    {
+        selector: '.acs-resource-drawer',
+        fallbackSelector: '#acs-resource-dock-tab',
+        placement: 'left',
+        scene: 'resource-drawer',
+        eyebrow: 'CONTROL 03',
+        title: '逐项决定哪些辅助条目生效',
+        description: '设置页右侧的小页签会打开“预设与正则条目”。这里显示 29 个步骤之外的辅助提示词，以及创作台用于整理 AI 回复的正则。',
+        points: ['开关只影响创作台的发送与显示，不会改动原始导入文件。', '如果某段回复没有正确隐藏，先在正则页检查对应条目是否已启用。'],
+        actionNote: '已自动打开右侧资源抽屉。',
     },
     {
         selector: '#acs-project-menu',
         fallbackSelector: '.acs-project-identity',
         placement: 'right',
         scene: 'projects',
-        eyebrow: 'PROJECT 02',
-        title: '一个角色卡对应一个项目',
-        description: '文件夹会展开项目库。你可以同时保存多个角色卡方案，并在这里新建、切换或删除项目。',
-        points: ['项目名、母题、29 步进度和全部产物会一起切换。', '删除项目前会再次确认；导出的项目文件可用于备份和迁移。'],
+        eyebrow: 'PROJECT 04',
+        title: '一个创作方案保存为一个项目',
+        description: '点击项目名左侧的文件夹可打开项目库。每个项目独立保存母题、29 步对话、正式产物、历史版本和发布名称。',
+        points: ['可以新建、切换和删除多个项目；切换不会丢失当前进度。', '顶部导出按钮保存完整项目 JSON，适合备份、迁移或分享协作。'],
         actionNote: '已自动展开项目库。',
     },
     {
         selector: '#acs-brief-panel',
         placement: 'right',
         scene: 'brief',
-        eyebrow: 'THESIS 03',
-        title: '用创作母题守住全局方向',
-        description: '这里写的是整张角色卡都要遵守的总纲，而不是某一步的临时要求。后续 29 个步骤都会读取它。',
-        points: ['建议写明核心体验、主角定位、审美方向与内容边界。', '母题可以随时补充；标题区的“收起概览”能为对话腾出空间。'],
-        actionNote: '已自动展开创作概览。',
+        eyebrow: 'THESIS 05',
+        title: '用创作母题告诉整张卡要去哪里',
+        description: '母题是所有步骤共享的总方向，不是某一轮的临时命令。它应简要说明玩家身份、核心体验、审美倾向、世界边界和明确禁区。',
+        points: ['先写能指导取舍的几句话，不必一开始就完成整套设定。', '母题可以持续修改；收起概览后可把更多空间留给对话。'],
+        actionNote: '已自动展开创作母题。',
     },
     {
         selector: '#acs-step-rail',
         placement: 'right',
         scene: 'route',
-        eyebrow: 'ROUTE 04',
-        title: '29 步组成一条分层设计路线',
-        description: '左侧四个折叠区用于导航，实际逻辑依次覆盖概念、实体、状态机、描写、变量、目录、输出、异步任务、重组和开局。',
-        points: ['新手通常按顺序推进，确认后的最新产物会成为后续步骤的上下文。', 'Step 3 等步骤可以跳过；返工时直接返回，历史版本不会丢失。'],
-        actionNote: '已自动展开第一大类并定位 Step 1。',
+        eyebrow: 'ROUTE 06',
+        title: '29 步分成六个阶段，不要求全部完成',
+        description: '左侧依次是核心与世界、叙事与体验、变量化系统、装配设计、AutoTask 配置、启动与交付。大类可以折叠，步骤可以随时返回。',
+        points: ['“核心”只标出最能代表流程的 1、4、7、8、24、29 步，不等于强制完成。', '确认后的最新版会进入后续上下文；是否跳过其他步骤取决于角色卡复杂度。'],
+        actionNote: '已展开第一阶段并定位核心 Step 1。',
     },
     {
         selector: '.acs-stage-heading',
         placement: 'bottom',
         scene: 'station',
-        eyebrow: 'STATION 05',
-        title: '先理解步骤，再要求 AI 生成',
-        description: '标题右侧的说明按钮会解释这一站为什么存在、建议怎样做、最终交付什么，以及教程中特别提醒的常见误区。',
-        points: ['“未开始、草案、已确认”表示当前步骤状态。', '确认只代表采用当前版本；之后仍可返回修改、重生成或恢复历史。'],
-        actionNote: '中间内容已切换到 Step 1 的任务视图。',
+        eyebrow: 'STATION 07',
+        title: '每一步先看说明，再开始对话',
+        description: '标题旁的说明按钮解释该步骤的用途、建议做法、最终产物和常见误区。中间空白页还会给出三个适合起步的问题。',
+        points: ['状态分为未开始、草案和已确认；确认后仍可返回修改。', '标题区的“清空对话”只清理本步骤对话，已经形成的正式产物继续保留。'],
+        actionNote: '已切换到 Step 1，说明按钮位于步骤标题旁。',
     },
     {
         selector: '.acs-composer',
         placement: 'top',
         scene: 'compose',
-        eyebrow: 'DIALOGUE 06',
-        title: '用对话逐轮打磨阶段产物',
-        description: '输入框既能提交初始设想，也能要求删改、扩写或重新生成。留空时，A.U.T.O 会依据母题与已有正式产物主动完成本阶段。',
-        points: ['最新一条用户输入可直接重试，并保留被替换产物的历史版本。', '满意后点击“确认并前往下一站”；不满意就继续提出具体修改。'],
-        actionNote: '已自动收起创作概览，让输入与生成按钮完整可见。',
+        eyebrow: 'DIALOGUE 08',
+        title: '把每一步当作一次可持续修改的对话',
+        description: '输入你的要求后生成草案；不满意就继续指出修改方向。留空也可以让 A.U.T.O 根据母题和既有正式产物主动完成当前步骤。',
+        points: ['最新一条输入可以重试，旧回复中的产物会保留为历史版本。', '满意后确认并前往下一步；清空对话后也能从头讨论，但产物不会误删。'],
+        actionNote: '已收起概览，让输入框和生成按钮完整显示。',
     },
     {
         selector: '#acs-preview-prompt',
         placement: 'top',
         scene: 'prompt',
-        eyebrow: 'REQUEST 07',
-        title: '发送前先检查 AI 会看到什么',
-        description: '“查看提示词”会列出固定预设、当前步骤条目、项目上下文和本轮输入，适合排查变量、上下文与预设开关。',
-        points: ['项目上下文只携带正式产物最新版和你的修改要求。', '{{char}}、{{user}} 会受到保护，不应显示成当前聊天角色名。'],
-        actionNote: '引导不会直接打开大弹窗，结束后可点击此按钮亲自检查。',
+        eyebrow: 'REQUEST 09',
+        title: '发送前可以检查完整提示词',
+        description: '“查看提示词”按实际发送顺序列出辅助条目、当前步骤、项目上下文和本轮输入，适合排查模型为什么得到某些信息。',
+        points: ['项目上下文只使用正式产物的最新版，不会把所有旧代码块重复发送。', '{{char}} 与 {{user}} 会在查看器中保持模板变量形式。'],
+        actionNote: '引导不打开大型提示词窗口，结束后可自行点击检查。',
     },
     {
         selector: '.acs-inspector-intro',
         fallbackSelector: '#acs-inspector-toggle',
         placement: 'left',
         scene: 'artifacts',
-        eyebrow: 'ARTIFACT 08',
-        title: '右侧只管理正式产物',
-        description: '产物页不会收录 AI 的思考、评分或建议，只展示 A.U.T.O 为当前步骤规定的最终代码块。',
-        points: ['同一产物默认显示最新版，也可查看和恢复历史。', '支持编辑、复制、放大，以及按步骤、阶段和关键词筛选。'],
-        actionNote: '已自动切换到“产物”页；小屏幕会同时打开右侧栏。',
+        eyebrow: 'ARTIFACT 10',
+        title: '右侧产物栏才是最终交付内容',
+        description: '这里仅提取预设明确要求复制的正式区块，不收录 AI 的思考、评分、解释或追问。产物可直接编辑，修改会自动保存。',
+        points: ['同名产物默认使用最新版，也能切换历史、恢复、复制或按分类搜索。', '删除会移除该产物的全部历史版本；重新生成后它会作为新产物再次出现。'],
+        actionNote: '已切换到产物页；小屏幕会自动打开右侧栏。',
     },
     {
         selector: '.acs-connection-section',
         fallbackSelector: '#acs-inspector-toggle',
         placement: 'left',
         scene: 'settings',
-        eyebrow: 'CONNECTION 09',
-        title: '决定创作台使用哪个模型',
-        description: '模型可以跟随 SillyTavern 当前连接，也可以独立配置；A.U.T.O 预设和回复正则则由创作台自行导入并独立运行。',
-        points: ['右侧停靠页签可逐项控制非步骤预设条目和正则。', '创作台不会读取 SillyTavern 的全局、预设或角色正则。'],
-        actionNote: '已自动切换到“设置”页。',
+        eyebrow: 'MODEL 11',
+        title: '模型连接与创作资源彼此独立',
+        description: '模型既可跟随 SillyTavern 当前连接，也可为创作台单独配置接口、密钥和模型。无论选择哪种连接，使用的仍是创作台自己导入的预设与正则。',
+        points: ['独立连接的密钥只保存在当前页面内存，刷新后需要重新填写。', '“获取模型”可读取兼容接口的模型列表，也可以手动填写模型名。'],
+        actionNote: '已返回设置页并定位模型连接。',
+    },
+    {
+        selector: '#acs-step-rail',
+        placement: 'right',
+        scene: 'output',
+        eyebrow: 'ASSEMBLY 12',
+        title: '输出格式决定游玩时每轮回复的结构',
+        description: 'Step 23 设计状态栏，Step 24 设计正文、摘要、选项、变量更新和状态栏数据如何组合。两者必须与变量方案和 AutoTask 分工保持一致。',
+        points: ['选择导出 Step 24 的输出格式时，发布流程会询问是否同时载入 9 条配套局部正则。', '状态栏显示正则不使用示例包，而是由 Step 23 根据当前项目动态生成。'],
+        actionNote: '已展开装配设计并定位核心 Step 24。',
+    },
+    {
+        selector: '#acs-step-rail',
+        placement: 'right',
+        scene: 'autotask',
+        eyebrow: 'AUTOTASK 13',
+        title: 'AutoTask 是可选的副 AI 自动化层',
+        description: 'Step 25–28 用于把摘要、变量更新、世界书维护等独立工作交给副 AI，并规划它能读取什么、写回哪里、何时触发。',
+        points: ['没有异步任务需求时可以跳过，不必为了完成进度强行配置。', '有变量或大型世界书时，应严格限制每个任务的读取范围与输出位置。'],
+        actionNote: '已展开 AutoTask 配置阶段并定位 Step 25。',
     },
     {
         selector: '.acs-publish-copy',
         fallbackSelector: '#acs-inspector-toggle',
         placement: 'left',
         scene: 'publish',
-        eyebrow: 'HANDOFF 10',
-        title: '完成后交付角色卡与世界书',
-        description: '发布页会先列出当前可交付产物。勾选需要的内容后，创作台直接创建世界书并绑定 SillyTavern 角色卡。',
-        points: ['默认选择已确认产物，草案也可手动加入。', '同一目标条目的多个产物会合并；同名角色卡或世界书在覆盖前会再次确认。'],
-        actionNote: '已自动切换到“发布”页；引导不会执行真正发布。',
+        eyebrow: 'HANDOFF 14',
+        title: '最后从正式产物创建角色卡与世界书',
+        description: '发布时先勾选本次要交付的产物。创作台会自动执行原 Step 29 的世界书重组，校验没有遗漏后，再创建世界书并绑定角色卡。',
+        points: ['若选择输出格式，会先询问是否载入配套局部正则，再单独确认是否创建角色卡。', '同名角色卡或世界书会更新；原有头像与无关扩展数据继续保留。'],
+        actionNote: '已切换到发布页；引导不会执行真实发布。',
     },
     {
         selector: '.acs-topbar-actions',
         placement: 'bottom',
         scene: 'controls',
-        eyebrow: 'CONTROL 11',
-        title: '最后记住更新与备份入口',
-        description: '标题栏右侧可以手动检查脚本更新、导出当前项目、打开移动端检查器或关闭创作台。',
-        points: ['项目会自动保存在浏览器中，但重要项目仍建议定期导出。', '引导可以从标题旁重复打开；Esc 可退出，左右方向键可切换步骤。'],
-        actionNote: '完成后会恢复你进入引导前的页面与折叠状态。',
+        eyebrow: 'SAFETY 15',
+        title: '自动保存不等于永久备份',
+        description: '项目会自动保存在当前浏览器，但清理站点数据或更换设备仍可能丢失。标题栏右侧可检查更新和导出项目文件。',
+        points: ['重要项目建议阶段性导出 JSON；发布页还可下载便于阅读的创作档案。', '随时可从标题旁重开引导；Esc 退出，左右方向键切换引导步骤。'],
+        actionNote: '完成后将恢复原来的步骤、折叠状态、页签和滚动位置。',
     },
 ]);
 
@@ -5866,6 +5910,7 @@ function captureTourWorkspace() {
         overviewCollapsed: Boolean(project.ui.overviewCollapsed),
         inspectorTab: shell.querySelector('[data-acs-tab].is-active')?.dataset.acsTab || 'structure',
         projectMenuOpen: shell.querySelector('#acs-project-menu')?.classList.contains('is-open') || false,
+        resourceDrawerOpen: shell.querySelector('#acs-resource-drawer')?.classList.contains('is-open') || false,
         mobileInspectorOpen: inspector?.classList.contains('is-mobile-open') || false,
         artifactPanelExpanded,
         stepRailScrollTop: shell.querySelector('#acs-step-rail')?.scrollTop || 0,
@@ -5892,6 +5937,7 @@ function restoreTourWorkspace() {
     if (artifactPanelExpanded) toggleArtifactPanel(false);
     renderAll();
     switchInspectorTab(previous.inspectorTab);
+    if (previous.inspectorTab === 'settings' && previous.resourceDrawerOpen) toggleResourceDrawer(true);
     setTourMobileInspector(previous.mobileInspectorOpen);
     if (previous.artifactPanelExpanded) toggleArtifactPanel(true);
     toggleProjectMenu(previous.projectMenuOpen);
@@ -5910,8 +5956,19 @@ function applyTourScene(step) {
     closePromptPreview();
     closeStyledSelects();
     if (step.scene !== 'projects') toggleProjectMenu(false);
+    if (step.scene !== 'resource-drawer') toggleResourceDrawer(false);
 
     switch (step.scene) {
+        case 'resources':
+            ensureTourInspectorVisible();
+            switchInspectorTab('settings');
+            shell.querySelector('.acs-inspector').scrollTop = shell.querySelector('.acs-resource-import-card')?.offsetTop || 0;
+            break;
+        case 'resource-drawer':
+            ensureTourInspectorVisible();
+            switchInspectorTab('settings');
+            toggleResourceDrawer(true);
+            break;
         case 'projects':
             setTourMobileInspector(false);
             toggleProjectMenu(true);
@@ -5952,6 +6009,26 @@ function applyTourScene(step) {
             ensureTourInspectorVisible();
             switchInspectorTab('settings');
             shell.querySelector('.acs-inspector').scrollTop = 0;
+            break;
+        case 'output':
+            setTourMobileInspector(false);
+            switchInspectorTab('structure');
+            project.currentStep = 24;
+            project.ui.overviewCollapsed = true;
+            project.ui.collapsedPhases = PHASES.filter(phase => phase.id !== 'production').map(phase => phase.id);
+            renderStepRail();
+            renderCurrentStep();
+            renderOverviewState();
+            break;
+        case 'autotask':
+            setTourMobileInspector(false);
+            switchInspectorTab('structure');
+            project.currentStep = 25;
+            project.ui.overviewCollapsed = true;
+            project.ui.collapsedPhases = PHASES.filter(phase => phase.id !== 'autotask').map(phase => phase.id);
+            renderStepRail();
+            renderCurrentStep();
+            renderOverviewState();
             break;
         case 'publish':
             ensureTourInspectorVisible();
