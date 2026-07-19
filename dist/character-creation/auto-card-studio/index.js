@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.13 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.14 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.13';
+const AUTO_CARD_STUDIO_VERSION = '0.6.14';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -5229,12 +5229,70 @@ function createRegexId() {
         || `auto-card-studio-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function buildCharacterRegexScripts(selectedArtifacts, existingScripts = []) {
+// Step24“输出格式”的通用配套正则。状态栏显示正则包含项目专属 HTML，
+// 因此继续由 Step23 动态生成，不把附件中的示例状态栏混入其他角色卡。
+const OUTPUT_FORMAT_REGEX_BUNDLE = Object.freeze([
+    ['7ccce287-970f-48e2-a151-0dddc79d3ab2', '🕹️去除conception', '/<CONTEXT_conception>[\\s\\S]*?</CONTEXT_conception>/gs', [1, 2], true, true, null],
+    ['139f6568-218c-40bc-9d05-53888efeab67', '🧩不发送剧情', '/<NARRATIVE>[\\s\\S]*?</NARRATIVE>/gs', [1, 2], false, true, 5],
+    ['1f719870-73ce-4cee-aab9-ef32b587a427', '🧩不发送副剧情', '/<NARRATIVE_parallel>.*?</NARRATIVE_parallel>/gs', [1, 2], false, true, 5],
+    ['0f340cb5-f1e6-4790-978a-53b63d7fad9c', '🕹️去除选择区', '/<CONTEXT_options>[\\s\\S]*?</CONTEXT_options>/gs', [1, 2], true, true, 2],
+    ['f3284806-c7db-4508-90f3-454bd9a0e349', '🕹️隐藏摘要', '/<CONTEXT_summary>[\\s\\S]*?</CONTEXT_summary>/gs', [1, 2], true, false, null],
+    ['4ce83bde-111d-4453-9e6d-afd7328bd017', '🕹️隐藏隐藏摘要', '/<CONTEXT_hidden_summary>[\\s\\S]*?</CONTEXT_hidden_summary>/gs', [1, 2], true, false, null],
+    ['f4a96e51-622d-45cd-bbe9-2f69c2888b54', '🕹️隐藏变量更新', '/<UpdateVariable>[\\s\\S]*?</UpdateVariable>/gs', [1, 2], true, false, null],
+    ['44f1f813-69ef-4262-bf3d-1bbc4ce071c0', '🕹️去除变量更新', '/<UpdateVariable>[\\s\\S]*?</UpdateVariable>/gs', [1], true, true, 2],
+    ['1eb350ef-e06a-4e5c-9cef-237eb7e9aa6a', '🕹️去除状态栏', '/<STATUSBAR_DATA>[\\s\\S]*?</STATUSBAR_DATA>/gs', [1, 2], true, true, 3],
+].map(([id, name, findRegex, placement, display, prompt, minDepth]) => ({
+    id,
+    script_name: name,
+    enabled: true,
+    find_regex: findRegex,
+    trim_strings: [],
+    replace_string: '',
+    source: {
+        user_input: placement.includes(1),
+        ai_output: placement.includes(2),
+        slash_command: false,
+        world_info: false,
+        reasoning: false,
+    },
+    destination: { display, prompt },
+    run_on_edit: true,
+    min_depth: minDepth,
+    max_depth: null,
+})));
+
+function mergeOutputFormatRegexBundle(existingScripts) {
+    const scripts = Array.isArray(existingScripts) ? [...existingScripts] : [];
+    for (const bundled of OUTPUT_FORMAT_REGEX_BUNDLE) {
+        const index = scripts.findIndex(script => (
+            script?.id === bundled.id
+            || (script?.script_name || script?.scriptName) === bundled.script_name
+        ));
+        // 使用浅层克隆，避免角色卡接口修改内置常量。
+        const next = {
+            ...bundled,
+            source: { ...bundled.source },
+            destination: { ...bundled.destination },
+            trim_strings: [...bundled.trim_strings],
+        };
+        if (index >= 0) scripts[index] = next;
+        else scripts.push(next);
+    }
+    return scripts;
+}
+
+function buildCharacterRegexScripts(selectedArtifacts, existingScripts = [], includeOutputFormatBundle = false) {
     const htmlArtifact = selectedArtifacts.find(item => item.target.kind === 'character_regex_replace');
     const findArtifact = selectedArtifacts.find(item => item.target.kind === 'character_regex_find');
-    if (!htmlArtifact && !findArtifact) return Array.isArray(existingScripts) ? existingScripts : [];
+    if (!htmlArtifact && !findArtifact) {
+        return includeOutputFormatBundle
+            ? mergeOutputFormatRegexBundle(existingScripts)
+            : (Array.isArray(existingScripts) ? existingScripts : []);
+    }
 
-    const scripts = Array.isArray(existingScripts) ? [...existingScripts] : [];
+    const scripts = includeOutputFormatBundle
+        ? mergeOutputFormatRegexBundle(existingScripts)
+        : (Array.isArray(existingScripts) ? [...existingScripts] : []);
     const scriptName = '🕹️显示状态栏';
     // 酒馆助手的角色卡接口使用公开的正则结构（snake_case），而不是
     // SillyTavern 存档内部的 scriptName / placement 等字段。
@@ -5395,6 +5453,14 @@ async function confirmProjectDelivery() {
     const selectedArtifacts = deliveryArtifacts.filter(item => selectedIds.has(item.id));
     if (!selectedArtifacts.length) return;
 
+    const hasOutputFormat = selectedArtifacts.some(item => item.step === 24 && item.tag === 'SYS_output_format');
+    const includeOutputFormatBundle = hasOutputFormat && hostWindow.confirm(
+        '你已选择导出“输出格式”。是否同时把配套的 9 条正则载入角色卡局部正则？\n\n'
+        + '这些正则负责隐藏或移除构思、摘要、选项、变量更新、状态栏数据等结构标签。\n'
+        + '“显示状态栏”仍会使用 Step23 为当前项目生成的专属正则，不会载入示例角色卡的状态栏。\n\n'
+        + '选择“取消”只是不载入这组配套正则，角色卡仍会继续发布。'
+    );
+
     const button = shell.querySelector('#acs-confirm-delivery');
     button.disabled = true;
     button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在自动重组';
@@ -5410,7 +5476,8 @@ async function confirmProjectDelivery() {
             ? `将用已选择的 ${selectedArtifacts.length} 项产物更新${overwritten.join('和')}。已有头像与其他扩展数据会保留，是否继续？`
             : `将用已选择的 ${selectedArtifacts.length} 项产物创建角色卡“${characterName}”及世界书“${worldbookName}”，是否继续？`)
             + `\n\n自动重组已通过校验，将创建 ${worldbookBuild.entries.length} 个世界书条目。`
-            + (regexArtifacts.length ? '\n状态栏产物将写入角色卡局部正则“🕹️显示状态栏”。' : '');
+            + (regexArtifacts.length ? '\n状态栏产物将写入角色卡局部正则“🕹️显示状态栏”。' : '')
+            + (includeOutputFormatBundle ? `\n输出格式配套正则包将写入角色卡局部正则（${OUTPUT_FORMAT_REGEX_BUNDLE.length} 条）。` : '');
         if (!hostWindow.confirm(message)) return;
 
         button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在创建';
@@ -5430,7 +5497,11 @@ async function confirmProjectDelivery() {
         const openingArtifact = selectedArtifacts.find(item => item.target.kind === 'opening');
         const existingExtensions = existing.extensions || existing.data?.extensions || {};
         // 在写入世界书之前先验证局部正则，避免正则不完整时产生半成品交付。
-        const regexScripts = buildCharacterRegexScripts(selectedArtifacts, existingExtensions.regex_scripts);
+        const regexScripts = buildCharacterRegexScripts(
+            selectedArtifacts,
+            existingExtensions.regex_scripts,
+            includeOutputFormatBundle,
+        );
         await helper.createOrReplaceWorldbook(worldbookName, worldbookBuild.entries, { render: 'immediate' });
         const character = {
             ...existing,
@@ -5453,9 +5524,10 @@ async function confirmProjectDelivery() {
         project.output.worldbookName = worldbookName;
         saveProject();
         const importedRegex = selectedArtifacts.some(item => item.target.kind.startsWith('character_regex_'));
-        shell.querySelector('#acs-publish-note').textContent = `已创建：${characterName} · ${worldbookName} · 自动重组已执行${importedRegex ? ' · 局部正则已写入' : ''}`;
+        const regexNote = importedRegex || includeOutputFormatBundle ? ' · 局部正则已写入' : '';
+        shell.querySelector('#acs-publish-note').textContent = `已创建：${characterName} · ${worldbookName} · 自动重组已执行${regexNote}`;
         closeDeliveryDialog();
-        notify('success', `角色卡与世界书已写入 SillyTavern，自动重组已执行${importedRegex ? '，局部正则已写入' : ''}。`);
+        notify('success', `角色卡与世界书已写入 SillyTavern，自动重组已执行${regexNote ? '，局部正则已写入' : ''}。`);
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 发布失败', error);
         notify('error', `发布失败：${error?.message || error}`);
