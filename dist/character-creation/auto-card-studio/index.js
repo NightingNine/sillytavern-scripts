@@ -438,6 +438,81 @@ const COMPACT_STAGE_HEADER_CSS = `
 }
 `;
 
+const CONNECTION_PROFILE_CSS = `
+/* 模型连接预设沿用创作台的“档案卡”语汇，保持设置区紧凑而可辨认。 */
+.acs-connection-profile-panel {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 13px;
+  padding: 11px;
+  border: 1px solid rgba(211, 173, 114, 0.24);
+  border-radius: 10px;
+  background: rgba(211, 173, 114, 0.055);
+}
+
+.acs-connection-profile-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--acs-muted);
+  font: 700 9px/1.3 var(--acs-mono);
+  letter-spacing: 0.06em;
+}
+
+.acs-connection-profile-heading small {
+  color: var(--acs-gold);
+  font: 600 8px/1.3 var(--acs-body);
+  letter-spacing: 0;
+}
+
+.acs-connection-profile-panel label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--acs-muted);
+  font: 700 9px/1.3 var(--acs-mono);
+}
+
+.acs-connection-profile-name-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 7px;
+}
+
+.acs-connection-profile-name-row input {
+  min-width: 0;
+  min-height: 34px;
+}
+
+.acs-connection-profile-action {
+  display: inline-grid;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 7px 9px;
+  place-items: center;
+  border: 1px solid var(--acs-line);
+  border-radius: 8px;
+  background: rgba(56, 53, 47, 0.88);
+  color: var(--acs-text-soft);
+  cursor: pointer;
+}
+
+.acs-connection-profile-action:hover:not(:disabled) {
+  border-color: rgba(211, 173, 114, 0.52);
+  color: var(--acs-gold);
+}
+
+.acs-connection-profile-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+@media (max-width: 560px) {
+  .acs-connection-profile-panel { padding: 9px; }
+  .acs-connection-profile-name-row { grid-template-columns: minmax(0, 1fr) 34px 34px; }
+}
+`;
+
 const PROJECT_LIBRARY_CSS = `
 .acs-project-identity {
   position: relative;
@@ -1559,7 +1634,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-20';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-21';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1574,6 +1649,7 @@ const STORAGE_KEY = 'auto-card-studio:project:v1';
 const PROJECT_LIBRARY_KEY = 'auto-card-studio:projects:v1';
 const PROJECT_LIBRARY_VERSION = 1;
 const CONNECTION_STORAGE_KEY = 'auto-card-studio:connection:v1';
+const CONNECTION_PROFILES_STORAGE_KEY = 'auto-card-studio:connection-profiles:v1';
 const RESOURCE_DATABASE_NAME = 'auto-card-studio-resources';
 const RESOURCE_DATABASE_VERSION = 1;
 const RESOURCE_STORE_NAME = 'resources';
@@ -1597,6 +1673,8 @@ const DEFAULT_CONNECTION_SETTINGS = Object.freeze({
     apiUrl: '',
     model: '',
     outputMode: 'complete',
+    apiKey: '',
+    profileId: '',
 });
 
 // 依据 A.U.T.O 教程整理的步骤说明。这里解释步骤在整套制卡结构中的作用，
@@ -3640,9 +3718,10 @@ const ARTIFACT_PREFIX_DISPLAY_NAMES = Object.freeze([
 
 let projectLibrary = loadProjectLibrary();
 let project = getActiveProject(projectLibrary);
+let connectionProfiles = loadConnectionProfiles();
 let connectionSettings = loadConnectionSettings();
-// 密钥只在当前页面的内存中保留，不能进入项目存档或导出文件。
-let customApiKey = '';
+// 密钥仅保存在独立的浏览器连接设置中，不进入项目存档、导出文件或提示词。
+let customApiKey = connectionSettings.apiKey || '';
 let availableCustomModels = [];
 let shell = null;
 let studioOpenPromise = null;
@@ -3929,6 +4008,8 @@ function loadConnectionSettings() {
             ...(saved && typeof saved === 'object' ? saved : {}),
             mode: saved?.mode === 'custom' ? 'custom' : 'current',
             outputMode: saved?.outputMode === 'stream' ? 'stream' : 'complete',
+            apiKey: typeof saved?.apiKey === 'string' ? saved.apiKey : '',
+            profileId: typeof saved?.profileId === 'string' ? saved.profileId : '',
         };
     } catch (error) {
         console.warn('[A.U.T.O Card Studio] 无法读取模型连接设置，将使用当前 SillyTavern 连接。', error);
@@ -3936,14 +4017,41 @@ function loadConnectionSettings() {
     }
 }
 
+function loadConnectionProfiles() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(CONNECTION_PROFILES_STORAGE_KEY));
+        if (!Array.isArray(saved)) return [];
+        return saved
+            .filter(item => item && typeof item === 'object' && typeof item.id === 'string')
+            .map(item => ({
+                id: item.id,
+                name: String(item.name || '未命名连接').slice(0, 60),
+                source: String(item.source || 'openai'),
+                apiUrl: String(item.apiUrl || ''),
+                model: String(item.model || ''),
+                outputMode: item.outputMode === 'stream' ? 'stream' : 'complete',
+                apiKey: String(item.apiKey || ''),
+            }));
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 无法读取模型连接预设。', error);
+        return [];
+    }
+}
+
+function saveConnectionProfiles() {
+    localStorage.setItem(CONNECTION_PROFILES_STORAGE_KEY, JSON.stringify(connectionProfiles));
+}
+
 function saveConnectionSettings() {
-    // 明确挑选可持久化字段，避免以后误把 customApiKey 写入本地存储。
+    // 连接设置与项目数据分开保存，密钥不会进入项目导出文件。
     localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
         mode: connectionSettings.mode,
         source: connectionSettings.source,
         apiUrl: connectionSettings.apiUrl,
         model: connectionSettings.model,
         outputMode: connectionSettings.outputMode,
+        apiKey: customApiKey,
+        profileId: connectionSettings.profileId || '',
     }));
 }
 
@@ -4107,7 +4215,7 @@ function toggleStyledSelect(widget, force) {
 }
 
 function installStyledSelects() {
-    for (const select of shell.querySelectorAll('#acs-custom-source, #acs-worldbook-select, #acs-person')) {
+    for (const select of shell.querySelectorAll('#acs-custom-source, #acs-connection-profile, #acs-worldbook-select, #acs-person')) {
         if (select.nextElementSibling?.classList.contains('acs-styled-select')) continue;
         select.classList.add('acs-native-select');
         select.tabIndex = -1;
@@ -5692,9 +5800,10 @@ async function deleteProject(projectId) {
 }
 
 function connectionDisplayName() {
+    const activeProfile = connectionProfiles.find(item => item.id === connectionSettings.profileId);
     const connectionName = connectionSettings.mode === 'current'
         ? '当前 ST 连接'
-        : (connectionSettings.model.trim() || '独立连接未完成');
+        : (activeProfile?.name || connectionSettings.model.trim() || '独立连接未完成');
     const outputName = connectionSettings.outputMode === 'stream' ? '流式' : '非流式';
     return `${connectionName} · ${outputName}`;
 }
@@ -5704,6 +5813,150 @@ function generationDependencyMessage() {
     if (!helper) return '未检测到酒馆助手，暂时不能调用 AI。';
     if (!studioResources.preset) return '尚未向创作台导入 A.U.T.O 预设。';
     return '';
+}
+
+function connectionProfileSnapshot(name, id = '') {
+    return {
+        id: id || hostWindow.crypto?.randomUUID?.() || `connection-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        name: String(name || '未命名连接').trim().slice(0, 60),
+        source: connectionSettings.source,
+        apiUrl: connectionSettings.apiUrl,
+        model: connectionSettings.model,
+        outputMode: connectionSettings.outputMode,
+        apiKey: customApiKey,
+    };
+}
+
+function applyConnectionProfile(profile) {
+    if (!profile) return;
+    connectionSettings.mode = 'custom';
+    connectionSettings.profileId = profile.id;
+    connectionSettings.source = profile.source;
+    connectionSettings.apiUrl = profile.apiUrl;
+    connectionSettings.model = profile.model;
+    connectionSettings.outputMode = profile.outputMode;
+    customApiKey = profile.apiKey;
+    connectionSettings.apiKey = customApiKey;
+    saveConnectionSettings();
+    renderConnectionSettings();
+    renderCurrentStep();
+    notify('success', `已切换到连接预设“${profile.name}”。`);
+}
+
+function renderConnectionProfileControls() {
+    const select = shell.querySelector('#acs-connection-profile');
+    if (!select) return;
+    const selectedId = connectionProfiles.some(item => item.id === connectionSettings.profileId)
+        ? connectionSettings.profileId
+        : '';
+    select.replaceChildren(new Option('当前临时配置', '', false, !selectedId));
+    for (const profile of connectionProfiles) {
+        select.add(new Option(profile.name, profile.id, false, profile.id === selectedId));
+    }
+    select.value = selectedId;
+    syncStyledSelect(select);
+    const selected = connectionProfiles.find(item => item.id === selectedId);
+    shell.querySelector('#acs-connection-profile-name').value = selected?.name || '';
+    shell.querySelector('#acs-delete-connection-profile').disabled = !selected;
+    shell.querySelector('#acs-save-connection-profile').title = selected ? '更新当前连接预设' : '保存为新连接预设';
+    shell.querySelector('#acs-connection-profile-count').textContent = `${connectionProfiles.length} 个已保存`;
+}
+
+async function saveCurrentConnectionProfile() {
+    const nameInput = shell.querySelector('#acs-connection-profile-name');
+    const name = nameInput.value.trim();
+    if (!name) {
+        notify('warning', '请先填写连接预设名称。');
+        nameInput.focus();
+        return;
+    }
+
+    const activeIndex = connectionProfiles.findIndex(item => item.id === connectionSettings.profileId);
+    const duplicateIndex = connectionProfiles.findIndex(item => item.name === name && item.id !== connectionSettings.profileId);
+    if (duplicateIndex >= 0) {
+        const confirmed = await showStudioConfirm({
+            title: '覆盖同名连接预设？',
+            message: `“${name}”已经存在。是否用当前连接配置替换它？`,
+            confirmLabel: '覆盖预设',
+        });
+        if (!confirmed) return;
+        const existingId = connectionProfiles[duplicateIndex].id;
+        connectionProfiles[duplicateIndex] = connectionProfileSnapshot(name, existingId);
+        if (activeIndex >= 0 && activeIndex !== duplicateIndex) connectionProfiles.splice(activeIndex, 1);
+        connectionSettings.profileId = existingId;
+    } else if (activeIndex >= 0) {
+        connectionProfiles[activeIndex] = connectionProfileSnapshot(name, connectionSettings.profileId);
+    } else {
+        const profile = connectionProfileSnapshot(name);
+        connectionProfiles.push(profile);
+        connectionSettings.profileId = profile.id;
+    }
+
+    connectionSettings.apiKey = customApiKey;
+    saveConnectionProfiles();
+    saveConnectionSettings();
+    renderConnectionProfileControls();
+    notify('success', `连接预设“${name}”已保存。`);
+}
+
+async function deleteCurrentConnectionProfile() {
+    const profile = connectionProfiles.find(item => item.id === connectionSettings.profileId);
+    if (!profile) return;
+    const confirmed = await showStudioConfirm({
+        title: '删除连接预设？',
+        message: `将删除“${profile.name}”，当前输入的连接信息仍会保留。`,
+        confirmLabel: '删除预设',
+        danger: true,
+    });
+    if (!confirmed) return;
+    connectionProfiles = connectionProfiles.filter(item => item.id !== profile.id);
+    connectionSettings.profileId = '';
+    saveConnectionProfiles();
+    saveConnectionSettings();
+    renderConnectionProfileControls();
+    notify('success', `已删除连接预设“${profile.name}”。`);
+}
+
+function installConnectionProfileUI() {
+    const customConnection = shell.querySelector('#acs-custom-connection');
+    if (!customConnection || shell.querySelector('#acs-connection-profile-panel')) return;
+    const panel = document.createElement('div');
+    panel.id = 'acs-connection-profile-panel';
+    panel.className = 'acs-connection-profile-panel';
+    panel.innerHTML = `
+      <div class="acs-connection-profile-heading">
+        <span>连接预设</span>
+        <small id="acs-connection-profile-count">0 个已保存</small>
+      </div>
+      <label>
+        <span>快速切换</span>
+        <select id="acs-connection-profile"></select>
+      </label>
+      <div class="acs-connection-profile-name-row">
+        <input id="acs-connection-profile-name" type="text" maxlength="60" placeholder="例如：OpenRouter · Gemini">
+        <button id="acs-save-connection-profile" class="acs-connection-profile-action" type="button" aria-label="保存连接预设" title="保存为新连接预设">
+          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+        </button>
+        <button id="acs-delete-connection-profile" class="acs-connection-profile-action" type="button" aria-label="删除连接预设" title="删除当前连接预设">
+          <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+        </button>
+      </div>`;
+    customConnection.prepend(panel);
+    shell.querySelector('#acs-custom-api-key').placeholder = '保存在当前浏览器中';
+    shell.querySelector('#acs-connection-profile').addEventListener('change', event => {
+        const profile = connectionProfiles.find(item => item.id === event.target.value);
+        if (profile) applyConnectionProfile(profile);
+        else {
+            connectionSettings.profileId = '';
+            saveConnectionSettings();
+            renderConnectionProfileControls();
+        }
+    });
+    shell.querySelector('#acs-save-connection-profile').addEventListener('click', saveCurrentConnectionProfile);
+    shell.querySelector('#acs-delete-connection-profile').addEventListener('click', deleteCurrentConnectionProfile);
+    const note = customConnection.querySelector('.acs-security-note');
+    if (note) note.lastChild.textContent = ' 密钥会长期保存在当前浏览器中，不写入项目或导出文件；请仅在个人设备上使用。';
+    renderConnectionProfileControls();
 }
 
 function ensureOutputModeControls() {
@@ -5761,11 +6014,13 @@ function renderConnectionSettings() {
     shell.querySelector('#acs-custom-api-url').value = connectionSettings.apiUrl;
     shell.querySelector('#acs-custom-api-key').value = customApiKey;
     shell.querySelector('#acs-custom-model').value = connectionSettings.model;
+    renderConnectionProfileControls();
 
     const summary = shell.querySelector('#acs-connection-summary');
+    const activeProfile = connectionProfiles.find(item => item.id === connectionSettings.profileId);
     summary.classList.toggle('is-custom', isCustom);
     summary.textContent = isCustom
-        ? (connectionSettings.model.trim() || '等待配置')
+        ? (activeProfile?.name || connectionSettings.model.trim() || '等待配置')
         : '跟随 SillyTavern';
 }
 
@@ -8804,6 +9059,8 @@ function bindStudioEvents() {
     });
     shell.querySelector('#acs-custom-api-key').addEventListener('input', event => {
         customApiKey = event.target.value;
+        connectionSettings.apiKey = customApiKey;
+        saveConnectionSettings();
     });
     shell.querySelector('#acs-custom-model').addEventListener('input', event => {
         connectionSettings.model = event.target.value;
@@ -8901,7 +9158,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}`;
     document.head.append(style);
 }
 
@@ -8929,6 +9186,7 @@ async function ensureStudioLoaded() {
     installConversationNavigation();
     installDeliveryUI();
     installMobileLayoutUI();
+    installConnectionProfileUI();
     installStyledSelects();
     installCustomModelPicker();
     updateStudioViewportScale();
