@@ -1390,7 +1390,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-15';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-16';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -3491,6 +3491,8 @@ let confirmDialogResolver = null;
 let updateDialogResolver = null;
 let resourceEditorPrompt = null;
 let automaticUpdateChecked = false;
+let backgroundUpdatePromise = null;
+let pendingAutomaticUpdate = null;
 let artifactFilterScope = 'all';
 let artifactFilterQuery = '';
 const artifactSaveTimers = new Map();
@@ -8774,14 +8776,55 @@ async function checkForUpdatesManually() {
 }
 
 async function maybeOfferAutomaticUpdate() {
-    if (TEST_BRANCH_UPDATE_MODE || automaticUpdateChecked || !shell?.classList.contains('is-open')) return;
-    automaticUpdateChecked = true;
+    if (!shell?.classList.contains('is-open')) return;
     try {
-        const latestVersion = await getLatestPublishedVersion();
-        if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) > 0) await checkForUpdatesManually();
+        // 复用脚本加载时已经启动的后台扫描，避免打开创作台时重复等待网络请求。
+        if (backgroundUpdatePromise) await backgroundUpdatePromise;
+        if (pendingAutomaticUpdate) {
+            pendingAutomaticUpdate = null;
+            await checkForUpdatesManually();
+        }
     } catch (error) {
         // 自动检查失败不打断创作；用户仍可通过顶部按钮手动检查。
         console.warn('[A.U.T.O Card Studio] 自动更新检查失败。', error);
+    }
+}
+
+async function scanForUpdatesInBackground() {
+    if (automaticUpdateChecked) return pendingAutomaticUpdate;
+    automaticUpdateChecked = true;
+    try {
+        if (TEST_BRANCH_UPDATE_MODE) {
+            const response = await hostWindow.fetch(TEST_BRANCH_API_URL, {
+                cache: 'no-store',
+                headers: { Accept: 'application/vnd.github+json' },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const revision = String((await response.json())?.commit?.sha || '').trim();
+            if (!/^[0-9a-f]{40}$/i.test(revision)) throw new Error('测试分支返回的提交编号无效');
+            const loadedRevision = String(localStorage.getItem(TEST_BRANCH_PIN_KEY) || '').trim();
+            if (revision !== loadedRevision) pendingAutomaticUpdate = { mode: 'test', revision };
+        } else {
+            // 每次脚本加载都绕过上一次会话缓存，真正向版本目录查询一次。
+            const latestVersion = await getLatestPublishedVersion(true);
+            if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) > 0) {
+                pendingAutomaticUpdate = { mode: 'release', version: latestVersion };
+            }
+        }
+
+        if (pendingAutomaticUpdate) {
+            const button = shell?.querySelector('#acs-check-update');
+            if (button) {
+                button.classList.add('is-current');
+                button.title = '发现新版本，点击查看更新内容';
+                button.setAttribute('aria-label', '发现新版本，点击查看更新内容');
+            }
+        }
+        return pendingAutomaticUpdate;
+    } catch (error) {
+        // 后台扫描静默失败，不显示红色提示，也不影响创作台加载和手动检查。
+        console.warn('[A.U.T.O Card Studio] 后台版本扫描失败。', error);
+        return null;
     }
 }
 
@@ -8795,6 +8838,10 @@ function startStudioRuntime() {
     // 首次升级时旧按钮可能已经渲染并持有旧事件，保留一次兼容绑定。
     eventOn(getButtonEvent(LEGACY_TOOLBAR_LAUNCHER_NAME), requestOpenStudio);
     installStudioLaunchers();
+    // 不阻塞脚本入口与创作台启动；每次载入脚本都独立扫描一次最新版。
+    backgroundUpdatePromise = new Promise(resolve => {
+        hostWindow.setTimeout(() => resolve(scanForUpdatesInBackground()), 0);
+    });
     window.addEventListener('pagehide', cleanupScriptRuntime, { once: true });
     if (hostWindow.sessionStorage.getItem(UPDATE_REOPEN_KEY)) {
         hostWindow.sessionStorage.removeItem(UPDATE_REOPEN_KEY);
