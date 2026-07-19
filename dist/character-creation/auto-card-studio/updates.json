@@ -2,6 +2,13 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.6.22",
+      "title": "生成响应诊断修复",
+      "changes": [
+        "修复酒馆助手在主页面发起请求时，诊断无法捕获响应的问题。"
+      ]
+    },
+    {
       "version": "0.6.21",
       "title": "接口错误诊断增强",
       "changes": [
