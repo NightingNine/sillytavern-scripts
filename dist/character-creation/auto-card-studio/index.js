@@ -1390,7 +1390,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-14';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-15';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2842,6 +2842,111 @@ body.acs-no-scroll {
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-node::before {
   display: none;
 }
+
+/* 项目库在手机端属于步骤抽屉的上一级视图，不再套用桌面悬浮层。 */
+.acs-shell.acs-mobile-layout.is-mobile-project-menu-open .acs-project-identity {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  flex-direction: column;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-project-menu-open .acs-step-rail,
+.acs-shell.acs-mobile-layout.is-mobile-project-menu-open #acs-new-project {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-menu {
+  position: relative;
+  top: auto;
+  left: auto;
+  z-index: 1;
+  width: 100%;
+  margin-top: 8px;
+  border-radius: 12px;
+  box-shadow: none;
+  transform: translateY(-7px);
+  transform-origin: top center;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-menu.is-open { transform: translateY(0); }
+.acs-shell.acs-mobile-layout .acs-project-menu::before { display: none; }
+.acs-shell.acs-mobile-layout .acs-project-menu-head,
+.acs-shell.acs-mobile-layout .acs-project-menu-foot { padding: 9px 10px; }
+.acs-shell.acs-mobile-layout .acs-project-list { max-height: none; padding: 6px; overflow: visible; }
+.acs-shell.acs-mobile-layout .acs-project-row { grid-template-columns: minmax(0, 1fr) 34px; }
+.acs-shell.acs-mobile-layout .acs-project-switch { padding: 8px 7px 8px 9px; }
+.acs-shell.acs-mobile-layout .acs-project-switch strong { font-size: 11px; }
+.acs-shell.acs-mobile-layout .acs-project-switch small { margin-top: 3px; font-size: 7px; }
+.acs-shell.acs-mobile-layout .acs-project-delete { width: 30px; height: 30px; opacity: 0.82; }
+.acs-shell.acs-mobile-layout .acs-project-menu-new {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* 收起概览后的步骤标题仍完整占用剩余空间。 */
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+  min-height: 44px;
+  padding: 6px 7px 6px 9px;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading > div:first-child {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px;
+  overflow: hidden;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading .acs-eyebrow {
+  font-size: 7px;
+  letter-spacing: 0.12em;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading h2 {
+  overflow: visible;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading-actions { gap: 3px; }
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-overview-toggle,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-clear-step-button,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-step-help-button {
+  width: 27px;
+  min-width: 27px;
+  height: 27px;
+}
+
+/* 预设条目编辑器与更新公告保持同一种紧凑、居中的操作区。 */
+.acs-shell.acs-mobile-layout .acs-resource-editor-actions {
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding-right: 13px;
+  padding-left: 13px;
+}
+
+.acs-shell.acs-mobile-layout .acs-resource-editor-actions .acs-button {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 108px;
+  min-height: 36px;
+  margin: 0;
+  padding: 7px 14px;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout .acs-resource-editor-actions .acs-button-publish { min-width: 154px; }
 
 @media (max-width: 390px) {
   .acs-shell.acs-mobile-layout .acs-brand-mark {
@@ -5300,6 +5405,10 @@ function toggleProjectMenu(force) {
     icon.setAttribute('title', opened ? '收起项目库' : '打开项目库');
     icon.setAttribute('aria-label', opened ? '收起项目库' : '打开项目库');
     icon.querySelector('i').className = opened ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder';
+    shell.classList.toggle(
+        'is-mobile-project-menu-open',
+        opened && shell.classList.contains('acs-mobile-layout'),
+    );
     if (opened) {
         renderProjectMenu();
         menu.hidden = false;
@@ -7137,6 +7246,7 @@ function setMobilePanel(panel = null) {
 
     shell.classList.toggle('is-mobile-flow-open', flowOpen);
     shell.classList.toggle('is-mobile-panel-open', flowOpen || inspectorOpen);
+    if (!flowOpen) toggleProjectMenu(false);
     inspector?.classList.toggle('is-mobile-open', inspectorOpen);
     inspectorButton?.setAttribute('aria-expanded', String(inspectorOpen));
     if (inspectorButton) inspectorButton.title = inspectorOpen ? '关闭产物与设置' : '打开产物与设置';
