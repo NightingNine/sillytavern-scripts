@@ -7296,6 +7296,7 @@ function openResourceEditor(promptId) {
     const prompt = (studioResources.preset?.prompts || []).find(item => String(item.id) === String(promptId));
     const overlay = shell?.querySelector('#acs-resource-editor-overlay');
     if (!prompt || !overlay) return;
+    toggleResourceDrawer(false);
     resourceEditorPrompt = prompt;
     overlay.querySelector('#acs-resource-editor-title').textContent = prompt.name || '未命名预设条目';
     overlay.querySelector('#acs-resource-editor-content').value = prompt.content || '';
