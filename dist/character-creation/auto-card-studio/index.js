@@ -1390,7 +1390,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-7';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-8';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1520,7 +1520,7 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-editor-head,.acs-update-notes-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px 17px;border-bottom:1px solid var(--acs-line-soft);background:linear-gradient(120deg,rgba(217,119,87,.09),transparent 58%)}
 .acs-resource-editor-head p,.acs-resource-editor-head h2,.acs-update-notes-head p,.acs-update-notes-head h2{margin:0}.acs-resource-editor-head p,.acs-update-notes-head p{color:var(--acs-cyan);font:700 8px/1 var(--acs-mono);letter-spacing:.15em}.acs-resource-editor-head h2,.acs-update-notes-head h2{margin-top:7px;color:var(--acs-text);font:500 23px/1.25 var(--acs-display)}
 .acs-resource-editor-close,.acs-update-notes-close{display:grid;width:34px;height:34px;flex:0 0 auto;place-items:center;border:1px solid var(--acs-line);border-radius:9px;background:transparent;color:var(--acs-muted);cursor:pointer}
-.acs-resource-editor-body{display:grid;min-height:0;padding:18px 22px}.acs-resource-editor-body textarea{width:100%;min-height:360px;resize:vertical;padding:15px;border:1px solid var(--acs-line);border-radius:11px;background:#292722;color:var(--acs-text);font:12px/1.72 var(--acs-mono);scrollbar-width:thin;scrollbar-color:var(--acs-line) transparent}
+.acs-resource-editor-body{display:grid;min-height:0;padding:18px 22px}.acs-resource-editor-body textarea{width:100%;min-height:360px;resize:vertical;padding:15px;border:1px solid var(--acs-line);border-radius:11px;background:#292722;color:var(--acs-text);font-family:var(--acs-body);font-size:12px;font-weight:450;line-height:1.78;letter-spacing:.008em;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;scrollbar-width:thin;scrollbar-color:var(--acs-line) transparent}
 .acs-resource-editor-actions,.acs-update-notes-actions{display:flex;justify-content:flex-end;gap:8px;padding:13px 18px;border-top:1px solid var(--acs-line-soft);background:#292722}
 .acs-update-notes-actions{align-items:center}.acs-update-notes-actions .acs-button{width:auto;min-width:104px;min-height:36px;margin:0;padding:7px 14px;white-space:nowrap}.acs-update-notes-actions .acs-button-publish{width:auto;margin-top:0}
 .acs-update-notes-dialog{grid-template-rows:auto minmax(0,1fr) auto;width:min(680px,94vw)}
@@ -1796,6 +1796,28 @@ const CONFIRM_DIALOG_CSS = `
 
 const MOBILE_ADAPTATION_CSS = `
 /* 手机端使用真正的单栏工作区；步骤和检查器分别作为左右抽屉。 */
+/* 所有文字输入框沿用对话与产物区的清晰排版，覆盖宿主主题的输入样式。 */
+.acs-shell textarea,
+.acs-shell input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
+.acs-shell select {
+  font-family: var(--acs-body) !important;
+  font-weight: 450;
+  letter-spacing: 0.008em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 锁住宿主页面的横向溢出，避免创作台底部出现浏览器滚动条。 */
+html.acs-no-scroll,
+body.acs-no-scroll {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+#auto-card-studio.acs-shell {
+  overflow: clip;
+}
+
 .acs-mobile-flow-toggle,
 .acs-mobile-scrim {
   display: none;
@@ -1892,6 +1914,13 @@ const MOBILE_ADAPTATION_CSS = `
   background: rgba(56, 53, 47, 0.84);
   color: var(--acs-muted);
   cursor: pointer;
+}
+
+.acs-shell.acs-mobile-layout .acs-mobile-flow-toggle i {
+  display: block;
+  color: currentColor;
+  font-size: 15px;
+  line-height: 1;
 }
 
 .acs-shell.acs-mobile-layout .acs-mobile-flow-toggle[aria-expanded="true"],
@@ -4941,8 +4970,8 @@ function updateStudioViewportScale() {
         hostWindow.innerHeight || STUDIO_DESIGN_MIN_HEIGHT,
         hostWindow.visualViewport?.height || Number.POSITIVE_INFINITY,
     );
-    const coarsePointer = hostWindow.matchMedia?.('(pointer: coarse)')?.matches || false;
-    const useMobileLayout = viewportWidth <= 640 || (coarsePointer && viewportWidth <= 960);
+    // 仅在真正窄屏时启用手机抽屉；桌面触控屏或浏览器缩放不能误触发手机顶栏。
+    const useMobileLayout = viewportWidth <= 640;
     shell.classList.toggle('acs-mobile-layout', useMobileLayout);
 
     // 手机端改用真正的单栏布局，不再把桌面画布缩成难以点击的小字版本。
@@ -6619,7 +6648,8 @@ function installMobileLayoutUI() {
     flowButton.title = '打开项目与创作步骤';
     flowButton.setAttribute('aria-label', '打开项目与创作步骤');
     flowButton.setAttribute('aria-expanded', 'false');
-    flowButton.innerHTML = '<i class="fa-solid fa-list-check" aria-hidden="true"></i>';
+    // 使用明确的侧栏图标，避免部分主题将 list-check 渲染成白色方块。
+    flowButton.innerHTML = '<i class="fa-solid fa-bars-staggered" aria-hidden="true"></i>';
 
     const inspectorButton = shell.querySelector('#acs-inspector-toggle');
     inspectorButton.before(flowButton);
@@ -7680,6 +7710,7 @@ async function ensureStudioLoaded() {
         existing.remove();
         document.querySelector('#auto-card-studio-launch')?.remove();
         document.body.classList.remove('acs-no-scroll');
+        document.documentElement.classList.remove('acs-no-scroll');
     }
 
     ensureStudioStyle();
@@ -7716,6 +7747,7 @@ function showStudioRuntimeError(error) {
         shell.classList.add('is-open');
         shell.setAttribute('aria-hidden', 'false');
         document.body.classList.add('acs-no-scroll');
+        document.documentElement.classList.add('acs-no-scroll');
         updateStudioViewportScale();
         let banner = shell.querySelector('#acs-runtime-error');
         if (!banner) {
@@ -7736,6 +7768,7 @@ async function openStudio() {
         shell.classList.add('is-open');
         shell.setAttribute('aria-hidden', 'false');
         document.body.classList.add('acs-no-scroll');
+        document.documentElement.classList.add('acs-no-scroll');
         updateStudioViewportScale();
         renderAll();
         const initialFocus = project.ui.overviewCollapsed
@@ -7778,6 +7811,7 @@ function closeStudio() {
     shell.classList.remove('is-open');
     shell.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('acs-no-scroll');
+    document.documentElement.classList.remove('acs-no-scroll');
 }
 
 function handleHostKeydown(event) {
@@ -7824,6 +7858,7 @@ function cleanupScriptRuntime() {
     if (tourSceneTimer) hostWindow.clearTimeout(tourSceneTimer);
     document.querySelector('#auto-card-studio-wand-launcher')?.remove();
     document.body.classList.remove('acs-no-scroll');
+    document.documentElement.classList.remove('acs-no-scroll');
     if (shell?.dataset.acsRuntime === SCRIPT_RUNTIME_MARK) shell.remove();
     document.querySelector(`#${SCRIPT_STYLE_ID}`)?.remove();
     shell = null;
