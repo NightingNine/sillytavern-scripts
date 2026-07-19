@@ -6134,6 +6134,21 @@ function generationErrorDetails(error) {
     return simplify(error);
 }
 
+function generationErrorMessage(error, fallback = '未知错误') {
+    const details = generationErrorDetails(error);
+    const candidates = [
+        details?.message,
+        details?.error?.message,
+        details?.data?.message,
+        details?.data?.error?.message,
+        details?.response?.data?.message,
+        details?.response?.data?.error?.message,
+        details?.cause?.message,
+        typeof details === 'string' ? details : '',
+    ];
+    return String(candidates.find(value => typeof value === 'string' && value.trim()) || fallback);
+}
+
 function logGenerationDiagnostic(phase, detail) {
     const label = `[A.U.T.O Card Studio] 生成诊断 · ${phase}`;
     if (console.groupCollapsed) console.groupCollapsed(label);
@@ -6255,13 +6270,20 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
         const shouldStream = connectionSettings.outputMode === 'stream';
         const customApi = presetGenerationOptions(preset);
+        // 同一轮只构建一次，确保日志的条目数与实际传给酒馆助手的内容一致。
+        const orderedPrompts = buildOrderedPrompts(preset, step);
         generationDiagnostic = {
             step: `${step.number} · ${step.name}`,
             generation_id: activeGenerationId,
             should_stream: shouldStream,
             connection_mode: connectionSettings.mode,
             output_mode: connectionSettings.outputMode,
-            ordered_prompt_count: buildOrderedPrompts(preset, step).length,
+            preset_prompt_count: Array.isArray(preset.prompts) ? preset.prompts.length : 0,
+            ordered_prompt_count: orderedPrompts.length,
+            ordered_prompt_shape: orderedPrompts.map((prompt, index) => typeof prompt === 'string'
+                ? { index: index + 1, type: 'user_input 占位符' }
+                : { index: index + 1, role: prompt.role || 'system', characters: String(prompt.content || '').length }),
+            user_input_characters: String(userInput || '').length,
             custom_api: generationDiagnosticOptions(customApi),
         };
         logGenerationDiagnostic('请求开始（不含提示词正文）', generationDiagnostic);
@@ -6285,10 +6307,15 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             user_input: prepareTemplateMacrosForGeneration(userInput),
             should_stream: shouldStream,
             should_silence: false,
-            ordered_prompts: buildOrderedPrompts(preset, step),
+            ordered_prompts: orderedPrompts,
             custom_api: customApi,
         });
         const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+        logGenerationDiagnostic('请求完成', {
+            ...generationDiagnostic,
+            result_type: typeof result,
+            response_characters: rawResponse.length,
+        });
         const response = normalizeFinalArtifactUserMacros(rawResponse, step.number);
         if (streamingTurn) streamingTurn.content = response;
         else state.turns.push({ role: 'assistant', content: response, createdAt: new Date().toISOString() });
@@ -6300,7 +6327,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             ? `Step ${step.number}「${step.name}」已重新生成。`
             : `Step ${step.number}「${step.name}」草案已生成。`);
     } catch (error) {
-        const message = String(error?.message || error);
+        const message = generationErrorMessage(error, String(error?.message || error));
         const stopped = /abort|stop|停止|中断/i.test(message);
         if (!stopped) {
             if (streamingTurn) state.turns = state.turns.filter(turn => turn !== streamingTurn);
@@ -6309,6 +6336,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             logGenerationDiagnostic('请求失败', {
                 ...generationDiagnostic,
                 error: details,
+                note: '若 error 仍只有 Bad Request，说明酒馆助手/渠道没有透传原始响应；请在开发者工具 Network 的 Fetch/XHR 中查看失败请求的 Response。',
             });
             // 保持提示简短；完整但脱敏的参数与接口错误可在浏览器控制台查看。
             notify('error', `生成失败：${message}。详细诊断已输出到浏览器控制台。`);
