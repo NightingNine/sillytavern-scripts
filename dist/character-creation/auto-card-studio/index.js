@@ -1430,7 +1430,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-17';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-18';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1448,6 +1448,7 @@ const CONNECTION_STORAGE_KEY = 'auto-card-studio:connection:v1';
 const RESOURCE_DATABASE_NAME = 'auto-card-studio-resources';
 const RESOURCE_DATABASE_VERSION = 1;
 const RESOURCE_STORE_NAME = 'resources';
+const RESOURCE_DOCK_POSITION_KEY = 'auto-card-studio:resource-dock-position:v1';
 const PROJECT_VERSION = 1;
 const MAX_CONTEXT_CHARS = 420000;
 const TEMPLATE_MACRO_SENTINELS = Object.freeze({
@@ -1539,8 +1540,12 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-import-head small { color:var(--acs-muted); font:700 8px/1 var(--acs-mono); }
 .acs-resource-import-actions { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
 .acs-resource-import-actions .acs-button { min-height:34px; padding:6px 9px; font-size:9px; }
-.acs-resource-dock-tab { position:absolute; top:48%; right:0; z-index:17; display:none; width:25px; min-height:104px; padding:9px 5px; border:1px solid rgba(217,119,87,.42); border-right:0; border-radius:9px 0 0 9px; background:#38352f; color:var(--acs-cyan); cursor:pointer; font:700 9px/1.45 var(--acs-body); writing-mode:vertical-rl; letter-spacing:.08em; box-shadow:-8px 8px 24px rgba(10,9,8,.24); }
-.acs-shell.is-settings-view .acs-resource-dock-tab { display:block; }
+.acs-resource-dock-tab { position:absolute; top:48%; right:0; z-index:17; display:block; width:25px; min-height:104px; padding:9px 5px; touch-action:none; user-select:none; border:1px solid rgba(217,119,87,.42); border-right:0; border-radius:9px 0 0 9px; background:#38352f; color:var(--acs-cyan); cursor:ns-resize; font:700 9px/1.45 var(--acs-body); writing-mode:vertical-rl; letter-spacing:.08em; box-shadow:-8px 8px 24px rgba(10,9,8,.24); }
+.acs-resource-dock-tab:hover,.acs-resource-dock-tab:focus-visible{border-color:rgba(217,119,87,.72);background:#403b34}
+.acs-resource-dock-tab.is-dragging{cursor:grabbing;box-shadow:-10px 10px 30px rgba(10,9,8,.38)}
+.acs-settings-fold{margin-bottom:12px;border:1px solid var(--acs-line-soft);border-radius:11px;background:#302e29;overflow:hidden}.acs-settings-fold.acs-connection-section{padding:0;border-bottom:1px solid var(--acs-line-soft)}
+.acs-settings-fold-toggle{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;padding:12px 13px;border:0;background:#35322d;color:var(--acs-text);cursor:pointer;text-align:left}.acs-settings-fold-toggle:hover{background:#3a3731}.acs-settings-fold-toggle>span:first-child{min-width:0}.acs-settings-fold-toggle strong{display:block;color:var(--acs-text);font:500 15px/1.25 var(--acs-display)}.acs-settings-fold-toggle small{display:block;margin-top:3px;color:var(--acs-muted);font:500 9px/1.4 var(--acs-body)}.acs-settings-fold-toggle>.acs-settings-fold-meta{display:flex;min-width:0;align-items:center;gap:8px}.acs-settings-fold-toggle>.acs-settings-fold-meta>strong{max-width:110px;overflow:hidden;padding:5px 8px;border:1px solid var(--acs-line);border-radius:999px;color:var(--acs-muted);font:700 8px/1 var(--acs-mono);text-overflow:ellipsis;white-space:nowrap}.acs-settings-fold-toggle i{color:var(--acs-cyan);font-size:9px;transition:transform 160ms ease}.acs-settings-fold-toggle[aria-expanded="false"] i{transform:rotate(-90deg)}
+.acs-settings-fold-body{padding:13px}.acs-settings-fold-body[hidden]{display:none!important}
 .acs-resource-drawer-scrim { position:absolute; inset:72px 0 0; z-index:17; border:0; background:rgba(18,16,14,.16); backdrop-filter:blur(1px); cursor:default; }
 .acs-resource-drawer { position:absolute; top:72px; right:0; bottom:0; z-index:18; display:grid; grid-template-rows:auto auto minmax(0,1fr); width:min(430px,88vw); border-left:1px solid rgba(217,119,87,.32); background:#2b2925; box-shadow:-24px 0 60px rgba(10,9,8,.45); transform:translateX(102%); transition:transform 220ms ease; }
 .acs-resource-drawer.is-open { transform:translateX(0); }
@@ -1570,7 +1575,7 @@ const RESOURCE_MANAGER_CSS = `
 .acs-update-note{position:relative;padding:14px 15px 14px 18px;border:1px solid var(--acs-line-soft);border-radius:11px;background:#34312c}.acs-update-note+.acs-update-note{margin-top:10px}.acs-update-note::before{position:absolute;top:17px;left:-4px;width:7px;height:7px;border-radius:50%;background:var(--acs-cyan);box-shadow:0 0 0 4px #302e29;content:""}.acs-update-note strong{display:block;color:var(--acs-text);font-size:12px}.acs-update-note small{display:block;margin-top:4px;color:var(--acs-cyan);font:700 8px/1 var(--acs-mono)}.acs-update-note ul{margin:10px 0 0;padding-left:18px;color:var(--acs-text-soft);font-size:10px;line-height:1.65}.acs-update-note li+li{margin-top:4px}
 @media(max-width:860px){.acs-resource-drawer{top:64px;width:min(420px,94vw)}.acs-resource-drawer-scrim{inset:64px 0 0}.acs-resource-dock-tab{top:44%}}
 @media(max-width:560px){.acs-resource-editor-overlay,.acs-update-notes-overlay{padding:0}.acs-resource-editor-dialog,.acs-update-notes-dialog{width:100%;height:100vh;height:100dvh;max-height:none;border:0;border-radius:0}.acs-resource-editor-head,.acs-update-notes-head{padding-top:max(18px,env(safe-area-inset-top,0px));padding-right:17px;padding-left:17px}.acs-resource-editor-body{padding:14px 13px}.acs-resource-editor-body textarea{min-height:100%;resize:none;font-size:13px}.acs-resource-editor-actions,.acs-update-notes-actions{padding-bottom:max(13px,env(safe-area-inset-bottom,0px))}.acs-update-notes-actions{padding-right:13px;padding-left:13px}.acs-update-notes-actions .acs-button{min-width:0}.acs-update-notes-list{padding-right:14px;padding-left:14px}}
-@media(prefers-reduced-motion:reduce){.acs-resource-drawer,.acs-resource-switch span::after{transition:none}}
+@media(prefers-reduced-motion:reduce){.acs-resource-drawer,.acs-resource-switch span::after,.acs-settings-fold-toggle i{transition:none}}
 `;
 
 const PHASES = [
@@ -3531,6 +3536,7 @@ let deliveryArtifacts = [];
 let confirmDialogResolver = null;
 let updateDialogResolver = null;
 let resourceEditorPrompt = null;
+let resourceDockDragged = false;
 let automaticUpdateChecked = false;
 let backgroundUpdatePromise = null;
 let pendingAutomaticUpdate = null;
@@ -5058,18 +5064,31 @@ async function deleteArtifact(button) {
 }
 
 async function copyText(text) {
-    if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
+    // 酒馆助手脚本位于 iframe 中，iframe 的 Clipboard API 可能存在但会被权限策略拒绝。
+    // 优先使用主页面剪贴板；失败后再退回主页面的选区复制。
+    const clipboard = hostWindow.navigator?.clipboard || navigator.clipboard;
+    if (clipboard?.writeText) {
+        try {
+            await clipboard.writeText(text);
+            return;
+        } catch (error) {
+            console.warn('[A.U.T.O Card Studio] Clipboard API 不可用，改用兼容复制。', error);
+        }
     }
-    const fallback = document.createElement('textarea');
+    const copyDocument = hostWindow.document || document;
+    const fallback = copyDocument.createElement('textarea');
     fallback.value = text;
     fallback.style.position = 'fixed';
+    fallback.style.left = '-9999px';
+    fallback.style.top = '0';
     fallback.style.opacity = '0';
-    document.body.append(fallback);
+    copyDocument.body.append(fallback);
+    fallback.focus({ preventScroll: true });
     fallback.select();
-    document.execCommand('copy');
+    fallback.setSelectionRange(0, fallback.value.length);
+    const copied = copyDocument.execCommand('copy');
     fallback.remove();
+    if (!copied) throw new Error('浏览器拒绝了兼容复制请求');
 }
 
 async function copyArtifact(button) {
@@ -7426,7 +7445,6 @@ function switchInspectorTab(name) {
         panel.hidden = !active;
     }
     shell.classList.toggle('is-settings-view', name === 'settings');
-    if (name !== 'settings') toggleResourceDrawer(false);
 }
 
 function installMobileLayoutUI() {
@@ -7954,6 +7972,116 @@ function closeStepHelp() {
     shell.querySelector('#acs-step-help')?.focus({ preventScroll: true });
 }
 
+function installSettingsCollapsibles() {
+    const settingsPanel = shell.querySelector('[data-acs-panel="settings"]');
+    const connection = settingsPanel?.querySelector('.acs-connection-section');
+    if (!settingsPanel || !connection || settingsPanel.querySelector('[data-settings-fold="connection"]')) return;
+
+    const connectionHeading = connection.querySelector('.acs-settings-heading');
+    const connectionBody = document.createElement('div');
+    connectionBody.id = 'acs-connection-fold-body';
+    connectionBody.className = 'acs-settings-fold-body';
+    for (const child of [...connection.children]) {
+        if (child !== connectionHeading) connectionBody.append(child);
+    }
+    const connectionToggle = document.createElement('button');
+    connectionToggle.type = 'button';
+    connectionToggle.className = 'acs-settings-fold-toggle';
+    connectionToggle.dataset.settingsFold = 'connection';
+    connectionToggle.setAttribute('aria-expanded', 'true');
+    connectionToggle.setAttribute('aria-controls', connectionBody.id);
+    const headingCopy = connectionHeading?.querySelector('div');
+    const summary = connectionHeading?.querySelector('#acs-connection-summary');
+    connectionToggle.innerHTML = '<span><strong>模型连接</strong><small>决定创作台从哪里调用 AI</small></span><span class="acs-settings-fold-meta"></span>';
+    const meta = connectionToggle.querySelector('.acs-settings-fold-meta');
+    if (summary) meta.append(summary);
+    meta.insertAdjacentHTML('beforeend', '<i class="fa-solid fa-chevron-down" aria-hidden="true"></i>');
+    headingCopy?.remove();
+    connectionHeading?.remove();
+    connection.classList.add('acs-settings-fold');
+    connection.append(connectionToggle, connectionBody);
+
+    const flowLabel = settingsPanel.querySelector('.acs-settings-section-label');
+    const flowFields = flowLabel?.nextElementSibling;
+    if (flowLabel && flowFields?.classList.contains('acs-field-stack')) {
+        const flow = document.createElement('section');
+        flow.className = 'acs-settings-fold';
+        const flowBody = document.createElement('div');
+        flowBody.id = 'acs-workflow-fold-body';
+        flowBody.className = 'acs-settings-fold-body';
+        flowBody.append(flowFields);
+        const flowToggle = document.createElement('button');
+        flowToggle.type = 'button';
+        flowToggle.className = 'acs-settings-fold-toggle';
+        flowToggle.dataset.settingsFold = 'workflow';
+        flowToggle.setAttribute('aria-expanded', 'true');
+        flowToggle.setAttribute('aria-controls', flowBody.id);
+        flowToggle.innerHTML = '<span><strong>创作流程</strong><small>管理预设、正则与生成偏好</small></span><span class="acs-settings-fold-meta"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>';
+        flowLabel.replaceWith(flow);
+        flow.append(flowToggle, flowBody);
+    }
+
+    settingsPanel.addEventListener('click', event => {
+        const toggle = event.target.closest('[data-settings-fold]');
+        if (!toggle) return;
+        const body = shell.querySelector(`#${toggle.getAttribute('aria-controls')}`);
+        const expanded = toggle.getAttribute('aria-expanded') !== 'false';
+        toggle.setAttribute('aria-expanded', String(!expanded));
+        if (body) body.hidden = expanded;
+    });
+}
+
+function restoreResourceDockPosition() {
+    const dock = shell.querySelector('#acs-resource-dock-tab');
+    const windowElement = shell.querySelector('.acs-window');
+    if (!dock || !windowElement) return;
+    const stored = localStorage.getItem(RESOURCE_DOCK_POSITION_KEY);
+    if (stored === null) return;
+    const ratio = Number(stored);
+    if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return;
+    const minimumTop = 80;
+    const available = Math.max(0, windowElement.clientHeight - dock.offsetHeight - minimumTop - 8);
+    dock.style.top = `${minimumTop + available * ratio}px`;
+}
+
+function installResourceDockDrag() {
+    const dock = shell.querySelector('#acs-resource-dock-tab');
+    const windowElement = shell.querySelector('.acs-window');
+    if (!dock || !windowElement || dock.dataset.dragReady) return;
+    dock.dataset.dragReady = 'true';
+    restoreResourceDockPosition();
+    dock.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        const startY = event.clientY;
+        const startTop = dock.offsetTop;
+        resourceDockDragged = false;
+        dock.classList.add('is-dragging');
+        dock.setPointerCapture(event.pointerId);
+        const move = moveEvent => {
+            const delta = moveEvent.clientY - startY;
+            if (Math.abs(delta) > 4) resourceDockDragged = true;
+            const minimumTop = 80;
+            const maxTop = Math.max(minimumTop, windowElement.clientHeight - dock.offsetHeight - 8);
+            const nextTop = Math.max(minimumTop, Math.min(maxTop, startTop + delta));
+            dock.style.top = `${nextTop}px`;
+        };
+        const finish = finishEvent => {
+            dock.removeEventListener('pointermove', move);
+            dock.removeEventListener('pointerup', finish);
+            dock.removeEventListener('pointercancel', finish);
+            dock.classList.remove('is-dragging');
+            if (dock.hasPointerCapture(finishEvent.pointerId)) dock.releasePointerCapture(finishEvent.pointerId);
+            const minimumTop = 80;
+            const available = Math.max(1, windowElement.clientHeight - dock.offsetHeight - minimumTop - 8);
+            const ratio = Math.max(0, Math.min(1, (dock.offsetTop - minimumTop) / available));
+            localStorage.setItem(RESOURCE_DOCK_POSITION_KEY, String(ratio));
+        };
+        dock.addEventListener('pointermove', move);
+        dock.addEventListener('pointerup', finish);
+        dock.addEventListener('pointercancel', finish);
+    });
+}
+
 function installResourceManagerUI() {
     const presetCard = shell.querySelector('#acs-preset-lock');
     if (!presetCard || shell.querySelector('#acs-resource-drawer')) return;
@@ -8003,6 +8131,7 @@ function installResourceManagerUI() {
     dock.textContent = '预设 / 正则';
     dock.title = '管理独立预设与正则条目';
     shell.querySelector('.acs-window').append(dock);
+    installResourceDockDrag();
 
     const drawer = document.createElement('aside');
     drawer.id = 'acs-resource-drawer';
@@ -8059,6 +8188,7 @@ function installResourceManagerUI() {
         </footer>
       </section>`;
     shell.append(updateOverlay);
+    installSettingsCollapsibles();
 }
 
 function toggleResourceDrawer(force) {
@@ -8297,7 +8427,14 @@ function bindStudioEvents() {
     shell.querySelector('#acs-import-regex-button').addEventListener('click', () => shell.querySelector('#acs-import-regex-file').click());
     shell.querySelector('#acs-import-preset-file').addEventListener('change', importPresetFile);
     shell.querySelector('#acs-import-regex-file').addEventListener('change', importRegexFile);
-    shell.querySelector('#acs-resource-dock-tab').addEventListener('click', () => toggleResourceDrawer());
+    shell.querySelector('#acs-resource-dock-tab').addEventListener('click', event => {
+        if (resourceDockDragged) {
+            event.preventDefault();
+            resourceDockDragged = false;
+            return;
+        }
+        toggleResourceDrawer();
+    });
     shell.querySelector('#acs-open-resource-drawer-inline').addEventListener('click', () => toggleResourceDrawer(true));
     shell.querySelector('[data-resource-drawer-close]').addEventListener('click', () => toggleResourceDrawer(false));
     shell.querySelector('#acs-resource-drawer-scrim').addEventListener('click', () => toggleResourceDrawer(false));
