@@ -1390,7 +1390,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-13';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-14';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1824,6 +1824,8 @@ body.acs-no-scroll {
   height: 100dvh !important;
   min-height: 100dvh !important;
   overflow: hidden !important;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 .acs-mobile-flow-toggle,
@@ -1838,23 +1840,21 @@ body.acs-no-scroll {
   border: 0;
   border-radius: 0;
   transform: none !important;
-  grid-template-rows: calc(56px + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
+  grid-template-rows: calc(50px + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
 }
 
 .acs-shell.acs-mobile-layout .acs-topbar {
   min-width: 0;
-  padding: env(safe-area-inset-top, 0px) 8px 0 10px;
+  padding: env(safe-area-inset-top, 0px) 6px 0 8px;
 }
 
 .acs-shell.acs-mobile-layout .acs-brand {
   min-width: 0;
-  gap: 8px;
+  gap: 4px;
 }
 
 .acs-shell.acs-mobile-layout .acs-brand-mark {
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  display: none;
 }
 
 .acs-shell.acs-mobile-layout .acs-brand > div {
@@ -1863,8 +1863,8 @@ body.acs-no-scroll {
 
 .acs-shell.acs-mobile-layout .acs-brand h1 {
   overflow: hidden;
-  max-width: 30vw;
-  font-size: 16px;
+  max-width: 27vw;
+  font-size: 14px;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1878,16 +1878,16 @@ body.acs-no-scroll {
 
 .acs-shell.acs-mobile-layout .acs-topbar-actions {
   flex: 0 0 auto;
-  gap: 3px;
+  gap: 1px;
 }
 
 .acs-shell.acs-mobile-layout .acs-icon-button,
 .acs-shell.acs-mobile-layout .acs-tour-launch,
 .acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
   display: grid;
-  width: 38px;
-  height: 38px;
-  min-height: 38px;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
   padding: 0;
   place-items: center;
   border-radius: 10px;
@@ -1992,7 +1992,7 @@ body.acs-no-scroll {
 
 .acs-shell.acs-mobile-layout .acs-mobile-scrim {
   position: absolute;
-  inset: calc(56px + env(safe-area-inset-top, 0px)) 0 0;
+  inset: calc(50px + env(safe-area-inset-top, 0px)) 0 0;
   z-index: 15;
   border: 0;
   background: rgba(15, 13, 11, 0.58);
@@ -2103,11 +2103,11 @@ body.acs-no-scroll {
 .acs-shell.acs-mobile-layout .acs-stage-heading {
   align-items: flex-start;
   gap: 8px;
-  padding: 11px 12px 9px;
+  padding: 8px 10px 7px;
 }
 
 .acs-shell.acs-mobile-layout .acs-stage-heading h2 {
-  font-size: clamp(20px, 6vw, 25px);
+  font-size: clamp(18px, 5.3vw, 22px);
   line-height: 1.14;
 }
 
@@ -2124,41 +2124,42 @@ body.acs-no-scroll {
 .acs-shell.acs-mobile-layout .acs-overview-toggle,
 .acs-shell.acs-mobile-layout .acs-clear-step-button,
 .acs-shell.acs-mobile-layout .acs-step-help-button {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   padding: 0;
   justify-content: center;
 }
 
 .acs-shell.acs-mobile-layout .acs-step-goal {
-  margin-top: 5px;
-  font-size: 10px;
-  line-height: 1.45;
+  margin-top: 4px;
+  font-size: 9px;
+  line-height: 1.4;
 }
 
 .acs-shell.acs-mobile-layout .acs-brief-panel {
-  margin: 0 12px 9px;
-  padding: 10px;
+  margin: 0 10px 7px;
+  padding: 8px;
 }
 
 .acs-shell.acs-mobile-layout .acs-brief-panel textarea {
-  min-height: 78px;
-  max-height: 24vh;
+  min-height: 58px;
+  max-height: 21vh;
+  font-size: 11px;
 }
 
 .acs-shell.acs-mobile-layout .acs-conversation {
-  padding: 10px 12px 14px;
-  scroll-padding-bottom: 18px;
+  padding: 8px 10px 10px;
+  scroll-padding-bottom: 14px;
 }
 
 .acs-shell.acs-mobile-layout .acs-empty-turns {
   width: 100%;
-  padding: 20px 4px;
+  padding: 14px 3px;
 }
 
 .acs-shell.acs-mobile-layout .acs-empty-turns h3 {
-  font-size: 23px;
+  font-size: 19px;
 }
 
 .acs-shell.acs-mobile-layout .acs-guide-prompts {
@@ -2174,18 +2175,18 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-turn-content {
-  font-size: 13px;
-  line-height: 1.72;
+  font-size: 11.5px;
+  line-height: 1.64;
 }
 
 .acs-shell.acs-mobile-layout .acs-composer {
-  padding: 9px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding: 7px 10px calc(8px + env(safe-area-inset-bottom, 0px));
 }
 
 .acs-shell.acs-mobile-layout .acs-composer textarea {
-  min-height: 68px;
-  max-height: 26vh;
-  font-size: 14px;
+  min-height: 52px;
+  max-height: 22vh;
+  font-size: 12px;
 }
 
 .acs-shell.acs-mobile-layout .acs-composer-actions {
@@ -2195,13 +2196,14 @@ body.acs-no-scroll {
 .acs-shell.acs-mobile-layout .acs-composer-actions > div {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  gap: 5px;
 }
 
 .acs-shell.acs-mobile-layout .acs-composer-actions .acs-button {
   min-width: 0;
-  min-height: 43px;
-  padding: 8px 9px;
+  min-height: 36px;
+  padding: 6px 7px;
+  font-size: 10px;
 }
 
 .acs-shell.acs-mobile-layout .acs-button-confirm {
@@ -2214,15 +2216,15 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-tabs {
-  padding: 7px 10px 0;
+  padding: 5px 8px 0;
 }
 
 .acs-shell.acs-mobile-layout .acs-tab {
-  min-height: 44px;
+  min-height: 38px;
 }
 
 .acs-shell.acs-mobile-layout .acs-tab-panel {
-  padding: 15px 12px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 10px calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .acs-shell.acs-mobile-layout .acs-field-grid,
@@ -2233,8 +2235,8 @@ body.acs-no-scroll {
 .acs-shell.acs-mobile-layout .acs-field-stack input,
 .acs-shell.acs-mobile-layout .acs-field-stack select,
 .acs-shell.acs-mobile-layout .acs-button-compact {
-  min-height: 44px;
-  font-size: 13px;
+  min-height: 38px;
+  font-size: 11px;
 }
 
 .acs-shell.acs-mobile-layout .acs-artifact-filter-bar {
@@ -2250,18 +2252,18 @@ body.acs-no-scroll {
 
 .acs-shell.acs-mobile-layout .acs-artifact-filter-button {
   flex: 0 0 auto;
-  min-height: 36px;
+  min-height: 32px;
 }
 
 .acs-shell.acs-mobile-layout .acs-artifact summary {
-  min-height: 46px;
+  min-height: 40px;
 }
 
 .acs-shell.acs-mobile-layout .acs-artifact-editor textarea.acs-artifact-content {
   min-height: 42vh;
   max-height: 62vh;
-  padding: 13px;
-  font-size: 13px;
+  padding: 11px;
+  font-size: 11.5px;
 }
 
 .acs-shell.acs-mobile-layout .acs-resource-dock-tab {
@@ -2269,7 +2271,7 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-resource-drawer {
-  top: calc(56px + env(safe-area-inset-top, 0px));
+  top: calc(50px + env(safe-area-inset-top, 0px));
   width: 100%;
   max-width: none;
 }
@@ -2400,7 +2402,7 @@ body.acs-no-scroll {
 /* 手机端步骤使用“航站轨道 + 完整抽屉”：平时只占窄栏，需要时从左侧展开。 */
 .acs-shell.acs-mobile-layout .acs-workspace {
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr);
 }
 
 .acs-shell.acs-mobile-layout .acs-rail {
@@ -2408,8 +2410,8 @@ body.acs-no-scroll {
   grid-column: 1;
   z-index: 2;
   display: flex;
-  width: 68px;
-  min-width: 68px;
+  width: 56px;
+  min-width: 56px;
   overflow: hidden;
   border-right-color: rgba(232, 224, 212, 0.1);
   background:
@@ -2422,7 +2424,7 @@ body.acs-no-scroll {
 
 .acs-shell.acs-mobile-layout .acs-rail::after {
   position: absolute;
-  top: 62px;
+  top: 50px;
   right: 0;
   bottom: 0;
   width: 1px;
@@ -2446,10 +2448,10 @@ body.acs-no-scroll {
   position: relative;
   z-index: 3;
   display: flex;
-  flex: 0 0 58px;
+  flex: 0 0 50px;
   align-items: center;
   justify-content: center;
-  padding: 8px 10px 6px;
+  padding: 6px 8px 5px;
   border-bottom: 1px solid rgba(232, 224, 212, 0.08);
 }
 
@@ -2466,16 +2468,16 @@ body.acs-no-scroll {
 .acs-shell.acs-mobile-layout .acs-mobile-rail-heading span {
   color: var(--acs-cyan);
   font-family: var(--acs-mono);
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .acs-shell.acs-mobile-layout .acs-mobile-rail-heading strong {
-  margin-top: 3px;
+  margin-top: 2px;
   color: var(--acs-text-soft);
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 650;
 }
 
@@ -2483,11 +2485,11 @@ body.acs-no-scroll {
   position: relative;
   display: grid;
   grid-template-columns: 1fr;
-  width: 46px;
-  height: 42px;
+  width: 38px;
+  height: 36px;
   padding: 0;
   border: 1px solid rgba(217, 119, 87, 0.24);
-  border-radius: 14px;
+  border-radius: 11px;
   outline: 0;
   background: linear-gradient(145deg, rgba(217, 119, 87, 0.14), rgba(56, 53, 47, 0.72));
   color: var(--acs-cyan);
@@ -2499,7 +2501,7 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-mobile-rail-toggle i {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .acs-shell.acs-mobile-layout .acs-mobile-rail-current {
@@ -2507,15 +2509,15 @@ body.acs-no-scroll {
   right: -3px;
   bottom: -3px;
   display: grid;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
   border: 2px solid #292722;
   border-radius: 999px;
   background: var(--acs-cyan);
   color: var(--acs-void);
   font-family: var(--acs-mono);
-  font-size: 7px;
+  font-size: 6px;
   font-weight: 800;
   line-height: 1;
   place-items: center;
@@ -2531,21 +2533,21 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-step-rail {
-  padding: 4px 8px calc(14px + env(safe-area-inset-bottom, 0px));
-  scroll-padding-top: 8px;
+  padding: 3px 5px calc(12px + env(safe-area-inset-bottom, 0px));
+  scroll-padding-top: 6px;
 }
 
 .acs-shell.acs-mobile-layout .acs-phase-group + .acs-phase-group {
-  margin-top: 8px;
+  margin-top: 5px;
 }
 
 .acs-shell.acs-mobile-layout .acs-phase-toggle {
   display: grid;
   grid-template-columns: 1fr;
-  width: 46px;
-  min-height: 22px;
+  width: 42px;
+  min-height: 18px;
   margin: 0 auto;
-  padding: 2px 4px;
+  padding: 1px 3px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -2556,7 +2558,7 @@ body.acs-no-scroll {
 .acs-shell.acs-mobile-layout .acs-phase-toggle::before {
   content: attr(data-mobile-label);
   font-family: var(--acs-mono);
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 800;
   letter-spacing: 0.08em;
 }
@@ -2577,17 +2579,17 @@ body.acs-no-scroll {
 .acs-shell.acs-mobile-layout .acs-phase-steps::before {
   top: 0;
   bottom: 0;
-  left: 22px;
+  left: 21px;
   opacity: 0.24;
 }
 
 .acs-shell.acs-mobile-layout .acs-step-button {
-  grid-template-columns: 46px;
-  width: 46px;
-  min-height: 34px;
+  grid-template-columns: 42px;
+  width: 42px;
+  min-height: 29px;
   margin: 0 auto;
   padding: 2px 0;
-  border-radius: 12px;
+  border-radius: 10px;
   place-items: center;
 }
 
@@ -2597,14 +2599,14 @@ body.acs-no-scroll {
 
 .acs-shell.acs-mobile-layout .acs-step-node {
   position: relative;
-  width: 22px;
-  height: 22px;
+  width: 19px;
+  height: 19px;
   margin: 0;
   border-color: rgba(171, 162, 151, 0.42);
   background: #2f2c27;
   color: var(--acs-muted);
   font-family: var(--acs-mono);
-  font-size: 7px;
+  font-size: 6px;
   font-weight: 700;
 }
 
@@ -2624,7 +2626,7 @@ body.acs-no-scroll {
   border-color: var(--acs-cyan);
   background: var(--acs-cyan);
   color: var(--acs-void);
-  box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.1), 0 5px 14px rgba(217, 119, 87, 0.24);
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1), 0 4px 10px rgba(217, 119, 87, 0.22);
 }
 
 /* 展开后恢复完整项目、阶段与步骤信息，作为适合触控的左侧抽屉。 */
@@ -2634,15 +2636,15 @@ body.acs-no-scroll {
   bottom: 0;
   left: 0;
   z-index: 16;
-  width: min(86vw, 340px);
-  min-width: min(86vw, 340px);
+  width: min(82vw, 310px);
+  min-width: min(82vw, 310px);
   border-right-color: rgba(217, 119, 87, 0.24);
   box-shadow: 22px 0 54px rgba(10, 9, 8, 0.48);
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-head {
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 6px 10px;
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-heading {
@@ -2650,10 +2652,10 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-mobile-rail-toggle {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   border-color: var(--acs-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(56, 53, 47, 0.84);
   color: var(--acs-text-soft);
   box-shadow: none;
@@ -2672,24 +2674,66 @@ body.acs-no-scroll {
   display: block;
 }
 
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-identity {
+  padding: 9px 10px 8px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-title-field label {
+  margin: 0 0 4px 3px;
+  font-size: 7px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-name-control {
+  grid-template-columns: 27px minmax(0, 1fr) 24px;
+  min-height: 40px;
+  padding: 4px 5px;
+  border-radius: 13px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-title-icon {
+  width: 27px;
+  height: 27px;
+  border-radius: 9px;
+  font-size: 9px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-name-control input {
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-project-name-control > i {
+  width: 24px;
+  height: 24px;
+  font-size: 8px;
+}
+
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-progress-row {
   display: flex;
+  margin-top: 7px;
+  font-size: 8px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-progress-track {
+  margin-top: 4px;
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-rail {
-  padding: 10px 8px calc(18px + env(safe-area-inset-bottom, 0px));
+  padding: 7px 7px calc(14px + env(safe-area-inset-bottom, 0px));
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle {
-  grid-template-columns: minmax(0, 1fr) auto 13px;
+  grid-template-columns: minmax(0, 1fr) max-content 12px;
+  gap: 5px;
+  align-items: center;
+  justify-items: stretch;
   width: 100%;
-  min-height: 40px;
+  min-height: 34px;
   margin: 0;
-  padding: 7px 9px 7px 12px;
+  padding: 5px 7px 5px 9px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 9px;
   color: var(--acs-muted);
-  place-items: initial;
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle::before {
@@ -2698,6 +2742,30 @@ body.acs-no-scroll {
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle > i {
   display: block;
+  justify-self: center;
+  font-size: 7px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-title {
+  min-width: 0;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  width: auto;
+  min-width: 28px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 6.5px;
+  line-height: 1;
+  white-space: nowrap;
+  aspect-ratio: auto;
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-group.is-current-phase > .acs-phase-toggle {
@@ -2706,30 +2774,69 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-steps {
-  padding-left: 10px;
+  padding-left: 8px;
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-steps::before {
   top: 3px;
   bottom: 5px;
-  left: 20px;
+  left: 18px;
   opacity: 0.38;
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-button {
-  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  grid-template-columns: 24px minmax(0, 1fr) 20px;
+  align-items: center;
+  justify-items: stretch;
   width: 100%;
-  min-height: 44px;
-  margin: 0;
-  padding: 4px 7px 4px 0;
-  place-items: initial;
+  min-height: 36px;
+  margin: 1px 0;
+  padding: 3px 6px 3px 0;
+  border-radius: 9px;
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-node {
-  width: 15px;
-  height: 15px;
-  margin-left: 6px;
+  align-self: center;
+  justify-self: start;
+  width: 13px;
+  height: 13px;
+  margin-left: 4px;
+  font-size: 6px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-name {
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-number {
+  align-self: center;
   font-size: 7px;
+  line-height: 1;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-button.is-active {
+  background: linear-gradient(90deg, rgba(217, 119, 87, 0.17), rgba(217, 119, 87, 0.045));
+  box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.68);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-button.is-active .acs-step-node {
+  box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.09);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-core-step-badge {
+  margin-left: 5px;
+  padding: 1px 4px;
+  font-size: 6px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-quiet-action {
+  min-height: 36px;
+  margin: 6px 10px 10px;
+  padding: 7px;
+  border-radius: 9px;
+  font-size: 10px;
 }
 
 .acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-node::before {
@@ -2742,8 +2849,8 @@ body.acs-no-scroll {
   }
 
   .acs-shell.acs-mobile-layout .acs-brand h1 {
-    max-width: 30vw;
-    font-size: 15px;
+    max-width: 26vw;
+    font-size: 13px;
   }
 
   .acs-shell.acs-mobile-layout .acs-topbar-actions {
@@ -2753,8 +2860,8 @@ body.acs-no-scroll {
   .acs-shell.acs-mobile-layout .acs-icon-button,
   .acs-shell.acs-mobile-layout .acs-tour-launch,
   .acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
   }
 }
 
