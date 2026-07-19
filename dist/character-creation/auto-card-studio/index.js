@@ -1847,16 +1847,6 @@ const MOBILE_ADAPTATION_CSS = `
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 手机端保留导出与检查更新；用图标按钮避免占用额外宽度。 */
-.acs-shell.acs-mobile-layout #acs-save-project,
-.acs-shell.acs-mobile-layout #acs-check-update {
-  display: grid !important;
-}
-
-.acs-shell.acs-mobile-layout .acs-update-control {
-  display: block !important;
-}
-
 .acs-shell.acs-mobile-layout .acs-tour-launch span {
   display: none;
 }
@@ -2316,26 +2306,6 @@ const MOBILE_ADAPTATION_CSS = `
   background: #302e29;
 }
 
-/* 三个手机浮层使用显式状态类，避免被桌面端定位规则或抽屉层遮挡。 */
-.acs-shell.acs-mobile-layout.is-mobile-tour-open #acs-tour-overlay,
-.acs-shell.acs-mobile-layout.is-mobile-step-help-open #acs-step-help-overlay,
-.acs-shell.acs-mobile-layout.is-mobile-prompt-preview-open #acs-prompt-preview {
-  position: fixed !important;
-  inset: 0 !important;
-  z-index: 10200 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-}
-
-.acs-shell.acs-mobile-layout.is-mobile-tour-open #acs-tour-overlay,
-.acs-shell.acs-mobile-layout.is-mobile-step-help-open #acs-step-help-overlay {
-  display: block !important;
-}
-
-.acs-shell.acs-mobile-layout.is-mobile-prompt-preview-open #acs-prompt-preview {
-  display: grid !important;
-}
-
 @media (max-width: 390px) {
   .acs-shell.acs-mobile-layout .acs-brand-mark {
     display: none;
@@ -2355,6 +2325,13 @@ const MOBILE_ADAPTATION_CSS = `
   .acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
     width: 36px;
     height: 36px;
+  }
+}
+
+/* 窄屏优先保留创作操作；更新仍会自动检查，可在较宽屏幕中手动触发。 */
+@media (max-width: 460px) {
+  .acs-shell.acs-mobile-layout .acs-update-control {
+    display: none;
   }
 }
 
@@ -5147,7 +5124,6 @@ function closePromptPreview() {
     if (!preview || preview.hidden) return;
     preview.hidden = true;
     preview.setAttribute('aria-hidden', 'true');
-    shell.classList.remove('is-mobile-prompt-preview-open');
     shell.querySelector('#acs-preview-prompt')?.focus({ preventScroll: true });
 }
 
@@ -5276,16 +5252,12 @@ function openPromptPreview() {
         if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
 
         const preview = shell.querySelector('#acs-prompt-preview');
-        if (shell.classList.contains('acs-mobile-layout')) {
-            shell.classList.add('is-mobile-prompt-preview-open');
-        }
         preview.hidden = false;
         preview.setAttribute('aria-hidden', 'false');
         preview.querySelector('button[data-prompt-preview-close]')?.focus({ preventScroll: true });
         renderPromptPreview(messages, step);
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 打开提示词预览失败', error);
-        shell?.classList.remove('is-mobile-prompt-preview-open');
         notify('error', '提示词预览打开失败，请重试。');
     }
 }
@@ -6906,31 +6878,20 @@ function renderTourStep() {
 
 function startTour() {
     if (!shell?.classList.contains('is-open') || tourActive) return;
-    try {
-        flushPendingProjectEdits();
-        tourRestoreState = captureTourWorkspace();
-        const isMobile = shell.classList.contains('acs-mobile-layout');
-        // 手机端先收起抽屉，避免引导浮层被残留的侧栏状态干扰。
-        if (isMobile) {
-            setMobilePanel(null);
-            shell.classList.add('is-mobile-tour-open');
-        }
-        if (artifactPanelExpanded) toggleArtifactPanel(false);
-        toggleProjectMenu(false);
-        closeStyledSelects();
-        tourStepIndex = 0;
-        tourActive = true;
-        const overlay = shell.querySelector('#acs-tour-overlay');
-        overlay.hidden = false;
-        overlay.setAttribute('aria-hidden', 'false');
-        shell.classList.add('is-touring');
-        renderTourStep();
-    } catch (error) {
-        console.error('[A.U.T.O Card Studio] 打开新手引导失败', error);
-        tourActive = false;
-        shell.classList.remove('is-touring', 'is-mobile-tour-open');
-        notify('error', '新手引导打开失败，请重试。');
-    }
+    flushPendingProjectEdits();
+    tourRestoreState = captureTourWorkspace();
+    // 手机端先收起抽屉，避免引导浮层被残留的侧栏状态干扰。
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
+    if (artifactPanelExpanded) toggleArtifactPanel(false);
+    toggleProjectMenu(false);
+    closeStyledSelects();
+    tourStepIndex = 0;
+    tourActive = true;
+    const overlay = shell.querySelector('#acs-tour-overlay');
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    shell.classList.add('is-touring');
+    renderTourStep();
 }
 
 function closeTour(completed = false) {
@@ -6945,7 +6906,7 @@ function closeTour(completed = false) {
         overlay.hidden = true;
         overlay.setAttribute('aria-hidden', 'true');
     }
-    shell?.classList.remove('is-touring', 'is-mobile-tour-open');
+    shell?.classList.remove('is-touring');
     restoreTourWorkspace();
     if (completed) {
         localStorage.setItem(TOUR_COMPLETED_KEY, new Date().toISOString());
@@ -7044,10 +7005,7 @@ function openStepHelp() {
     const overlay = shell.querySelector('#acs-step-help-overlay');
     if (!step || !note || !overlay) return;
     // 说明窗口在手机端独占当前视图，先关闭步骤／产物抽屉。
-    if (shell.classList.contains('acs-mobile-layout')) {
-        setMobilePanel(null);
-        shell.classList.add('is-mobile-step-help-open');
-    }
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
     shell.querySelector('#acs-step-help-kicker').textContent = `STEP ${String(step.number).padStart(2, '0')} / ${STEPS.length}`;
     shell.querySelector('#acs-step-help-title').textContent = step.name;
     shell.querySelector('#acs-step-help-stage').textContent = `${note.stage} · ${step.goal}`;
@@ -7066,7 +7024,6 @@ function closeStepHelp() {
     if (!overlay || overlay.hidden) return;
     overlay.hidden = true;
     overlay.setAttribute('aria-hidden', 'true');
-    shell.classList.remove('is-mobile-step-help-open');
     shell.querySelector('#acs-step-help')?.focus({ preventScroll: true });
 }
 
@@ -7579,7 +7536,6 @@ function closeStudio() {
     }
     if (tourActive) closeTour(false);
     closePromptPreview();
-    closeStepHelp();
     if (artifactPanelExpanded) toggleArtifactPanel(false);
     toggleProjectMenu(false);
     closeStyledSelects();
@@ -7594,10 +7550,6 @@ function handleHostKeydown(event) {
     if (event.key !== 'Escape' || !shell?.classList.contains('is-open')) return;
     if (!shell.querySelector('#acs-prompt-preview')?.hidden) {
         closePromptPreview();
-        return;
-    }
-    if (!shell.querySelector('#acs-step-help-overlay')?.hidden) {
-        closeStepHelp();
         return;
     }
     if (tourActive) {
