@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.19 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.20 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1420,7 +1420,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.19';
+const AUTO_CARD_STUDIO_VERSION = '0.6.20';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -5407,11 +5407,21 @@ function closeUpdateNotes(result = false) {
     resolve?.(Boolean(result));
 }
 
-function showUpdateNotes({ currentLabel, targetLabel, entries }) {
+function showUpdateNotes({ currentLabel, targetLabel, entries, completed = false }) {
     const overlay = shell?.querySelector('#acs-update-notes-overlay');
     if (!overlay) return Promise.resolve(false);
     if (updateDialogResolver) closeUpdateNotes(false);
     overlay.querySelector('#acs-update-notes-summary').textContent = `${currentLabel}  →  ${targetLabel}`;
+    overlay.querySelector('#acs-update-notes-title').textContent = completed ? '更新完成' : '本次更新内容';
+    const cancelButton = overlay.querySelector('.acs-update-notes-actions [data-update-result="false"]');
+    const confirmButton = overlay.querySelector('.acs-update-notes-actions [data-update-result="true"]');
+    const closeButton = overlay.querySelector('.acs-update-notes-close');
+    cancelButton.hidden = completed;
+    confirmButton.innerHTML = completed
+        ? '<i class="fa-solid fa-check"></i>知道了'
+        : '<i class="fa-solid fa-arrow-up-right-dots"></i>立即更新';
+    closeButton.dataset.updateResult = completed ? 'true' : 'false';
+    closeButton.setAttribute('aria-label', completed ? '关闭更新公告' : '暂不更新');
     const list = overlay.querySelector('#acs-update-notes-list');
     list.replaceChildren();
     const safeEntries = entries.length ? entries : [{ label: targetLabel, title: '版本更新', changes: ['包含功能改进与问题修复。'] }];
@@ -8892,6 +8902,30 @@ async function collectPublishedUpdateEntries(latestVersion) {
     }
 }
 
+async function collectInstalledReleaseEntry(version) {
+    try {
+        const manifest = await fetchUpdateManifest(`auto-card-studio-v${version}`);
+        const entry = (Array.isArray(manifest.releases) ? manifest.releases : [])
+            .find(item => String(item?.version || '') === version);
+        return entry ? [normalizeManifestEntry(entry, `v${version}`)] : [];
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 更新完成公告读取失败。', error);
+        return [];
+    }
+}
+
+async function showInstalledUpdateNotes(version) {
+    if (version !== AUTO_CARD_STUDIO_VERSION) return;
+    await requestOpenStudio();
+    const entries = await collectInstalledReleaseEntry(version);
+    await showUpdateNotes({
+        currentLabel: `v${version}`,
+        targetLabel: '已安装',
+        entries,
+        completed: true,
+    });
+}
+
 function showUpdateFeedback(message, state = '', duration = 3200) {
     const button = shell?.querySelector('#acs-check-update');
     const feedback = shell?.querySelector('#acs-update-feedback');
@@ -9062,9 +9096,11 @@ function startStudioRuntime() {
         hostWindow.setTimeout(() => resolve(scanForUpdatesInBackground()), 0);
     });
     window.addEventListener('pagehide', cleanupScriptRuntime, { once: true });
-    if (hostWindow.sessionStorage.getItem(UPDATE_REOPEN_KEY)) {
+    const installedUpdateVersion = String(hostWindow.sessionStorage.getItem(UPDATE_REOPEN_KEY) || '').trim();
+    if (installedUpdateVersion) {
         hostWindow.sessionStorage.removeItem(UPDATE_REOPEN_KEY);
-        hostWindow.setTimeout(requestOpenStudio, 0);
+        // 正式版更新完成后首次打开也展示一次公告，避免刷新后用户看不到本次变化。
+        hostWindow.setTimeout(() => { void showInstalledUpdateNotes(installedUpdateVersion); }, 0);
     }
 }
 
