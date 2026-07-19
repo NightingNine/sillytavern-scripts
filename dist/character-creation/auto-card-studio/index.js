@@ -1808,7 +1808,7 @@ const MOBILE_ADAPTATION_CSS = `
 
 .acs-shell.acs-mobile-layout .acs-brand h1 {
   overflow: hidden;
-  max-width: 42vw;
+  max-width: 30vw;
   font-size: 16px;
   line-height: 1.15;
   text-overflow: ellipsis;
@@ -1817,7 +1817,6 @@ const MOBILE_ADAPTATION_CSS = `
 
 .acs-shell.acs-mobile-layout .acs-brand .acs-eyebrow,
 .acs-shell.acs-mobile-layout .acs-dependency,
-.acs-shell.acs-mobile-layout #acs-save-project,
 .acs-shell.acs-mobile-layout .acs-update-feedback {
   display: none !important;
 }
@@ -1837,6 +1836,15 @@ const MOBILE_ADAPTATION_CSS = `
   padding: 0;
   place-items: center;
   border-radius: 10px;
+}
+
+.acs-shell.acs-mobile-layout #acs-save-project,
+.acs-shell.acs-mobile-layout #acs-tour-launch,
+.acs-shell.acs-mobile-layout #acs-step-help {
+  flex: 0 0 auto;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .acs-shell.acs-mobile-layout .acs-tour-launch span {
@@ -1920,6 +1928,31 @@ const MOBILE_ADAPTATION_CSS = `
 
 .acs-shell.acs-mobile-layout.is-mobile-panel-open .acs-mobile-scrim {
   display: block;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-overlay,
+.acs-shell.acs-mobile-layout #acs-step-help-overlay,
+.acs-shell.acs-mobile-layout #acs-prompt-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 10090;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
+  overscroll-behavior: contain;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-overlay {
+  overflow: auto;
+}
+
+.acs-shell.acs-mobile-layout .acs-tour-card,
+.acs-shell.acs-mobile-layout .acs-step-help-dialog {
+  max-width: 100%;
+  max-height: min(76dvh, 620px);
+  overscroll-behavior: contain;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-help-dialog {
+  width: 100%;
 }
 
 .acs-shell.acs-mobile-layout .acs-project-identity {
@@ -2148,6 +2181,22 @@ const MOBILE_ADAPTATION_CSS = `
   border-radius: 0;
 }
 
+/* 提示词预览在手机上独占视图，避免被步骤或产物抽屉遮住。 */
+.acs-shell.acs-mobile-layout #acs-prompt-preview {
+  display: grid;
+  padding: 0;
+}
+
+.acs-shell.acs-mobile-layout #acs-preview-prompt {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 产物区已改为抽屉浏览，不再保留容易失效的放大模式。 */
+#auto-card-studio #acs-expand-artifacts {
+  display: none !important;
+}
+
 .acs-shell.acs-mobile-layout .acs-prompt-preview-note,
 .acs-shell.acs-mobile-layout .acs-prompt-message-list,
 .acs-shell.acs-mobile-layout .acs-delivery-body {
@@ -2170,7 +2219,7 @@ const MOBILE_ADAPTATION_CSS = `
   }
 
   .acs-shell.acs-mobile-layout .acs-brand h1 {
-    max-width: 38vw;
+    max-width: 30vw;
     font-size: 15px;
   }
 
@@ -2183,6 +2232,13 @@ const MOBILE_ADAPTATION_CSS = `
   .acs-shell.acs-mobile-layout .acs-mobile-flow-toggle {
     width: 36px;
     height: 36px;
+  }
+}
+
+/* 窄屏优先保留创作操作；更新仍会自动检查，可在较宽屏幕中手动触发。 */
+@media (max-width: 460px) {
+  .acs-shell.acs-mobile-layout .acs-update-control {
+    display: none;
   }
 }
 
@@ -4241,17 +4297,10 @@ async function copyArtifact(button) {
     }
 }
 
-function toggleArtifactPanel(force) {
-    artifactPanelExpanded = typeof force === 'boolean' ? force : !artifactPanelExpanded;
-    const inspector = shell.querySelector('.acs-inspector');
-    const button = shell.querySelector('#acs-expand-artifacts');
-    inspector.classList.toggle('is-expanded', artifactPanelExpanded);
-    button.classList.toggle('is-active', artifactPanelExpanded);
-    button.setAttribute('aria-pressed', String(artifactPanelExpanded));
-    button.title = artifactPanelExpanded ? '收回产物工作区' : '放大产物工作区';
-    button.querySelector('i').className = artifactPanelExpanded
-        ? 'fa-solid fa-compress'
-        : 'fa-solid fa-expand';
+function toggleArtifactPanel() {
+    // 产物采用右侧抽屉展示，停用旧的放大模式以避免在小屏幕失效。
+    artifactPanelExpanded = false;
+    shell?.querySelector('.acs-inspector')?.classList.remove('is-expanded');
 }
 
 function renderProjectFields() {
@@ -5078,6 +5127,8 @@ function openPromptPreview() {
     renderPromptPreview(messages, step);
     toggleProjectMenu(false);
     closeStyledSelects();
+    // 手机端先收起步骤／产物抽屉，确保预览可见且可操作。
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
 
     const preview = shell.querySelector('#acs-prompt-preview');
     preview.hidden = false;
@@ -6668,6 +6719,8 @@ function startTour() {
     if (!shell?.classList.contains('is-open') || tourActive) return;
     flushPendingProjectEdits();
     tourRestoreState = captureTourWorkspace();
+    // 手机端先收起抽屉，避免引导浮层被残留的侧栏状态干扰。
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
     if (artifactPanelExpanded) toggleArtifactPanel(false);
     toggleProjectMenu(false);
     closeStyledSelects();
@@ -6790,6 +6843,8 @@ function openStepHelp() {
     const note = STEP_TUTORIAL_NOTES[project.currentStep - 1];
     const overlay = shell.querySelector('#acs-step-help-overlay');
     if (!step || !note || !overlay) return;
+    // 说明窗口在手机端独占当前视图，先关闭步骤／产物抽屉。
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
     shell.querySelector('#acs-step-help-kicker').textContent = `STEP ${String(step.number).padStart(2, '0')} / ${STEPS.length}`;
     shell.querySelector('#acs-step-help-title').textContent = step.name;
     shell.querySelector('#acs-step-help-stage').textContent = `${note.stage} · ${step.goal}`;
