@@ -5,7 +5,7 @@
       {
         "id": "auto-card-studio",
         "name": "A.U.T.O 角色卡创作台",
-        "version": "0.6.23",
+        "version": "0.6.24",
         "entry": "dist/character-creation/auto-card-studio/index.js",
         "documentation": "docs/character-creation/auto-card-studio.md",
         "requires": [
