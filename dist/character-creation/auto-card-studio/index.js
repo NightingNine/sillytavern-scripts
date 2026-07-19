@@ -1390,7 +1390,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-9';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-10';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2389,6 +2389,63 @@ body.acs-no-scroll {
   background: #302e29;
 }
 
+/* 手机端步骤改为左侧常驻图标栏，避免再额外生成“项目与步骤”顶栏按钮。 */
+.acs-shell.acs-mobile-layout .acs-workspace {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+}
+
+.acs-shell.acs-mobile-layout .acs-rail {
+  position: relative;
+  grid-column: 1;
+  width: 58px;
+  min-width: 58px;
+  transform: none;
+  box-shadow: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  width: auto;
+}
+
+.acs-shell.acs-mobile-layout .acs-project-identity,
+.acs-shell.acs-mobile-layout .acs-step-name,
+.acs-shell.acs-mobile-layout .acs-step-number,
+.acs-shell.acs-mobile-layout .acs-phase-title,
+.acs-shell.acs-mobile-layout .acs-phase-progress,
+.acs-shell.acs-mobile-layout .acs-quiet-action {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-rail {
+  padding: 10px 6px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle {
+  grid-template-columns: 1fr;
+  width: 42px;
+  min-height: 30px;
+  margin: 0 auto;
+  padding: 6px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-steps {
+  padding-left: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-steps::before {
+  left: 15px;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-button {
+  grid-template-columns: 30px;
+  width: 42px;
+  margin: 0 auto;
+}
+
 @media (max-width: 390px) {
   .acs-shell.acs-mobile-layout .acs-brand-mark {
     display: none;
@@ -2910,6 +2967,7 @@ let customApiKey = '';
 let availableCustomModels = [];
 let shell = null;
 let studioOpenPromise = null;
+let studioScrollLockState = null;
 let helper = null;
 let launcherInstallTimer = null;
 let isGenerating = false;
@@ -6639,20 +6697,7 @@ function switchInspectorTab(name) {
 }
 
 function installMobileLayoutUI() {
-    if (shell.querySelector('#acs-mobile-flow-toggle')) return;
-
-    const flowButton = document.createElement('button');
-    flowButton.id = 'acs-mobile-flow-toggle';
-    flowButton.className = 'acs-mobile-flow-toggle';
-    flowButton.type = 'button';
-    flowButton.title = '打开项目与创作步骤';
-    flowButton.setAttribute('aria-label', '打开项目与创作步骤');
-    flowButton.setAttribute('aria-expanded', 'false');
-    // 使用明确的侧栏图标，避免部分主题将 list-check 渲染成白色方块。
-    flowButton.innerHTML = '<i class="fa-solid fa-bars-staggered" aria-hidden="true"></i>';
-
-    const inspectorButton = shell.querySelector('#acs-inspector-toggle');
-    inspectorButton.before(flowButton);
+    if (shell.querySelector('#acs-mobile-scrim')) return;
 
     const scrim = document.createElement('button');
     scrim.id = 'acs-mobile-scrim';
@@ -6667,21 +6712,19 @@ function setMobilePanel(panel = null) {
     const flowOpen = panel === 'flow';
     const inspectorOpen = panel === 'inspector';
     const inspector = shell.querySelector('.acs-inspector');
-    const flowButton = shell.querySelector('#acs-mobile-flow-toggle');
     const inspectorButton = shell.querySelector('#acs-inspector-toggle');
 
-    shell.classList.toggle('is-mobile-flow-open', flowOpen);
-    shell.classList.toggle('is-mobile-panel-open', flowOpen || inspectorOpen);
+    // 步骤导航改为手机端常驻窄栏，不再额外占用顶栏按钮。
+    shell.classList.remove('is-mobile-flow-open');
+    shell.classList.toggle('is-mobile-panel-open', inspectorOpen);
     inspector?.classList.toggle('is-mobile-open', inspectorOpen);
-    flowButton?.setAttribute('aria-expanded', String(flowOpen));
     inspectorButton?.setAttribute('aria-expanded', String(inspectorOpen));
-    if (flowButton) flowButton.title = flowOpen ? '关闭项目与创作步骤' : '打开项目与创作步骤';
     if (inspectorButton) inspectorButton.title = inspectorOpen ? '关闭产物与设置' : '打开产物与设置';
 }
 
 function toggleMobileFlow() {
-    const opened = !shell.classList.contains('is-mobile-flow-open');
-    setMobilePanel(opened ? 'flow' : null);
+    // 兼容旧引导调用：步骤栏已常驻，无需再切换。
+    setMobilePanel(null);
 }
 
 function toggleMobileInspector() {
@@ -6757,7 +6800,7 @@ function ensureTourInspectorVisible() {
 }
 
 function ensureTourFlowVisible() {
-    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel('flow');
+    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
     else setTourMobileInspector(false);
 }
 
@@ -7525,7 +7568,6 @@ function bindStudioEvents() {
         if (event.key === 'Escape') closeUpdateNotes(false);
     });
     shell.querySelector('#acs-inspector-toggle').addEventListener('click', toggleMobileInspector);
-    shell.querySelector('#acs-mobile-flow-toggle').addEventListener('click', toggleMobileFlow);
     shell.querySelector('#acs-mobile-scrim').addEventListener('click', () => setMobilePanel(null));
     shell.querySelector('#acs-new-project').addEventListener('click', newProject);
     shell.querySelector('#acs-fetch-models').addEventListener('click', fetchCustomModels);
@@ -7693,6 +7735,39 @@ function bindStudioEvents() {
     });
 }
 
+// 创作台为固定全屏层；直接锁定根节点，避免宿主页面横向溢出露出滚动条。
+function setStudioPageScrollLock(locked) {
+    const targets = [document.documentElement, document.body];
+    if (locked) {
+        if (!studioScrollLockState) {
+            studioScrollLockState = targets.map(target => ({
+                target,
+                overflow: target.style.getPropertyValue('overflow'),
+                overflowPriority: target.style.getPropertyPriority('overflow'),
+                overflowX: target.style.getPropertyValue('overflow-x'),
+                overflowXPriority: target.style.getPropertyPriority('overflow-x'),
+                overflowY: target.style.getPropertyValue('overflow-y'),
+                overflowYPriority: target.style.getPropertyPriority('overflow-y'),
+            }));
+        }
+        for (const target of targets) {
+            target.classList.add('acs-no-scroll');
+            target.style.setProperty('overflow', 'hidden', 'important');
+            target.style.setProperty('overflow-x', 'hidden', 'important');
+            target.style.setProperty('overflow-y', 'hidden', 'important');
+        }
+        return;
+    }
+
+    for (const target of targets) target.classList.remove('acs-no-scroll');
+    for (const state of studioScrollLockState || []) {
+        state.target.style.setProperty('overflow', state.overflow, state.overflowPriority);
+        state.target.style.setProperty('overflow-x', state.overflowX, state.overflowXPriority);
+        state.target.style.setProperty('overflow-y', state.overflowY, state.overflowYPriority);
+    }
+    studioScrollLockState = null;
+}
+
 function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
@@ -7709,8 +7784,7 @@ async function ensureStudioLoaded() {
         // 删除旧插件留在当前页面中的隐藏界面，脚本版随后接管。
         existing.remove();
         document.querySelector('#auto-card-studio-launch')?.remove();
-        document.body.classList.remove('acs-no-scroll');
-        document.documentElement.classList.remove('acs-no-scroll');
+        setStudioPageScrollLock(false);
     }
 
     ensureStudioStyle();
@@ -7746,8 +7820,7 @@ function showStudioRuntimeError(error) {
         }
         shell.classList.add('is-open');
         shell.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('acs-no-scroll');
-        document.documentElement.classList.add('acs-no-scroll');
+        setStudioPageScrollLock(true);
         updateStudioViewportScale();
         let banner = shell.querySelector('#acs-runtime-error');
         if (!banner) {
@@ -7767,8 +7840,7 @@ async function openStudio() {
         await ensureStudioLoaded();
         shell.classList.add('is-open');
         shell.setAttribute('aria-hidden', 'false');
-        document.body.classList.add('acs-no-scroll');
-        document.documentElement.classList.add('acs-no-scroll');
+        setStudioPageScrollLock(true);
         updateStudioViewportScale();
         renderAll();
         const initialFocus = project.ui.overviewCollapsed
@@ -7810,8 +7882,7 @@ function closeStudio() {
     setMobilePanel(null);
     shell.classList.remove('is-open');
     shell.setAttribute('aria-hidden', 'true');
-    document.body.classList.remove('acs-no-scroll');
-    document.documentElement.classList.remove('acs-no-scroll');
+    setStudioPageScrollLock(false);
 }
 
 function handleHostKeydown(event) {
@@ -7857,8 +7928,7 @@ function cleanupScriptRuntime() {
     if (tourAnimationFrame) hostWindow.cancelAnimationFrame(tourAnimationFrame);
     if (tourSceneTimer) hostWindow.clearTimeout(tourSceneTimer);
     document.querySelector('#auto-card-studio-wand-launcher')?.remove();
-    document.body.classList.remove('acs-no-scroll');
-    document.documentElement.classList.remove('acs-no-scroll');
+    setStudioPageScrollLock(false);
     if (shell?.dataset.acsRuntime === SCRIPT_RUNTIME_MARK) shell.remove();
     document.querySelector(`#${SCRIPT_STYLE_ID}`)?.remove();
     shell = null;
