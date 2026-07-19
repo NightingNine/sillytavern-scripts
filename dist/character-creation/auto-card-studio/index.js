@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.15 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.16 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1378,7 +1378,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.15';
+const AUTO_CARD_STUDIO_VERSION = '0.6.16';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -1460,6 +1460,10 @@ const STEP_HELP_CSS = `
 .acs-step-title-line { display:flex; align-items:center; gap:10px; min-width:0; }
 .acs-step-help-button { display:grid; width:27px; height:27px; flex:0 0 auto; place-items:center; padding:0; border:1px solid rgba(211,173,114,.34); border-radius:999px; background:rgba(211,173,114,.08); color:var(--acs-gold); cursor:pointer; transition:transform 140ms ease, background 140ms ease, border-color 140ms ease; }
 .acs-step-help-button:hover { transform:translateY(-1px); border-color:rgba(211,173,114,.62); background:rgba(211,173,114,.15); }
+.acs-clear-step-button { display:inline-flex; align-items:center; gap:6px; min-height:30px; padding:5px 9px; border:1px solid var(--acs-line); border-radius:999px; background:transparent; color:var(--acs-muted); cursor:pointer; font:600 9px/1 var(--acs-body); }
+.acs-clear-step-button:hover:not(:disabled) { border-color:rgba(217,132,127,.48); background:rgba(217,132,127,.08); color:var(--acs-red); }
+.acs-clear-step-button:disabled { cursor:default; opacity:.34; }
+.acs-artifact-delete:hover { border-color:rgba(217,132,127,.48); color:var(--acs-red); }
 .acs-step-help-overlay { position:absolute; inset:0; z-index:35; display:grid; padding:clamp(14px,4vh,42px); place-items:center; background:rgba(18,16,14,.76); backdrop-filter:blur(10px); }
 .acs-step-help-dialog { width:min(720px,94vw); max-height:min(780px,90vh); overflow:auto; border:1px solid rgba(211,173,114,.34); border-radius:18px; background:#2b2925; box-shadow:0 30px 90px rgba(10,9,8,.58); scrollbar-width:thin; scrollbar-color:var(--acs-line) transparent; }
 .acs-step-help-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:22px 24px 18px; border-bottom:1px solid var(--acs-line-soft); background:linear-gradient(120deg,rgba(217,119,87,.09),transparent 52%); }
@@ -1473,7 +1477,7 @@ const STEP_HELP_CSS = `
 .acs-step-help-section span { display:block; margin-bottom:7px; color:var(--acs-gold); font:700 9px/1 var(--acs-mono); letter-spacing:.12em; }
 .acs-step-help-section p { margin:0; color:var(--acs-text-soft); font-size:11px; line-height:1.72; }
 .acs-step-help-section.is-caution { border-left:2px solid var(--acs-cyan); }
-@media (max-width:560px) { .acs-step-help-overlay{padding:0}.acs-step-help-dialog{width:100%;max-height:100%;border-radius:0}.acs-step-help-head,.acs-step-help-body{padding-left:17px;padding-right:17px}.acs-step-title-line{gap:7px}.acs-step-help-button{width:25px;height:25px} }
+@media (max-width:560px) { .acs-step-help-overlay{padding:0}.acs-step-help-dialog{width:100%;max-height:100%;border-radius:0}.acs-step-help-head,.acs-step-help-body{padding-left:17px;padding-right:17px}.acs-step-title-line{gap:7px}.acs-step-help-button{width:25px;height:25px}.acs-clear-step-button span{display:none}.acs-clear-step-button{width:30px;padding:5px;justify-content:center} }
 `;
 
 const RESOURCE_MANAGER_CSS = `
@@ -3205,6 +3209,9 @@ function renderCurrentStep() {
     const turns = shell.querySelector('#acs-turns');
     turns.replaceChildren();
     const hasTurns = Array.isArray(state.turns) && state.turns.length > 0;
+    const clearStepButton = shell.querySelector('#acs-clear-step');
+    clearStepButton.disabled = !hasTurns || isGenerating;
+    clearStepButton.title = hasTurns ? '清空当前步骤的对话记录' : '当前步骤没有对话记录';
     shell.querySelector('#acs-conversation-nav').hidden = !hasTurns;
     const responsePreset = hasTurns ? getAutoPresetSafe() : null;
     let latestUserIndex = -1;
@@ -3257,6 +3264,32 @@ function renderCurrentStep() {
         const conversation = shell.querySelector('.acs-conversation');
         conversation.scrollTop = conversation.scrollHeight;
     });
+}
+
+async function clearCurrentStepConversation() {
+    if (isGenerating) {
+        notify('warning', '请先停止当前生成。');
+        return;
+    }
+    const step = STEPS[project.currentStep - 1];
+    const state = project.steps[step.number];
+    if (!state?.turns?.length) return;
+    if (!await showStudioConfirm({
+        title: '清空本步骤对话？',
+        message: '对话将清空，已生成的产物仍会保留。',
+        confirmLabel: '清空对话',
+        danger: true,
+    })) return;
+
+    // 对话与产物分开管理：助手回复转入产物历史，保证右侧正式产物不会随对话一起丢失。
+    const assistantTurns = state.turns.filter(turn => turn.role === 'assistant').map(turn => ({ ...turn }));
+    state.artifactHistory = [...(state.artifactHistory || []), ...assistantTurns];
+    state.turns = [];
+    state.status = 'idle';
+    state.updatedAt = new Date().toISOString();
+    saveProject();
+    renderAll();
+    notify('success', `Step ${step.number} 的对话已清空，产物仍保留。`);
 }
 
 function renderProgress() {
@@ -3514,7 +3547,13 @@ function renderArtifacts() {
         copy.dataset.copyArtifact = '';
         copy.title = '复制这个区块';
         copy.innerHTML = '<i class="fa-regular fa-copy" aria-hidden="true"></i><span>复制</span>';
-        actions.append(history, restore, copy);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'acs-artifact-action acs-artifact-delete';
+        remove.dataset.deleteArtifact = '';
+        remove.title = '删除这个产物及其历史版本';
+        remove.innerHTML = '<i class="fa-regular fa-trash-can" aria-hidden="true"></i><span>删除</span>';
+        actions.append(history, restore, copy, remove);
         toolbar.append(saveState, actions);
 
         const content = document.createElement('textarea');
@@ -3644,6 +3683,63 @@ function restoreArtifactVersion(button) {
     saveProject();
     renderAll();
     notify('success', `${group.tag} 已恢复为历史版本 ${selectedIndex + 1}，原版本仍保留。`);
+}
+
+function artifactRemovalRange(source, block) {
+    if (!block.language) return { start: block.start, end: block.end };
+    const opener = source.lastIndexOf('```', block.start);
+    const closer = source.indexOf('```', block.end);
+    const header = opener >= 0 ? source.slice(opener + 3, block.start) : '';
+    const footer = closer >= 0 ? source.slice(block.end, closer) : '';
+    if (opener >= 0 && closer >= block.end && /^[^\r\n`]*\r?\n\s*$/.test(header) && !footer.trim()) {
+        let end = closer + 3;
+        if (source.slice(end, end + 2) === '\r\n') end += 2;
+        else if (source[end] === '\n') end += 1;
+        return { start: opener, end };
+    }
+    return { start: block.start, end: block.end };
+}
+
+function removeArtifactIdentityFromText(source, stepNumber, identity) {
+    const blocks = extractArtifactBlocks(source, stepNumber);
+    const ranges = blocks
+        .filter(block => resolveArtifactIdentity(stepNumber, block, blocks) === identity)
+        .map(block => artifactRemovalRange(source, block))
+        .sort((left, right) => right.start - left.start);
+    let result = source;
+    for (const range of ranges) result = `${result.slice(0, range.start)}${result.slice(range.end)}`;
+    return result;
+}
+
+async function deleteArtifact(button) {
+    const details = button.closest('.acs-artifact');
+    const group = renderedArtifactGroups[Number(details?.dataset.artifactGroup)];
+    const latest = group?.versions?.at(-1);
+    if (!group || !latest) return;
+    const displayName = artifactDisplayName(group.tag, latest.step);
+    if (!await showStudioConfirm({
+        title: '删除产物？',
+        message: `“${displayName}”及其历史版本将被删除。`,
+        confirmLabel: '删除产物',
+        danger: true,
+    })) return;
+
+    flushPendingProjectEdits();
+    const state = project.steps[latest.step];
+    for (const collectionName of ['turns', 'artifactHistory']) {
+        state[collectionName] = (state[collectionName] || []).map(turn => (
+            turn.role === 'assistant'
+                ? { ...turn, content: removeArtifactIdentityFromText(turn.content, latest.step, group.tag) }
+                : turn
+        ));
+    }
+    state.status = state.turns?.length ? 'draft' : 'idle';
+    state.updatedAt = new Date().toISOString();
+    // 产物集合变化后，旧的世界书重组方案不再有效。
+    project.autoReorg = null;
+    saveProject();
+    renderAll();
+    notify('success', `已删除产物“${displayName}”，可以重新生成。`);
 }
 
 async function copyText(text) {
@@ -6073,6 +6169,14 @@ function installStepHelpUI() {
     button.innerHTML = '<i class="fa-solid fa-circle-info" aria-hidden="true"></i>';
     titleLine.append(button);
 
+    const clearButton = document.createElement('button');
+    clearButton.id = 'acs-clear-step';
+    clearButton.className = 'acs-clear-step-button';
+    clearButton.type = 'button';
+    clearButton.disabled = true;
+    clearButton.innerHTML = '<i class="fa-regular fa-trash-can" aria-hidden="true"></i><span>清空对话</span>';
+    shell.querySelector('.acs-stage-heading-actions').prepend(clearButton);
+
     const overlay = document.createElement('div');
     overlay.id = 'acs-step-help-overlay';
     overlay.className = 'acs-step-help-overlay';
@@ -6353,6 +6457,7 @@ function bindStudioEvents() {
     shell.querySelector('#acs-tour-next').addEventListener('click', () => moveTour(1));
     shell.querySelector('#acs-tour-overlay').addEventListener('keydown', handleTourKeydown);
     shell.querySelector('#acs-step-help').addEventListener('click', openStepHelp);
+    shell.querySelector('#acs-clear-step').addEventListener('click', clearCurrentStepConversation);
     shell.querySelector('#acs-step-help-overlay').addEventListener('click', event => {
         if (event.target === event.currentTarget) closeStepHelp();
     });
@@ -6434,7 +6539,12 @@ function bindStudioEvents() {
             return;
         }
         const copyButton = event.target.closest('[data-copy-artifact]');
-        if (copyButton) copyArtifact(copyButton);
+        if (copyButton) {
+            copyArtifact(copyButton);
+            return;
+        }
+        const deleteButton = event.target.closest('[data-delete-artifact]');
+        if (deleteButton) deleteArtifact(deleteButton);
     });
     artifactList.addEventListener('input', event => {
         if (event.target.matches('.acs-artifact-content')) scheduleArtifactSave(event.target);
