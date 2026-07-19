@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.24 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.25 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1684,7 +1684,7 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
-const AUTO_CARD_STUDIO_VERSION = '0.6.24';
+const AUTO_CARD_STUDIO_VERSION = '0.6.25';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -7600,10 +7600,15 @@ async function ensureDeliveryReorg(selectedArtifacts) {
         if (build.omittedArtifacts) retryReasons.push(`遗漏 ${build.omittedArtifacts} 项产物`);
         if (build.unresolvedBlockIds?.length) retryReasons.push(`${build.unresolvedBlockIds.length} 个 blockId 无法匹配`);
         notify('info', '重组方案存在遗漏，正在自动修正一次…');
-        generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook, {
-            retryReason: retryReasons.join('，') || '方案不完整',
-        });
-        build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
+        try {
+            generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook, {
+                retryReason: retryReasons.join('，') || '方案不完整',
+            });
+            build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
+        } catch (error) {
+            // 修正请求失败时保留首轮可用部分，随后由本地兜底补齐，避免再次中断发布。
+            console.warn('[A.U.T.O Card Studio] 世界书重组自动修正请求失败，将使用安全补全。', error);
+        }
     }
 
     if (!isCompleteReorgBuild(build, selectedWorldbook)) {
