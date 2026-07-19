@@ -1955,6 +1955,34 @@ const MOBILE_ADAPTATION_CSS = `
   width: 100%;
 }
 
+/* 说明在手机端改为完整页面，标题和关闭按钮不会被内容滚出屏幕。 */
+.acs-shell.acs-mobile-layout #acs-step-help-overlay {
+  display: block;
+  padding: 0;
+}
+
+.acs-shell.acs-mobile-layout #acs-step-help-overlay .acs-step-help-dialog {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  overscroll-behavior: contain;
+}
+
+.acs-shell.acs-mobile-layout #acs-step-help-overlay .acs-step-help-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-top: max(18px, env(safe-area-inset-top, 0px));
+  background: #2b2925;
+}
+
+.acs-shell.acs-mobile-layout #acs-step-help-overlay .acs-step-help-body {
+  padding-bottom: max(28px, calc(18px + env(safe-area-inset-bottom, 0px)));
+}
+
 .acs-shell.acs-mobile-layout .acs-project-identity {
   padding: 14px 13px 12px;
 }
@@ -2192,8 +2220,33 @@ const MOBILE_ADAPTATION_CSS = `
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 产物区已改为抽屉浏览，不再保留容易失效的放大模式。 */
-#auto-card-studio #acs-expand-artifacts {
+/* 预览内容很多时，手机端保持独立滚动区，避免整个页面失去响应。 */
+.acs-shell.acs-mobile-layout #acs-prompt-preview .acs-prompt-preview-backdrop {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout #acs-prompt-preview .acs-prompt-preview-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.acs-shell.acs-mobile-layout #acs-prompt-preview .acs-prompt-preview-head {
+  padding-top: max(14px, env(safe-area-inset-top, 0px));
+}
+
+.acs-shell.acs-mobile-layout #acs-prompt-preview .acs-prompt-message-list {
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: max(24px, calc(14px + env(safe-area-inset-bottom, 0px)));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 手机端使用抽屉浏览产物，不显示桌面端的放大模式。 */
+.acs-shell.acs-mobile-layout #acs-expand-artifacts {
   display: none !important;
 }
 
@@ -2204,13 +2257,53 @@ const MOBILE_ADAPTATION_CSS = `
   padding-left: 12px;
 }
 
-.acs-shell.acs-mobile-layout .acs-tour-card {
-  right: 8px !important;
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
-  left: 8px !important;
-  top: auto !important;
-  width: auto;
-  max-height: min(68dvh, 560px);
+/* 新手引导不再套用桌面端浮动定位，手机上始终完整显示。 */
+.acs-shell.acs-mobile-layout #acs-tour-overlay {
+  display: block;
+  padding: 0;
+  background: #2b2925;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-spotlight {
+  display: none !important;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card {
+  position: relative !important;
+  inset: auto !important;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100% !important;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none !important;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card .acs-tour-card-head {
+  padding: max(16px, env(safe-area-inset-top, 0px)) 17px 13px;
+  border-bottom: 1px solid var(--acs-line-soft);
+  background: #302e29;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 17px 22px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.acs-shell.acs-mobile-layout #acs-tour-card .acs-tour-actions {
+  margin: 0;
+  padding: 12px 17px max(14px, env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--acs-line-soft);
+  background: #302e29;
 }
 
 @media (max-width: 390px) {
@@ -4297,10 +4390,23 @@ async function copyArtifact(button) {
     }
 }
 
-function toggleArtifactPanel() {
-    // 产物采用右侧抽屉展示，停用旧的放大模式以避免在小屏幕失效。
-    artifactPanelExpanded = false;
-    shell?.querySelector('.acs-inspector')?.classList.remove('is-expanded');
+function toggleArtifactPanel(force) {
+    const inspector = shell.querySelector('.acs-inspector');
+    const button = shell.querySelector('#acs-expand-artifacts');
+    // 仅手机端停用放大；桌面端保持既有的放大产物工作区。
+    if (shell.classList.contains('acs-mobile-layout')) {
+        artifactPanelExpanded = false;
+        inspector?.classList.remove('is-expanded');
+        return;
+    }
+    artifactPanelExpanded = typeof force === 'boolean' ? force : !artifactPanelExpanded;
+    inspector.classList.toggle('is-expanded', artifactPanelExpanded);
+    button.classList.toggle('is-active', artifactPanelExpanded);
+    button.setAttribute('aria-pressed', String(artifactPanelExpanded));
+    button.title = artifactPanelExpanded ? '收回产物工作区' : '放大产物工作区';
+    button.querySelector('i').className = artifactPanelExpanded
+        ? 'fa-solid fa-compress'
+        : 'fa-solid fa-expand';
 }
 
 function renderProjectFields() {
@@ -5021,15 +5127,27 @@ function closePromptPreview() {
     shell.querySelector('#acs-preview-prompt')?.focus({ preventScroll: true });
 }
 
+function ensurePromptMessageContent(body) {
+    if (!body || body.dataset.rendered === 'true') return;
+    const index = Number(body.dataset.promptMessageIndex);
+    const message = promptPreviewMessages[index];
+    if (!message) return;
+    const content = document.createElement('pre');
+    content.textContent = repairExpandedCharacterMacro(message.content);
+    body.append(content);
+    body.dataset.rendered = 'true';
+}
+
 function renderPromptPreview(messages, step) {
     promptPreviewMessages = messages;
     const renderEpoch = ++promptTokenRenderEpoch;
     const list = shell.querySelector('#acs-prompt-message-list');
+    const deferMessageBodies = shell.classList.contains('acs-mobile-layout');
     list.replaceChildren();
     shell.querySelector('#acs-prompt-preview-summary').textContent = `Step ${step.number} · ${messages.length} 条消息 · 正在统计 tokens · ${connectionDisplayName()}`;
 
     const currentStepIndex = messages.findIndex(message => String(message.name || '').startsWith(`Step${step.number}`));
-    const initiallyOpenIndex = currentStepIndex >= 0 ? currentStepIndex : messages.length - 1;
+    const initiallyOpenIndex = deferMessageBodies ? -1 : (currentStepIndex >= 0 ? currentStepIndex : messages.length - 1);
     messages.forEach((message, index) => {
         const item = document.createElement('article');
         item.className = 'acs-prompt-message';
@@ -5061,16 +5179,15 @@ function renderPromptPreview(messages, step) {
         const body = document.createElement('div');
         body.className = 'acs-prompt-message-body';
         body.hidden = true;
-        const content = document.createElement('pre');
-        content.textContent = repairExpandedCharacterMacro(message.content);
-        body.append(content);
+        body.dataset.promptMessageIndex = String(index);
+        if (!deferMessageBodies) ensurePromptMessageContent(body);
         item.append(toggle, body);
         list.append(item);
 
         if (index === initiallyOpenIndex) setPromptMessageOpen(item, true, false);
     });
 
-    void Promise.all(messages.map(message => measureTokenCount(message.content))).then(metrics => {
+    const renderTokenMetrics = () => Promise.all(messages.map(message => measureTokenCount(message.content))).then(metrics => {
         if (renderEpoch !== promptTokenRenderEpoch || !shell) return;
         let total = 0;
         let approximate = false;
@@ -5087,6 +5204,9 @@ function renderPromptPreview(messages, step) {
         const totalMetric = formatTokenMetric({ count: total, approximate });
         shell.querySelector('#acs-prompt-preview-summary').textContent = `Step ${step.number} · ${messages.length} 条消息 · ${totalMetric} · ${connectionDisplayName()}`;
     });
+    // 手机端先显示预览外壳，token 统计延后一帧，避免长上下文阻塞打开动画。
+    if (deferMessageBodies) hostWindow.setTimeout(() => { void renderTokenMetrics(); }, 0);
+    else void renderTokenMetrics();
 }
 
 function setPromptMessageOpen(item, open, scroll = true) {
@@ -5095,6 +5215,7 @@ function setPromptMessageOpen(item, open, scroll = true) {
     const body = item.querySelector('.acs-prompt-message-body');
     item.classList.toggle('is-open', open);
     toggle?.setAttribute('aria-expanded', String(open));
+    if (open) ensurePromptMessageContent(body);
     if (body) body.hidden = !open;
     if (open && scroll) {
         const reducedMotion = hostWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -5115,25 +5236,30 @@ function togglePromptMessage(toggle) {
 }
 
 function openPromptPreview() {
-    const preset = getAutoPresetSafe();
-    if (!preset) {
-        notify('warning', '未找到固定的 A.U.T.O v2.0 预设，暂时无法组装提示词。');
-        return;
-    }
-    const step = STEPS[project.currentStep - 1];
-    const state = project.steps[step.number];
-    const userInput = resolvedCurrentUserInput(step, state);
-    const messages = buildOrderedPrompts(preset, step, { previewUserInput: userInput });
-    renderPromptPreview(messages, step);
-    toggleProjectMenu(false);
-    closeStyledSelects();
-    // 手机端先收起步骤／产物抽屉，确保预览可见且可操作。
-    if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
+    try {
+        const preset = getAutoPresetSafe();
+        if (!preset) {
+            notify('warning', '请先导入 A.U.T.O 预设。');
+            return;
+        }
+        const step = STEPS[project.currentStep - 1];
+        const state = project.steps[step.number];
+        const userInput = resolvedCurrentUserInput(step, state);
+        const messages = buildOrderedPrompts(preset, step, { previewUserInput: userInput });
+        toggleProjectMenu(false);
+        closeStyledSelects();
+        // 手机端先收起步骤／产物抽屉，确保预览可见且可操作。
+        if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
 
-    const preview = shell.querySelector('#acs-prompt-preview');
-    preview.hidden = false;
-    preview.setAttribute('aria-hidden', 'false');
-    preview.querySelector('button[data-prompt-preview-close]')?.focus({ preventScroll: true });
+        const preview = shell.querySelector('#acs-prompt-preview');
+        preview.hidden = false;
+        preview.setAttribute('aria-hidden', 'false');
+        preview.querySelector('button[data-prompt-preview-close]')?.focus({ preventScroll: true });
+        renderPromptPreview(messages, step);
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 打开提示词预览失败', error);
+        notify('error', '提示词预览打开失败，请重试。');
+    }
 }
 
 async function copyPromptPreview() {
@@ -6608,12 +6734,42 @@ function currentTourTarget(step) {
     return step.fallbackSelector ? shell?.querySelector(step.fallbackSelector) : null;
 }
 
+function syncMobileTourContent(card) {
+    const actionBar = card?.querySelector('.acs-tour-actions');
+    if (!card || !actionBar) return;
+    const content = card.querySelector('#acs-tour-content');
+    const useMobileLayout = shell.classList.contains('acs-mobile-layout');
+
+    if (!useMobileLayout && content) {
+        // 退出手机布局时还原原始 DOM 顺序，桌面端视觉保持不变。
+        while (content.firstChild) card.insertBefore(content.firstChild, actionBar);
+        content.remove();
+        return;
+    }
+    if (!useMobileLayout || content) return;
+
+    const mobileContent = document.createElement('div');
+    mobileContent.id = 'acs-tour-content';
+    for (const selector of ['#acs-tour-eyebrow', '#acs-tour-title', '#acs-tour-description', '#acs-tour-points', '#acs-tour-action-note', '#acs-tour-dots']) {
+        const element = card.querySelector(selector);
+        if (element) mobileContent.append(element);
+    }
+    card.insertBefore(mobileContent, actionBar);
+}
+
 function positionTourStep() {
     if (!tourActive || !shell?.isConnected) return;
+    const card = shell.querySelector('#acs-tour-card');
+    if (!card) return;
+    if (shell.classList.contains('acs-mobile-layout')) {
+        // 手机端不做聚光与跟随定位，避免将引导卡片推到可视区域外。
+        card.style.removeProperty('left');
+        card.style.removeProperty('top');
+        return;
+    }
     const step = TOUR_STEPS[tourStepIndex];
     const target = currentTourTarget(step);
     const spotlight = shell.querySelector('#acs-tour-spotlight');
-    const card = shell.querySelector('#acs-tour-card');
     if (!target || !spotlight || !card) return;
 
     const targetRect = target.getBoundingClientRect();
@@ -6651,6 +6807,7 @@ function renderTourStep() {
     if (!tourActive) return;
     const step = TOUR_STEPS[tourStepIndex];
     const card = shell.querySelector('#acs-tour-card');
+    syncMobileTourContent(card);
     applyTourScene(step);
     shell.querySelector('#acs-tour-eyebrow').textContent = step.eyebrow;
     shell.querySelector('#acs-tour-title').textContent = step.title;
@@ -6684,6 +6841,10 @@ function renderTourStep() {
     points.hidden = !step.points?.length;
     actionNote.textContent = step.actionNote || '';
     actionNote.hidden = !step.actionNote;
+
+    if (shell.classList.contains('acs-mobile-layout')) {
+        shell.querySelector('#acs-tour-content')?.scrollTo({ top: 0, behavior: 'auto' });
+    }
 
     const dots = shell.querySelector('#acs-tour-dots');
     dots.replaceChildren(...TOUR_STEPS.map((_, index) => {
@@ -6852,6 +7013,7 @@ function openStepHelp() {
     shell.querySelector('#acs-step-help-workflow').textContent = note.workflow;
     shell.querySelector('#acs-step-help-deliverable').textContent = note.deliverable;
     shell.querySelector('#acs-step-help-caution').textContent = note.caution;
+    overlay.querySelector('.acs-step-help-dialog')?.scrollTo({ top: 0, behavior: 'auto' });
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
     overlay.querySelector('[data-step-help-close]')?.focus({ preventScroll: true });
