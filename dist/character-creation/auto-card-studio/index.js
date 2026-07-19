@@ -1694,7 +1694,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-23';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-24';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -7202,7 +7202,8 @@ function createReorgSourceModel(artifacts = collectDeliveryArtifacts()) {
     for (const artifact of artifacts.filter(item => item.target.kind === 'worldbook')) {
         if (!grouped.has(artifact.target.name)) grouped.set(artifact.target.name, []);
         const group = grouped.get(artifact.target.name);
-        if (!group.some(item => item.content === artifact.content)) group.push(artifact);
+        // 即使正文相同也保留独立 blockId；发布完整性按“产物”而非“不同正文”校验。
+        group.push(artifact);
     }
 
     const entries = [];
@@ -7448,6 +7449,7 @@ function applyReorgPlan(selectedArtifacts, allArtifacts, planResult) {
         entries,
         plan: planResult.plan,
         usedArtifacts: usedArtifactIds.size,
+        usedArtifactIds: [...usedArtifactIds],
         omittedArtifacts: Math.max(0, selectedWorldbook.length - usedArtifactIds.size),
         unresolvedBlockIds: [...new Set(unresolvedBlockIds)],
     };
@@ -7478,7 +7480,7 @@ function reorgPlanFromResponse(response) {
     return { status: 'ready', plan, artifact: block };
 }
 
-async function generateDeliveryReorgPlan(selectedArtifacts) {
+async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' } = {}) {
     const step = { number: 30, promptId: REORG_PROMPT_ID, name: '自动世界书重组' };
     if (!studioResources.preset) throw new Error('尚未向创作台导入 A.U.T.O 预设，无法自动重组');
     const connectionError = customConnectionError();
@@ -7489,8 +7491,9 @@ async function generateDeliveryReorgPlan(selectedArtifacts) {
         '请立即执行预设中的世界书重组步骤（原 Step29）。',
         '只处理项目上下文中“创作台虚拟世界书结构报告”列出的本次已选产物。',
         '每个 blockId 都必须且只能在 mappings 中使用一次，不得遗漏，也不得自行编造 blockId。',
+        retryReason ? `上一次方案未通过完整性校验：${retryReason}。请重新核对全部 blockId 后完整输出。` : '',
         '请严格输出 A.U.T.O 规定的 reorg_plan JSON 代码块。',
-    ].join('\n');
+    ].filter(Boolean).join('\n');
     const generationId = `auto-card-studio-delivery-reorg-${project.id}-${Date.now()}`;
     // 发布阶段的重组与普通步骤使用同一输出方式，避免部分渠道把非流式请求路由到不同鉴权路径。
     const shouldStream = connectionSettings.outputMode === 'stream';
@@ -7519,6 +7522,53 @@ async function generateDeliveryReorgPlan(selectedArtifacts) {
     return planResult;
 }
 
+function recoverIncompleteReorgBuild(build, selectedArtifacts) {
+    const selectedWorldbook = selectedArtifacts.filter(item => item.target.kind === 'worldbook');
+    const usedIds = new Set(build?.usedArtifactIds || []);
+    const omitted = selectedWorldbook.filter(item => !usedIds.has(item.id));
+
+    // 若模型方案完全不可用，仍按原目标安全创建世界书，保证所选产物一个不少。
+    if (!build?.applied || !Array.isArray(build.entries) || !build.entries.length) {
+        return {
+            applied: true,
+            entries: buildDefaultOutputWorldbook(selectedWorldbook),
+            usedArtifacts: selectedWorldbook.length,
+            usedArtifactIds: selectedWorldbook.map(item => item.id),
+            omittedArtifacts: 0,
+            unresolvedBlockIds: [],
+            recoveredArtifacts: selectedWorldbook.length,
+            recoveryMode: 'default',
+        };
+    }
+
+    const entries = build.entries.map(entry => ({ ...entry }));
+    const fallbackEntries = buildDefaultOutputWorldbook(omitted);
+    for (const fallback of fallbackEntries) {
+        const existing = entries.find(entry => normalizeReorgLabel(entry.name) === normalizeReorgLabel(fallback.name));
+        if (existing) {
+            const additions = omitted
+                .filter(item => item.target.name === fallback.name)
+                .map(item => item.content)
+                .filter(content => content && !String(existing.content || '').includes(content));
+            if (additions.length) existing.content = [existing.content, ...additions].filter(Boolean).join('\n\n');
+        } else {
+            entries.push({ ...fallback, uid: entries.length });
+        }
+    }
+
+    return {
+        ...build,
+        applied: true,
+        entries,
+        usedArtifacts: selectedWorldbook.length,
+        usedArtifactIds: selectedWorldbook.map(item => item.id),
+        omittedArtifacts: 0,
+        unresolvedBlockIds: [],
+        recoveredArtifacts: omitted.length,
+        recoveryMode: omitted.length ? 'append' : 'validated',
+    };
+}
+
 async function ensureDeliveryReorg(selectedArtifacts) {
     const selectedWorldbook = selectedArtifacts.filter(item => item.target.kind === 'worldbook');
     if (!selectedWorldbook.length) {
@@ -7533,14 +7583,23 @@ async function ensureDeliveryReorg(selectedArtifacts) {
     }
 
     notify('info', '正在根据本次勾选的产物自动执行世界书重组…');
-    const generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook);
+    let generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook);
     build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
     if (!isCompleteReorgBuild(build, selectedWorldbook)) {
-        const reasons = [];
-        if (!build.applied) reasons.push('方案没有生成可用映射');
-        if (build.omittedArtifacts) reasons.push(`遗漏 ${build.omittedArtifacts} 项产物`);
-        if (build.unresolvedBlockIds?.length) reasons.push(`${build.unresolvedBlockIds.length} 个 blockId 无法匹配`);
-        throw new Error(`自动重组校验失败：${reasons.join('，') || '未知错误'}。世界书尚未创建，请重试或检查已选产物。`);
+        const retryReasons = [];
+        if (!build.applied) retryReasons.push('方案没有生成可用映射');
+        if (build.omittedArtifacts) retryReasons.push(`遗漏 ${build.omittedArtifacts} 项产物`);
+        if (build.unresolvedBlockIds?.length) retryReasons.push(`${build.unresolvedBlockIds.length} 个 blockId 无法匹配`);
+        notify('info', '重组方案存在遗漏，正在自动修正一次…');
+        generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook, {
+            retryReason: retryReasons.join('，') || '方案不完整',
+        });
+        build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
+    }
+
+    if (!isCompleteReorgBuild(build, selectedWorldbook)) {
+        build = recoverIncompleteReorgBuild(build, selectedWorldbook);
+        notify('warning', `重组方案仍不完整，已安全补入 ${build.recoveredArtifacts || 0} 项产物。`);
     }
     renderAll();
     return build;
