@@ -1390,7 +1390,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-8';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.19-9';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1521,7 +1521,7 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-editor-head p,.acs-resource-editor-head h2,.acs-update-notes-head p,.acs-update-notes-head h2{margin:0}.acs-resource-editor-head p,.acs-update-notes-head p{color:var(--acs-cyan);font:700 8px/1 var(--acs-mono);letter-spacing:.15em}.acs-resource-editor-head h2,.acs-update-notes-head h2{margin-top:7px;color:var(--acs-text);font:500 23px/1.25 var(--acs-display)}
 .acs-resource-editor-close,.acs-update-notes-close{display:grid;width:34px;height:34px;flex:0 0 auto;place-items:center;border:1px solid var(--acs-line);border-radius:9px;background:transparent;color:var(--acs-muted);cursor:pointer}
 .acs-resource-editor-body{display:grid;min-height:0;padding:18px 22px}.acs-resource-editor-body textarea{width:100%;min-height:360px;resize:vertical;padding:15px;border:1px solid var(--acs-line);border-radius:11px;background:#292722;color:var(--acs-text);font-family:var(--acs-body);font-size:12px;font-weight:450;line-height:1.78;letter-spacing:.008em;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;scrollbar-width:thin;scrollbar-color:var(--acs-line) transparent}
-.acs-resource-editor-actions,.acs-update-notes-actions{display:flex;justify-content:flex-end;gap:8px;padding:13px 18px;border-top:1px solid var(--acs-line-soft);background:#292722}
+.acs-resource-editor-actions,.acs-update-notes-actions{display:flex;justify-content:flex-end;gap:8px;padding:13px 18px;border-top:1px solid var(--acs-line-soft);background:#292722}.acs-update-notes-actions{justify-content:center}
 .acs-update-notes-actions{align-items:center}.acs-update-notes-actions .acs-button{width:auto;min-width:104px;min-height:36px;margin:0;padding:7px 14px;white-space:nowrap}.acs-update-notes-actions .acs-button-publish{width:auto;margin-top:0}
 .acs-update-notes-dialog{grid-template-rows:auto minmax(0,1fr) auto;width:min(680px,94vw)}
 .acs-update-notes-summary{display:block;margin-top:7px;color:var(--acs-muted);font:700 9px/1.4 var(--acs-mono)}
