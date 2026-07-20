@@ -1805,7 +1805,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-27';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-28';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -8194,12 +8194,48 @@ function downloadBlob(content, fileName, type) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function exportProjectJson() {
+function projectDataSummary(targetProject) {
+    const stepStates = STEPS.map(step => targetProject.steps?.[step.number]).filter(Boolean);
+    const turns = stepStates.reduce((total, state) => total + (Array.isArray(state.turns) ? state.turns.length : 0), 0);
+    let artifacts = 0;
+    for (const step of STEPS) {
+        const latest = new Set();
+        for (const turn of targetProject.steps?.[step.number]?.turns || []) {
+            const blocks = extractArtifactBlocks(turn.content, step.number);
+            for (const block of blocks) latest.add(resolveArtifactIdentity(step.number, block, blocks));
+        }
+        artifacts += latest.size;
+    }
+    return {
+        completedSteps: stepStates.filter(state => state.status !== 'idle').length,
+        turns,
+        artifacts,
+        briefCharacters: String(targetProject.brief || '').length,
+    };
+}
+
+function projectSummaryText(summary) {
+    return `已有内容：${summary.completedSteps} 个步骤 · ${summary.turns} 条对话 · ${summary.artifacts} 个正式产物 · 创作母题 ${summary.briefCharacters} 字`;
+}
+
+async function exportProjectJson() {
+    // 先立即保存正在编辑的产物，避免导出的 JSON 落后于界面内容。
+    flushPendingProjectEdits();
+    const summary = projectDataSummary(project);
+    const isEmpty = summary.turns === 0 && summary.artifacts === 0 && summary.briefCharacters === 0;
+    const confirmed = await showStudioConfirm({
+        title: isEmpty ? '当前项目没有创作数据' : '确认导出项目？',
+        message: `即将导出“${project.name}”。\n${projectSummaryText(summary)}${isEmpty ? '\n该文件导入后也会是空项目，请确认没有选错项目。' : ''}`,
+        confirmLabel: isEmpty ? '仍然导出' : '导出项目',
+        danger: isEmpty,
+    });
+    if (!confirmed) return;
     downloadBlob(
         JSON.stringify(project, null, 2),
         `${safeFileName(project.name)}.auto-card-studio.json`,
         'application/json;charset=utf-8',
     );
+    notify('success', `“${project.name}”已导出。${projectSummaryText(summary)}`);
 }
 
 async function importProjectJson(event) {
@@ -8212,6 +8248,7 @@ async function importProjectJson(event) {
 
         const imported = normalizeProject(JSON.parse(await file.text()));
         if (!imported) throw new Error('这不是有效的 A.U.T.O 创作台项目文件，或文件版本不受支持。');
+        const importedSummary = projectDataSummary(imported);
 
         flushPendingProjectEdits();
         const existingIds = new Set(projectLibrary.projects.map(item => item.id));
@@ -8237,7 +8274,7 @@ async function importProjectJson(event) {
         renderEnvironmentSelectors();
         renderAll();
         toggleProjectMenu(false);
-        notify('success', `已导入并切换到“${project.name}”。`);
+        notify('success', `已导入并切换到“${project.name}”。${projectSummaryText(importedSummary)}`);
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 项目导入失败。', error);
         notify('error', error?.message || '项目导入失败，请检查文件内容。');
