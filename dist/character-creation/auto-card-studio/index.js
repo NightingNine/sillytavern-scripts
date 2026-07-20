@@ -392,8 +392,8 @@ const COMPACT_STAGE_HEADER_CSS = `
 }
 
 .acs-brief-panel {
-  max-height: 260px;
-  overflow: hidden;
+  max-height: min(42vh, 320px);
+  overflow: auto;
   opacity: 1;
   transform: translateY(0);
   transition: max-height 220ms ease, margin 220ms ease, padding 220ms ease, opacity 160ms ease, transform 220ms ease, border-color 160ms ease;
@@ -468,6 +468,13 @@ const CONNECTION_PROFILE_CSS = `
   color: var(--acs-muted);
   font: 700 9px/1.3 var(--acs-mono);
   letter-spacing: 0.06em;
+}
+
+/* 桌面端限制母题输入框的可调整范围，避免缩放手柄被面板裁掉后无法拉回。 */
+.acs-shell:not(.acs-mobile-layout) .acs-brief-panel textarea {
+  min-height: 72px;
+  max-height: min(32vh, 220px);
+  resize: vertical;
 }
 
 .acs-connection-profile-toggle {
@@ -1805,7 +1812,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-28';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-29';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -9888,7 +9895,8 @@ async function collectTestUpdateEntries(currentRevision, targetRevision) {
         const manifest = await fetchUpdateManifest(targetRevision);
         const builds = Array.isArray(manifest.testBuilds) ? manifest.testBuilds : [];
         const currentIndex = builds.findIndex(entry => entry?.label === TEST_BRANCH_BUILD_LABEL);
-        const selected = currentIndex >= 0 ? builds.slice(currentIndex + 1) : builds.slice(-1);
+        // 找不到当前构建时不能拿最后一条旧公告冒充本次更新，直接回退到提交记录。
+        const selected = currentIndex >= 0 ? builds.slice(currentIndex + 1) : [];
         if (selected.length) return selected.map(entry => normalizeManifestEntry(entry, targetRevision.slice(0, 7)));
     } catch (error) {
         console.warn('[A.U.T.O Card Studio] 测试版更新说明读取失败，尝试读取提交记录。', error);
