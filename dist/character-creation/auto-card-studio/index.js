@@ -1941,7 +1941,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-34';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-35';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -6739,18 +6739,6 @@ function buildProjectContext(currentStep, preset, options = {}) {
         sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse.slice(0, 22000)}`);
     }
 
-    // 发布时的自动重组使用隐藏的内部 Step 30，不会出现在 project.steps 中。
-    const currentTurns = project.steps[currentStep.number]?.turns || [];
-    // 最新一条用户输入会通过 user_input 单独发送；这里只保留此前的修改要求，不再回传 AI 的整段说明或思考。
-    const contextualTurns = currentTurns.at(-1)?.role === 'user' ? currentTurns.slice(0, -1) : currentTurns;
-    const priorUserRequests = contextualTurns.filter(turn => turn.role === 'user').slice(-6);
-    if (priorUserRequests.length) {
-        sections.push('\n# 当前阶段的既有修改要求');
-        for (const turn of priorUserRequests) {
-            sections.push(`\n[创作者补充]\n${String(turn.content || '').slice(0, 18000)}`);
-        }
-    }
-
     const currentArtifacts = effectiveStepArtifacts(currentStep.number, { forContext: true });
     if (currentArtifacts) {
         sections.push(`\n# 当前阶段正式产物（各产物最新版）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
@@ -6767,6 +6755,41 @@ function buildProjectContext(currentStep, preset, options = {}) {
         context = `${context.slice(0, 180000)}\n\n[中间较早的产物因上下文长度省略]\n\n${context.slice(-(MAX_CONTEXT_CHARS - 180000))}`;
     }
     return context;
+}
+
+function conversationContentForPrompt(turn, stepNumber) {
+    let content = String(turn?.content || '');
+    if (turn?.role !== 'assistant') return content;
+    // 被关闭的产物即使出现在旧 AI 回复中，也不能通过会话记录重新进入上下文。
+    const blocks = extractArtifactBlocks(content, stepNumber);
+    const hiddenIdentities = new Set(blocks
+        .map(block => resolveArtifactIdentity(stepNumber, block, blocks))
+        .filter(identity => isArtifactHiddenFromContext(stepNumber, identity)));
+    for (const identity of hiddenIdentities) {
+        content = removeArtifactIdentityFromText(content, stepNumber, identity);
+    }
+    return content;
+}
+
+function buildCurrentConversationMessages(currentStep, options = {}) {
+    const state = project.steps[currentStep.number];
+    if (!Array.isArray(state?.turns) || !state.turns.length) return [];
+    let turns = [...state.turns];
+    const previewing = Object.prototype.hasOwnProperty.call(options, 'previewUserInput');
+    const embeddingInput = Object.prototype.hasOwnProperty.call(options, 'embeddedUserInput');
+    // 正常生成开始前已把本轮输入写入 turns；它会由 user_input 占位符单独发送，因此只排除这一条。
+    if (!previewing && !embeddingInput && turns.at(-1)?.role === 'user') turns = turns.slice(0, -1);
+
+    return turns.map((turn, index) => {
+        const entry = {
+            role: turn.role === 'assistant' ? 'assistant' : 'user',
+            content: prepareTemplateMacrosForGeneration(conversationContentForPrompt(turn, currentStep.number)),
+        };
+        if (previewing) {
+            entry.name = `当前会话 ${index + 1} · ${entry.role === 'assistant' ? 'AI 回复' : '用户消息'}`;
+        }
+        return entry;
+    }).filter(entry => entry.content.trim());
 }
 
 function buildOrderedPrompts(preset, currentStep, options = {}) {
@@ -6803,10 +6826,12 @@ function buildOrderedPrompts(preset, currentStep, options = {}) {
     };
     if (includePreviewMetadata) {
         macroGuard.name = '角色卡模板变量保护';
-        projectContext.name = '项目上下文（母题、正式产物与本阶段修改要求）';
+        projectContext.name = '项目上下文（母题与正式产物）';
     }
     ordered.unshift(macroGuard);
     ordered.push(projectContext);
+    // 保留当前步骤的真实对话顺序，让 AI 能接续此前讨论，而不只是读取项目摘要。
+    ordered.push(...buildCurrentConversationMessages(currentStep, options));
     if (includePreviewMetadata) {
         ordered.push({
             role: 'user',
