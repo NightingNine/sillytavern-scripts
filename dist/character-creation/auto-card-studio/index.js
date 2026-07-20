@@ -1156,6 +1156,18 @@ const ARTIFACT_HISTORY_CSS = `
 }
 
 /* 标题上的上下文开关只控制后续发送给 AI 的内容，不改变产物本身与发布选择。 */
+.acs-artifact-title {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.acs-artifact-title .acs-artifact-name {
+  min-width: 0;
+}
+
 .acs-artifact-context-toggle {
   position: relative;
   flex: 0 0 auto;
@@ -1929,7 +1941,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-33';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-34';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -5468,6 +5480,8 @@ function renderArtifacts() {
         name.className = 'acs-artifact-name';
         name.textContent = artifactDisplayName(group.tag, artifact.step);
         name.title = `原始标签：${group.tag}`;
+        const title = document.createElement('span');
+        title.className = 'acs-artifact-title';
         const step = document.createElement('span');
         step.className = 'acs-artifact-step';
         step.textContent = `S${String(artifact.step).padStart(2, '0')}${artifact.accepted ? ' · 已确认' : ' · 草案'}`;
@@ -5489,8 +5503,9 @@ function renderArtifacts() {
         const toggleIcon = document.createElement('i');
         toggleIcon.className = 'fa-solid fa-chevron-down acs-artifact-toggle-icon';
         toggleIcon.setAttribute('aria-hidden', 'true');
-        meta.append(contextToggle, step, tokenCount, toggleIcon);
-        head.append(name, meta);
+        title.append(contextToggle, name);
+        meta.append(step, tokenCount, toggleIcon);
+        head.append(title, meta);
         summary.append(head);
 
         const editor = document.createElement('div');
