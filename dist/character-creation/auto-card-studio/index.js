@@ -1969,7 +1969,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-37';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-38';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -7143,6 +7143,30 @@ function generationErrorMessage(error, fallback = '未知错误') {
     return String(candidates.find(value => typeof value === 'string' && value.trim()) || fallback);
 }
 
+function isOpaqueEmptyGenerationError(error) {
+    const message = generationErrorMessage(error, '').trim();
+    return /^(?:<none>|none|未得到响应)$/i.test(message);
+}
+
+async function generateRawWithOpaqueRetry(request, label = '本轮生成') {
+    try {
+        return await helper.generateRaw(request);
+    } catch (error) {
+        // 流式请求或已有正文时重发可能造成重复内容；这里只复现用户手动重试能够恢复的空错误场景。
+        if (request.should_stream || !isOpaqueEmptyGenerationError(error)) throw error;
+        const retryGenerationId = `${request.generation_id}-retry-${Date.now()}`;
+        if (activeGenerationId === request.generation_id) activeGenerationId = retryGenerationId;
+        logGenerationDiagnostic('接口返回空错误，自动重试一次', {
+            label,
+            first_generation_id: request.generation_id,
+            retry_generation_id: retryGenerationId,
+            error: generationErrorDetails(error),
+        });
+        notify('info', '接口首次没有返回有效响应，正在自动重试一次。');
+        return helper.generateRaw({ ...request, generation_id: retryGenerationId });
+    }
+}
+
 function logGenerationDiagnostic(phase, detail) {
     const label = `[A.U.T.O Card Studio] 生成诊断 · ${phase}`;
     if (console.groupCollapsed) console.groupCollapsed(label);
@@ -7359,14 +7383,14 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             });
         }
 
-        const result = await helper.generateRaw({
+        const result = await generateRawWithOpaqueRetry({
             generation_id: activeGenerationId,
             user_input: prepareTemplateMacrosForGeneration(userInput),
             should_stream: shouldStream,
             should_silence: false,
             ordered_prompts: orderedPrompts,
             custom_api: customApi,
-        });
+        }, `Step ${step.number} ${step.name}`);
         const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
         logGenerationDiagnostic('请求完成', {
             ...generationDiagnostic,
@@ -8079,7 +8103,7 @@ async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' }
     const generationId = `auto-card-studio-delivery-reorg-${project.id}-${Date.now()}`;
     // 发布阶段的重组与普通步骤使用同一输出方式，避免部分渠道把非流式请求路由到不同鉴权路径。
     const shouldStream = connectionSettings.outputMode === 'stream';
-    const result = await helper.generateRaw({
+    const result = await generateRawWithOpaqueRetry({
         generation_id: generationId,
         should_stream: shouldStream,
         should_silence: false,
@@ -8088,7 +8112,7 @@ async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' }
             embeddedUserInput: userInput,
         }),
         custom_api: presetGenerationOptions(preset),
-    });
+    }, '发布前世界书重组');
     const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
     const response = normalizeFinalArtifactUserMacros(rawResponse, 30);
     const planResult = reorgPlanFromResponse(response);
