@@ -590,6 +590,34 @@ const CONNECTION_PROFILE_CSS = `
   display: none;
 }
 
+/* 连接预设与接口详情属于同一套独立连接，视觉和折叠行为保持为一个整体。 */
+.acs-custom-connection-group {
+  display: grid;
+  margin-top: 10px;
+  margin-bottom: 13px;
+}
+
+.acs-custom-connection-group > .acs-connection-profile-panel {
+  margin: 0;
+  border-radius: 10px 10px 0 0;
+}
+
+.acs-custom-connection-group > .acs-custom-connection {
+  margin: 0;
+  border: 1px solid rgba(211, 173, 114, 0.24);
+  border-top: 0;
+  border-left: 2px solid rgba(183, 163, 207, 0.5);
+  border-radius: 0 0 10px 10px;
+}
+
+.acs-custom-connection-group.is-collapsed > .acs-connection-profile-panel {
+  border-radius: 10px;
+}
+
+.acs-custom-connection-group.is-collapsed > .acs-custom-connection {
+  display: none !important;
+}
+
 .acs-connection-profile-heading small {
   color: var(--acs-gold);
   font: 600 8px/1.3 var(--acs-body);
@@ -1941,7 +1969,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-35';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-36';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -6405,9 +6433,13 @@ function installConnectionProfileUI() {
           </button>
         </div>
       </div>`;
-    // 先创建输出方式，再把连接预设插到连接方式之后，确保它紧跟“单独配置”。
+    // 连接预设和接口详情组成同一折叠组，输出方式排列在整组之后。
     ensureOutputModeControls();
-    shell.querySelector('.acs-connection-options')?.insertAdjacentElement('afterend', panel);
+    const group = document.createElement('div');
+    group.id = 'acs-custom-connection-group';
+    group.className = 'acs-custom-connection-group';
+    shell.querySelector('.acs-connection-options')?.insertAdjacentElement('afterend', group);
+    group.append(panel, customConnection);
     shell.querySelector('#acs-custom-api-key').placeholder = '保存在当前浏览器中';
     shell.querySelector('#acs-connection-profile').addEventListener('change', event => {
         const profile = connectionProfiles.find(item => item.id === event.target.value);
@@ -6422,6 +6454,7 @@ function installConnectionProfileUI() {
     shell.querySelector('#acs-delete-connection-profile').addEventListener('click', deleteCurrentConnectionProfile);
     shell.querySelector('#acs-connection-profile-toggle').addEventListener('click', event => {
         const collapsed = panel.classList.toggle('is-collapsed');
+        group.classList.toggle('is-collapsed', collapsed);
         event.currentTarget.setAttribute('aria-expanded', String(!collapsed));
     });
     const note = customConnection.querySelector('.acs-security-note');
@@ -6520,6 +6553,8 @@ function renderConnectionSettings() {
     }
 
     const isCustom = connectionSettings.mode === 'custom';
+    const connectionGroup = shell.querySelector('#acs-custom-connection-group');
+    if (connectionGroup) connectionGroup.hidden = !isCustom;
     const profilePanel = shell.querySelector('#acs-connection-profile-panel');
     if (profilePanel) profilePanel.hidden = !isCustom;
     shell.querySelector('#acs-custom-connection').hidden = !isCustom;
