@@ -246,6 +246,80 @@ const CONVERSATION_NAV_CSS = `
   position: relative;
 }
 
+/* 每条消息使用独立操作栏，让编辑、重试不再挤在正文中。 */
+.acs-turn-label {
+  min-height: 32px;
+  justify-content: space-between;
+  margin: -14px -16px 12px;
+  padding: 6px 10px 6px 12px;
+  border-bottom: 1px solid var(--acs-line-soft);
+  border-radius: 13px 13px 0 0;
+  background: rgba(43, 41, 37, 0.28);
+}
+
+.acs-turn.is-user .acs-turn-label {
+  justify-content: flex-end;
+}
+
+.acs-turn-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.acs-turn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 23px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--acs-muted);
+  cursor: pointer;
+  font: 650 9px/1 var(--acs-body);
+}
+
+.acs-turn-action:hover:not(:disabled),
+.acs-turn-action:focus-visible {
+  background: rgba(217, 119, 87, 0.11);
+  color: var(--acs-cyan);
+  outline: 0;
+}
+
+.acs-turn-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.acs-turn-editor {
+  display: block;
+  width: 100%;
+  min-height: 120px;
+  max-height: 58vh;
+  margin: 0;
+  padding: 13px 15px;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  resize: vertical;
+  background: rgba(43, 41, 37, 0.54) !important;
+  color: var(--acs-text) !important;
+  font: inherit;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.acs-turn-editor:focus {
+  box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.72);
+}
+
+.acs-turn.is-user .acs-turn-editor {
+  min-height: 88px;
+}
+
 .acs-conversation-nav {
   position: absolute;
   top: 0;
@@ -1855,7 +1929,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-32';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-33';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -5076,19 +5150,33 @@ function renderCurrentStep() {
         article.className = `acs-turn ${turn.role === 'user' ? 'is-user' : 'is-assistant'}`;
         const label = document.createElement('div');
         label.className = 'acs-turn-label';
-        const labelText = document.createElement('span');
-        labelText.textContent = turn.role === 'user' ? '你的补充' : project.preferences.aiRole || 'A.U.T.O.';
-        label.append(labelText);
+        if (turn.role !== 'user') {
+            const labelText = document.createElement('span');
+            labelText.textContent = project.preferences.aiRole || 'A.U.T.O.';
+            label.append(labelText);
+        }
+        const actions = document.createElement('span');
+        actions.className = 'acs-turn-actions';
+        const edit = document.createElement('button');
+        edit.className = 'acs-turn-action acs-turn-edit';
+        edit.type = 'button';
+        edit.dataset.editTurn = String(turnIndex);
+        edit.disabled = isGenerating;
+        edit.title = '编辑这条消息';
+        edit.setAttribute('aria-label', '编辑这条消息');
+        edit.innerHTML = '<i class="fa-solid fa-pencil" aria-hidden="true"></i>';
+        actions.append(edit);
         if (turn.role === 'user' && turnIndex === latestUserIndex) {
             const retry = document.createElement('button');
-            retry.className = 'acs-turn-retry';
+            retry.className = 'acs-turn-action acs-turn-retry';
             retry.type = 'button';
             retry.dataset.retryTurn = String(turnIndex);
             retry.disabled = isGenerating;
             retry.title = '重新生成这条输入';
             retry.innerHTML = '<i class="fa-solid fa-rotate-right" aria-hidden="true"></i><span>重试</span>';
-            label.append(retry);
+            actions.append(retry);
         }
+        label.append(actions);
         const content = document.createElement(turn.role === 'user' ? 'pre' : 'div');
         content.className = 'acs-turn-content';
         if (turn.role === 'user') {
@@ -7247,6 +7335,63 @@ async function generateCurrentStep() {
     await runStepGeneration(step, state, userInput);
 }
 
+function beginTurnEdit(turnIndex) {
+    if (isGenerating) return;
+    const state = project.steps[project.currentStep];
+    const turn = state?.turns?.[turnIndex];
+    const article = shell.querySelector(`.acs-turn [data-edit-turn="${turnIndex}"]`)?.closest('.acs-turn');
+    const content = article?.querySelector('.acs-turn-content');
+    const actions = article?.querySelector('.acs-turn-actions');
+    if (!turn || !article || !content || !actions) return;
+
+    const editor = document.createElement('textarea');
+    editor.className = 'acs-turn-editor';
+    editor.value = String(turn.content || '');
+    editor.dataset.turnEditor = String(turnIndex);
+    editor.setAttribute('aria-label', turn.role === 'user' ? '编辑用户消息' : '编辑 AI 回复');
+    content.replaceWith(editor);
+    article.classList.add('is-editing');
+
+    actions.replaceChildren();
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'acs-turn-action';
+    cancel.dataset.cancelTurnEdit = '';
+    cancel.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i><span>取消</span>';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'acs-turn-action';
+    save.dataset.saveTurnEdit = String(turnIndex);
+    save.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i><span>保存</span>';
+    actions.append(cancel, save);
+
+    editor.style.height = `${Math.min(Math.max(editor.scrollHeight, turn.role === 'user' ? 88 : 120), hostWindow.innerHeight * 0.58)}px`;
+    editor.focus();
+    editor.setSelectionRange(editor.value.length, editor.value.length);
+}
+
+function saveTurnEdit(turnIndex) {
+    const state = project.steps[project.currentStep];
+    const turn = state?.turns?.[turnIndex];
+    const editor = shell.querySelector(`[data-turn-editor="${turnIndex}"]`);
+    if (!turn || !editor) return;
+    if (!editor.value.trim()) {
+        notify('warning', '对话内容不能为空。');
+        editor.focus();
+        return;
+    }
+
+    turn.content = turn.role === 'assistant'
+        ? normalizeFinalArtifactUserMacros(editor.value, project.currentStep)
+        : editor.value;
+    turn.editedAt = new Date().toISOString();
+    state.updatedAt = turn.editedAt;
+    state.status = 'draft';
+    saveProject();
+    renderAll();
+    notify('success', turn.role === 'user' ? '用户消息已保存。' : 'AI 回复已保存，相关产物已重新解析。');
+}
+
 async function retryLatestUserInput(turnIndex) {
     const prepared = prepareGeneration();
     if (!prepared) return;
@@ -9391,6 +9536,20 @@ function bindStudioEvents() {
         toggleOverview();
     });
     shell.querySelector('#acs-turns').addEventListener('click', event => {
+        const edit = event.target.closest('[data-edit-turn]');
+        if (edit) {
+            beginTurnEdit(Number(edit.dataset.editTurn));
+            return;
+        }
+        const save = event.target.closest('[data-save-turn-edit]');
+        if (save) {
+            saveTurnEdit(Number(save.dataset.saveTurnEdit));
+            return;
+        }
+        if (event.target.closest('[data-cancel-turn-edit]')) {
+            renderCurrentStep();
+            return;
+        }
         const retry = event.target.closest('[data-retry-turn]');
         if (retry) retryLatestUserInput(Number(retry.dataset.retryTurn));
     });
