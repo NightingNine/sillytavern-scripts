@@ -470,6 +470,53 @@ const CONNECTION_PROFILE_CSS = `
   letter-spacing: 0.06em;
 }
 
+.acs-connection-profile-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.acs-connection-profile-toggle > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.acs-connection-profile-toggle i {
+  color: var(--acs-muted);
+  font-size: 8px;
+  transition: transform 160ms ease;
+}
+
+.acs-connection-profile-panel.is-collapsed .acs-connection-profile-toggle i {
+  transform: rotate(-90deg);
+}
+
+.acs-connection-profile-body {
+  display: grid;
+  gap: 9px;
+}
+
+.acs-connection-profile-panel.is-collapsed .acs-connection-profile-body {
+  display: none;
+}
+
+.acs-custom-connection.is-profile-collapsed > :not(#acs-connection-profile-panel) {
+  display: none !important;
+}
+
+.acs-custom-connection.is-profile-collapsed #acs-connection-profile-panel {
+  margin-bottom: 0;
+}
+
 .acs-connection-profile-heading small {
   color: var(--acs-gold);
   font: 600 8px/1.3 var(--acs-body);
@@ -575,6 +622,60 @@ const CONNECTION_PROFILE_CSS = `
 .acs-connection-profile-action:disabled {
   cursor: not-allowed;
   opacity: 0.35;
+}
+
+.acs-model-parameter-section {
+  margin-top: 3px;
+  padding-top: 10px;
+  border-top: 1px solid var(--acs-line-soft);
+}
+
+.acs-model-parameter-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.acs-model-parameter-heading span {
+  color: var(--acs-muted);
+  font: 700 9px/1.3 var(--acs-mono);
+}
+
+.acs-model-parameter-reset {
+  padding: 3px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--acs-gold);
+  cursor: pointer;
+  font: 600 8px/1.3 var(--acs-body);
+}
+
+.acs-model-parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acs-model-parameter-grid label > span {
+  margin-bottom: 4px;
+  font-size: 8px;
+}
+
+.acs-model-parameter-grid input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.acs-model-parameter-note {
+  margin: 7px 0 0;
+  color: var(--acs-muted);
+  font-size: 8px;
+  line-height: 1.5;
 }
 
 @media (max-width: 560px) {
@@ -1704,7 +1805,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-26';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-27';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1745,7 +1846,18 @@ const DEFAULT_CONNECTION_SETTINGS = Object.freeze({
     outputMode: 'complete',
     apiKey: '',
     profileId: '',
+    modelParameters: null,
+    modelParametersCustomized: false,
 });
+
+const MODEL_PARAMETER_FIELDS = Object.freeze([
+    ['max_completion_tokens', '最大回复 Token', 1, 200000],
+    ['temperature', '温度', 0, 2],
+    ['top_p', 'Top P', 0, 1],
+    ['top_k', 'Top K', 0, 1000],
+    ['frequency_penalty', '频率惩罚', -2, 2],
+    ['presence_penalty', '存在惩罚', -2, 2],
+]);
 
 // 依据 A.U.T.O 教程整理的步骤说明。这里解释步骤在整套制卡结构中的作用，
 // 不复制预设提示词，也不会改变实际发送给模型的内容。
@@ -3894,6 +4006,8 @@ async function loadStudioResources() {
         preset: preset && Array.isArray(preset.prompts) ? preset : null,
         regexes: Array.isArray(regexes) ? regexes : [],
     };
+    // 旧数据首次升级时，以已导入预设的参数填充创作台独立参数。
+    ensureConnectionModelParameters(studioResources.preset);
 }
 
 function normalizeImportedPreset(raw, fileName = '') {
@@ -4070,6 +4184,28 @@ function saveProject() {
     if (shell?.querySelector('#acs-project-menu:not([hidden])')) renderProjectMenu();
 }
 
+function normalizeModelParameters(raw = {}) {
+    const normalized = {};
+    for (const [key] of MODEL_PARAMETER_FIELDS) {
+        const value = Number(raw?.[key]);
+        if (Number.isFinite(value)) normalized[key] = value;
+    }
+    return normalized;
+}
+
+function presetDefaultModelParameters(preset = studioResources?.preset) {
+    return normalizeModelParameters(preset?.settings || {});
+}
+
+function ensureConnectionModelParameters(preset = studioResources?.preset, force = false) {
+    const current = normalizeModelParameters(connectionSettings.modelParameters || {});
+    if (!force && Object.keys(current).length) return current;
+    connectionSettings.modelParameters = presetDefaultModelParameters(preset);
+    if (force) connectionSettings.modelParametersCustomized = false;
+    saveConnectionSettings();
+    return connectionSettings.modelParameters;
+}
+
 function loadConnectionSettings() {
     try {
         const saved = JSON.parse(localStorage.getItem(CONNECTION_STORAGE_KEY));
@@ -4080,6 +4216,8 @@ function loadConnectionSettings() {
             outputMode: saved?.outputMode === 'stream' ? 'stream' : 'complete',
             apiKey: typeof saved?.apiKey === 'string' ? saved.apiKey : '',
             profileId: typeof saved?.profileId === 'string' ? saved.profileId : '',
+            modelParameters: normalizeModelParameters(saved?.modelParameters || {}),
+            modelParametersCustomized: saved?.modelParametersCustomized === true,
         };
     } catch (error) {
         console.warn('[A.U.T.O Card Studio] 无法读取模型连接设置，将使用当前 SillyTavern 连接。', error);
@@ -4101,6 +4239,8 @@ function loadConnectionProfiles() {
                 model: String(item.model || ''),
                 outputMode: item.outputMode === 'stream' ? 'stream' : 'complete',
                 apiKey: String(item.apiKey || ''),
+                modelParameters: normalizeModelParameters(item.modelParameters || {}),
+                modelParametersCustomized: item.modelParametersCustomized === true,
             }));
     } catch (error) {
         console.warn('[A.U.T.O Card Studio] 无法读取模型连接预设。', error);
@@ -4122,6 +4262,8 @@ function saveConnectionSettings() {
         outputMode: connectionSettings.outputMode,
         apiKey: customApiKey,
         profileId: connectionSettings.profileId || '',
+        modelParameters: normalizeModelParameters(connectionSettings.modelParameters || {}),
+        modelParametersCustomized: connectionSettings.modelParametersCustomized === true,
     }));
 }
 
@@ -5884,6 +6026,8 @@ function connectionProfileSnapshot(name, id = '') {
         model: connectionSettings.model,
         outputMode: connectionSettings.outputMode,
         apiKey: customApiKey,
+        modelParameters: normalizeModelParameters(connectionSettings.modelParameters || {}),
+        modelParametersCustomized: connectionSettings.modelParametersCustomized === true,
     };
 }
 
@@ -5895,6 +6039,10 @@ function applyConnectionProfile(profile) {
     connectionSettings.apiUrl = profile.apiUrl;
     connectionSettings.model = profile.model;
     connectionSettings.outputMode = profile.outputMode;
+    connectionSettings.modelParameters = Object.keys(profile.modelParameters || {}).length
+        ? normalizeModelParameters(profile.modelParameters)
+        : presetDefaultModelParameters();
+    connectionSettings.modelParametersCustomized = profile.modelParametersCustomized === true;
     customApiKey = profile.apiKey;
     connectionSettings.apiKey = customApiKey;
     saveConnectionSettings();
@@ -5920,6 +6068,40 @@ function renderConnectionProfileControls() {
     shell.querySelector('#acs-delete-connection-profile').disabled = !selected;
     shell.querySelector('#acs-save-connection-profile').title = selected ? '更新当前连接预设' : '保存为新连接预设';
     shell.querySelector('#acs-connection-profile-count').textContent = `${connectionProfiles.length} 个已保存`;
+    renderModelParameterControls();
+}
+
+function renderModelParameterControls() {
+    if (!shell?.querySelector('#acs-model-parameter-grid')) return;
+    const parameters = ensureConnectionModelParameters();
+    for (const [key] of MODEL_PARAMETER_FIELDS) {
+        const input = shell.querySelector(`[data-model-parameter="${key}"]`);
+        if (input) input.value = Number.isFinite(parameters[key]) ? String(parameters[key]) : '';
+    }
+}
+
+function updateModelParameter(event) {
+    const input = event.currentTarget;
+    const key = input.dataset.modelParameter;
+    const parameters = normalizeModelParameters(connectionSettings.modelParameters || {});
+    const value = input.value.trim();
+    if (value === '') delete parameters[key];
+    else {
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) return;
+        parameters[key] = numericValue;
+    }
+    connectionSettings.modelParameters = parameters;
+    connectionSettings.modelParametersCustomized = true;
+    saveConnectionSettings();
+    renderConnectionProfileControls();
+}
+
+function resetModelParametersToPreset() {
+    ensureConnectionModelParameters(studioResources.preset, true);
+    saveConnectionSettings();
+    renderConnectionProfileControls();
+    notify('success', '模型参数已恢复为当前 A.U.T.O 预设的默认值。');
 }
 
 async function saveCurrentConnectionProfile() {
@@ -5985,24 +6167,45 @@ function installConnectionProfileUI() {
     panel.className = 'acs-connection-profile-panel';
     panel.innerHTML = `
       <div class="acs-connection-profile-heading">
-        <span>连接预设</span>
-        <small id="acs-connection-profile-count">0 个已保存</small>
+        <button id="acs-connection-profile-toggle" class="acs-connection-profile-toggle" type="button" aria-expanded="true" aria-controls="acs-connection-profile-body">
+          <span>连接预设</span>
+          <span>
+            <small id="acs-connection-profile-count">0 个已保存</small>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </span>
+        </button>
       </div>
-      <label>
-        <span>快速切换</span>
-        <select id="acs-connection-profile"></select>
-      </label>
-      <div class="acs-connection-profile-name-row">
-        <label class="acs-connection-profile-nameplate" for="acs-connection-profile-name">
-          <i class="fa-solid fa-tag" aria-hidden="true"></i>
-          <input id="acs-connection-profile-name" type="text" maxlength="60" placeholder="给这套连接起个名字">
+      <div id="acs-connection-profile-body" class="acs-connection-profile-body">
+        <label>
+          <span>快速切换</span>
+          <select id="acs-connection-profile"></select>
         </label>
-        <button id="acs-save-connection-profile" class="acs-connection-profile-action" type="button" aria-label="保存连接预设" title="保存为新连接预设">
-          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
-        </button>
-        <button id="acs-delete-connection-profile" class="acs-connection-profile-action" type="button" aria-label="删除连接预设" title="删除当前连接预设">
-          <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-        </button>
+        <div class="acs-connection-profile-name-row">
+          <label class="acs-connection-profile-nameplate" for="acs-connection-profile-name">
+            <i class="fa-solid fa-tag" aria-hidden="true"></i>
+            <input id="acs-connection-profile-name" type="text" maxlength="60" placeholder="给这套连接起个名字">
+          </label>
+          <button id="acs-save-connection-profile" class="acs-connection-profile-action" type="button" aria-label="保存连接预设" title="保存为新连接预设">
+            <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+          </button>
+          <button id="acs-delete-connection-profile" class="acs-connection-profile-action" type="button" aria-label="删除连接预设" title="删除当前连接预设">
+            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="acs-model-parameter-section">
+          <div class="acs-model-parameter-heading">
+            <span>模型参数</span>
+            <button id="acs-reset-model-parameters" class="acs-model-parameter-reset" type="button">恢复预设默认值</button>
+          </div>
+          <div id="acs-model-parameter-grid" class="acs-model-parameter-grid">
+            ${MODEL_PARAMETER_FIELDS.map(([key, label, min, max]) => `
+              <label>
+                <span>${label}</span>
+                <input type="number" data-model-parameter="${key}" min="${min}" max="${max}" step="any" placeholder="未设置">
+              </label>`).join('')}
+          </div>
+          <p class="acs-model-parameter-note">导入的 A.U.T.O 参数只作为初始默认值；生成时以这里保存的参数为准。</p>
+        </div>
       </div>`;
     customConnection.prepend(panel);
     shell.querySelector('#acs-custom-api-key').placeholder = '保存在当前浏览器中';
@@ -6017,6 +6220,15 @@ function installConnectionProfileUI() {
     });
     shell.querySelector('#acs-save-connection-profile').addEventListener('click', saveCurrentConnectionProfile);
     shell.querySelector('#acs-delete-connection-profile').addEventListener('click', deleteCurrentConnectionProfile);
+    shell.querySelector('#acs-connection-profile-toggle').addEventListener('click', event => {
+        const collapsed = panel.classList.toggle('is-collapsed');
+        customConnection.classList.toggle('is-profile-collapsed', collapsed);
+        event.currentTarget.setAttribute('aria-expanded', String(!collapsed));
+    });
+    for (const input of panel.querySelectorAll('[data-model-parameter]')) {
+        input.addEventListener('change', updateModelParameter);
+    }
+    shell.querySelector('#acs-reset-model-parameters').addEventListener('click', resetModelParametersToPreset);
     const note = customConnection.querySelector('.acs-security-note');
     if (note) note.lastChild.textContent = ' 密钥会长期保存在当前浏览器中，不写入项目或导出文件；请仅在个人设备上使用。';
     renderConnectionProfileControls();
@@ -6547,7 +6759,8 @@ async function copyPromptPreview() {
 }
 
 function presetGenerationOptions(preset) {
-    const settings = preset.settings || {};
+    // 预设参数只负责首次初始化；实际生成始终读取创作台独立保存的模型参数。
+    const settings = ensureConnectionModelParameters(preset);
     const customApi = {};
     const assignNumber = (key, value) => {
         if (Number.isFinite(value)) customApi[key] = value;
@@ -8945,6 +9158,10 @@ async function importPresetFile(event) {
         if (embeddedRegexes) await writeResourceRecord('regexes', embeddedRegexes);
         studioResources.preset = preset;
         if (embeddedRegexes) studioResources.regexes = embeddedRegexes;
+        if (!connectionSettings.modelParametersCustomized) {
+            connectionSettings.modelParameters = presetDefaultModelParameters(preset);
+            saveConnectionSettings();
+        }
         environment.presetName = preset.name;
         renderEnvironmentSelectors();
         renderResourceDrawer('prompts');
