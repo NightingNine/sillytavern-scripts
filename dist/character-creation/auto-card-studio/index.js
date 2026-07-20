@@ -1969,7 +1969,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-36';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-37';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -4169,10 +4169,15 @@ async function loadStudioResources() {
             await writeResourceRecord('preset', preset);
         }
     }
+    const normalizedRegexes = Array.isArray(regexes) ? regexes.map(normalizeResponseRegex) : [];
+    // 已导入的旧正则也立即升级并回写，侧栏展示与实际执行使用同一条兼容表达式。
+    if (Array.isArray(regexes) && JSON.stringify(normalizedRegexes) !== JSON.stringify(regexes)) {
+        await writeResourceRecord('regexes', normalizedRegexes);
+    }
     studioResources = {
         loaded: true,
         preset: preset && Array.isArray(preset.prompts) ? preset : null,
-        regexes: Array.isArray(regexes) ? regexes : [],
+        regexes: normalizedRegexes,
     };
     // 旧数据首次升级时，以已导入预设的参数填充创作台独立参数。
     ensureModelParameters(studioResources.preset);
@@ -4869,9 +4874,21 @@ function getAutoPresetSafe() {
     return studioResources.preset;
 }
 
+function makeResponseRegexFenceCompatible(script) {
+    const source = String(script?.findRegex || '');
+    // A.U.T.O 的部分清理规则把 set_log、des_score 等围栏语言写死；模型改用 xml/text 时会匹配失败。
+    // 仅放宽后面确实包含 XML 标签的代码块规则，其他用户正则保持原样，避免扩大删除范围。
+    if (!source.includes('```') || !/<\\?\/?(?:CONTEXT|TIPS_DESIGN)_/i.test(source)) return script;
+    const compatible = source.replace(
+        /```[a-zA-Z0-9_-]+\\s\*/g,
+        '```[^\\r\\n]*\\r?\\n?\\s*',
+    );
+    return compatible === source ? script : { ...script, findRegex: compatible };
+}
+
 function normalizeResponseRegex(script) {
-    if (!script || script.findRegex !== undefined) return script;
-    return {
+    if (!script) return script;
+    const normalized = script.findRegex !== undefined ? script : {
         id: script.id,
         scriptName: script.script_name,
         disabled: !script.enabled,
@@ -4882,6 +4899,7 @@ function normalizeResponseRegex(script) {
         markdownOnly: Boolean(script.destination?.display),
         promptOnly: Boolean(script.destination?.prompt),
     };
+    return makeResponseRegexFenceCompatible(normalized);
 }
 
 function shouldRunResponseRegex(script, mode) {
