@@ -1081,6 +1081,50 @@ const ARTIFACT_HISTORY_CSS = `
   color: var(--acs-text-soft) !important;
   background: #2d2b27 !important;
 }
+
+/* 标题上的上下文开关只控制后续发送给 AI 的内容，不改变产物本身与发布选择。 */
+.acs-artifact-context-toggle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid rgba(147, 189, 145, 0.5);
+  border-radius: 999px;
+  background: rgba(147, 189, 145, 0.18);
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.acs-artifact-context-toggle::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--acs-green);
+  box-shadow: 0 1px 4px rgba(10, 9, 8, 0.35);
+  content: "";
+  transform: translateX(12px);
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.acs-artifact-context-toggle[aria-pressed="false"] {
+  border-color: rgba(171, 162, 151, 0.42);
+  background: rgba(171, 162, 151, 0.08);
+}
+
+.acs-artifact-context-toggle[aria-pressed="false"]::after {
+  background: var(--acs-muted);
+  transform: translateX(0);
+}
+
+.acs-artifact.is-context-hidden .acs-artifact-name,
+.acs-artifact.is-context-hidden .acs-artifact-step {
+  color: var(--acs-muted);
+  opacity: 0.72;
+}
 `;
 
 const PROMPT_INSPECTOR_CSS = `
@@ -1812,7 +1856,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-29';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-30';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -4103,6 +4147,7 @@ function createDefaultProject() {
             characterName: '',
             worldbookName: '',
         },
+        contextHiddenArtifacts: [],
         autoReorg: { response: '', plan: null, updatedAt: null },
         ui: {
             collapsedPhases: [],
@@ -4124,6 +4169,9 @@ function normalizeProject(saved) {
         name: String(saved.name || '未命名世界'),
         preferences: { ...clean.preferences, ...(saved.preferences || {}) },
         output: { ...clean.output, ...(saved.output || {}) },
+        contextHiddenArtifacts: Array.isArray(saved.contextHiddenArtifacts)
+            ? [...new Set(saved.contextHiddenArtifacts.map(value => String(value)))]
+            : [],
         ui: { ...clean.ui, ...(saved.ui || {}) },
         steps: { ...clean.steps, ...(saved.steps || {}) },
         autoReorg: { ...clean.autoReorg, ...(saved.autoReorg || {}) },
@@ -5079,6 +5127,29 @@ function renderProgress() {
     shell.querySelector('#acs-progress-bar').style.width = `${percent}%`;
 }
 
+function artifactContextKey(stepNumber, identity) {
+    return `${Number(stepNumber)}:${String(identity || '')}`;
+}
+
+function isArtifactHiddenFromContext(stepNumber, identity) {
+    return (project.contextHiddenArtifacts || []).includes(artifactContextKey(stepNumber, identity));
+}
+
+function toggleArtifactContext(button) {
+    const key = String(button.dataset.artifactContextKey || '');
+    if (!key) return;
+    const hiddenKeys = new Set(project.contextHiddenArtifacts || []);
+    const willHide = !hiddenKeys.has(key);
+    if (willHide) hiddenKeys.add(key);
+    else hiddenKeys.delete(key);
+    project.contextHiddenArtifacts = [...hiddenKeys];
+    saveProject();
+    renderArtifacts();
+    notify('success', willHide
+        ? '已隐藏：后续设计不会把该产物发送给 AI，产物编辑与发布不受影响。'
+        : '已显示：后续设计会继续把该产物发送给 AI。');
+}
+
 function collectArtifactGroups() {
     const groups = new Map();
     for (const step of STEPS) {
@@ -5094,7 +5165,7 @@ function collectArtifactGroups() {
                 // 同名代码类型可能在不同步骤代表不同产物，历史版本只在当前步骤内合并。
                 const identity = resolveArtifactIdentity(step.number, block, blocks);
                 const groupKey = `${step.number}:${identity}`;
-                if (!groups.has(groupKey)) groups.set(groupKey, { tag: identity, versions: [] });
+                if (!groups.has(groupKey)) groups.set(groupKey, { key: groupKey, tag: identity, versions: [] });
                 groups.get(groupKey).versions.push({
                     ...block,
                     identity,
@@ -5253,9 +5324,15 @@ function renderArtifacts() {
     syncArtifactFilterControls();
 
     list.replaceChildren();
-    shell.querySelector('#acs-block-count').textContent = renderedArtifactGroups.length === allArtifactGroups.length
+    const hiddenCount = allArtifactGroups.filter(group => (
+        isArtifactHiddenFromContext(group.versions.at(-1)?.step, group.tag)
+    )).length;
+    const countLabel = renderedArtifactGroups.length === allArtifactGroups.length
         ? `${allArtifactGroups.length} 个产物`
         : `${renderedArtifactGroups.length} / ${allArtifactGroups.length} 个产物`;
+    shell.querySelector('#acs-block-count').textContent = hiddenCount
+        ? `${countLabel} · ${hiddenCount} 个不发送`
+        : countLabel;
     if (!renderedArtifactGroups.length) {
         const empty = document.createElement('div');
         empty.className = 'acs-artifact-empty';
@@ -5271,6 +5348,8 @@ function renderArtifacts() {
         const details = document.createElement('details');
         details.className = 'acs-artifact';
         details.dataset.artifactGroup = String(groupIndex);
+        const isContextVisible = !isArtifactHiddenFromContext(artifact.step, group.tag);
+        details.classList.toggle('is-context-hidden', !isContextVisible);
         if (renderedArtifactGroups.length === 1) details.open = true;
         const summary = document.createElement('summary');
         const head = document.createElement('span');
@@ -5284,6 +5363,15 @@ function renderArtifacts() {
         step.textContent = `S${String(artifact.step).padStart(2, '0')}${artifact.accepted ? ' · 已确认' : ' · 草案'}`;
         const meta = document.createElement('span');
         meta.className = 'acs-artifact-meta';
+        const contextToggle = document.createElement('button');
+        contextToggle.type = 'button';
+        contextToggle.className = 'acs-artifact-context-toggle';
+        contextToggle.dataset.artifactContextKey = group.key;
+        contextToggle.setAttribute('aria-pressed', String(isContextVisible));
+        contextToggle.setAttribute('aria-label', isContextVisible ? '后续设计会发送给 AI' : '后续设计不发送给 AI');
+        contextToggle.title = isContextVisible
+            ? '已开启：后续设计会发送给 AI；点击隐藏'
+            : '已隐藏：后续设计不发送给 AI；点击恢复';
         const tokenCount = document.createElement('span');
         tokenCount.className = 'acs-artifact-token-count';
         tokenCount.dataset.artifactTokenCount = '';
@@ -5291,7 +5379,7 @@ function renderArtifacts() {
         const toggleIcon = document.createElement('i');
         toggleIcon.className = 'fa-solid fa-chevron-down acs-artifact-toggle-icon';
         toggleIcon.setAttribute('aria-hidden', 'true');
-        meta.append(step, tokenCount, toggleIcon);
+        meta.append(contextToggle, step, tokenCount, toggleIcon);
         head.append(name, meta);
         summary.append(head);
 
@@ -6508,7 +6596,7 @@ function buildProjectContext(currentStep, preset, options = {}) {
 
     for (const step of STEPS) {
         if (step.number >= currentStep.number) break;
-        const response = effectiveStepArtifacts(step.number);
+        const response = effectiveStepArtifacts(step.number, { forContext: true });
         if (!response) continue;
         const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
         const promptResponse = responseForPrompt(response, preset);
@@ -6527,7 +6615,7 @@ function buildProjectContext(currentStep, preset, options = {}) {
         }
     }
 
-    const currentArtifacts = effectiveStepArtifacts(currentStep.number);
+    const currentArtifacts = effectiveStepArtifacts(currentStep.number, { forContext: true });
     if (currentArtifacts) {
         sections.push(`\n# 当前阶段正式产物（各产物最新版）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
     }
@@ -7297,13 +7385,16 @@ function extractArtifactBlocks(text, stepNumber) {
     return [...xmlBlocks, ...fencedBlocks].sort((left, right) => left.start - right.start || left.end - right.end);
 }
 
-function effectiveStepArtifacts(stepNumber) {
+function effectiveStepArtifacts(stepNumber, options = {}) {
     // 与右侧产物栏共用正式产物提取规则；每个身份只发送最新版，彻底排除说明、思考、评分和追问。
     const latestArtifacts = new Map();
     for (const turn of allAssistantArtifactTurns(stepNumber)) {
         const blocks = extractArtifactBlocks(turn.content, stepNumber);
         for (const block of blocks) {
-            latestArtifacts.set(resolveArtifactIdentity(stepNumber, block, blocks), block.content);
+            const identity = resolveArtifactIdentity(stepNumber, block, blocks);
+            // 隐藏状态按“步骤 + 产物身份”保存，因此同类唯一产物生成新版本后仍归入原条目并继续隐藏。
+            if (options.forContext && isArtifactHiddenFromContext(stepNumber, identity)) continue;
+            latestArtifacts.set(identity, block.content);
         }
     }
     return [...latestArtifacts.values()].join('\n\n');
@@ -9423,6 +9514,13 @@ function bindStudioEvents() {
         renderArtifacts();
     });
     artifactList.addEventListener('click', event => {
+        const contextToggle = event.target.closest('[data-artifact-context-key]');
+        if (contextToggle) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleArtifactContext(contextToggle);
+            return;
+        }
         const summary = event.target.closest('summary');
         if (summary?.parentElement?.classList.contains('acs-artifact')) {
             // 明确接管展开行为，避免独立滚动容器中浏览器原生 details 点击失效。
