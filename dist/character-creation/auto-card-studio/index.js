@@ -1855,7 +1855,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-31';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-32';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -1885,8 +1885,8 @@ const TEMPLATE_MACRO_SENTINELS = Object.freeze({
 const TEMPLATE_MACRO_GUARD_PROMPT = `模板变量保护规则：
 - __AUTO_LITERAL_CHAR_MACRO_7F3A__ 是角色卡中的角色变量，输出时必须保持原样。
 - __AUTO_LITERAL_USER_MACRO_7F3A__ 是角色扮演中玩家身份的变量，输出时必须保持原样。
-- 正式角色卡产物中凡是指代玩家在世界内的身份，都必须使用 __AUTO_LITERAL_USER_MACRO_7F3A__，不得写成普通文本“用户”。
-- “用户”只可用于解释创作操作、输入要求等过程性说明，不能作为正式产物中的角色称呼。
+- 只有明确指代角色扮演中玩家所扮演的角色身份时，才使用 __AUTO_LITERAL_USER_MACRO_7F3A__。
+- 产品使用者、工具操作者、说明文字中的普通“用户”必须保留为“用户”，不得替换成模板变量。
 - 不得把以上占位符改写成人名、系统名或当前聊天参与者名称。`;
 
 const DEFAULT_CONNECTION_SETTINGS = Object.freeze({
@@ -6568,28 +6568,9 @@ function repairExpandedCharacterMacro(text) {
     return restoreTemplateMacros(text).replaceAll('SillyTavern System', '{{char}}');
 }
 
-// 只规范 A.U.T.O 规定的正式产物区块；CONTEXT 思考、评分和追问中的“用户”保持原样。
+// 只修复已经被宿主展开的模板宏；普通“用户”可能指产品使用者，不能机械替换为 {{user}}。
 function normalizeFinalArtifactUserMacros(text, stepNumber) {
-    const source = repairExpandedCharacterMacro(text);
-    const ranges = extractArtifactBlocks(source, stepNumber)
-        .map(block => ({ start: block.start, end: block.end }))
-        .sort((left, right) => left.start - right.start || left.end - right.end);
-    if (!ranges.length) return source;
-
-    // 合并可能嵌套或重叠的正式区块，避免同一段文字被重复替换。
-    const merged = [];
-    for (const range of ranges) {
-        const previous = merged.at(-1);
-        if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
-        else merged.push({ ...range });
-    }
-
-    let normalized = source;
-    for (const range of merged.reverse()) {
-        const artifact = normalized.slice(range.start, range.end).replaceAll('用户', '{{user}}');
-        normalized = `${normalized.slice(0, range.start)}${artifact}${normalized.slice(range.end)}`;
-    }
-    return normalized;
+    return repairExpandedCharacterMacro(text);
 }
 
 // 宏处理可能递归生成新的 {{char}}；因此在酒馆助手替换之后还要再次修复并保护。
