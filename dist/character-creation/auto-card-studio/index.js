@@ -2050,7 +2050,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-39';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-40';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2070,6 +2070,10 @@ const MODEL_PARAMETERS_STORAGE_KEY = 'auto-card-studio:model-parameters:v1';
 const RESOURCE_DATABASE_NAME = 'auto-card-studio-resources';
 const RESOURCE_DATABASE_VERSION = 1;
 const RESOURCE_STORE_NAME = 'resources';
+const ARTIFACT_DATABASE_NAME = 'auto-card-studio-artifacts';
+const ARTIFACT_DATABASE_VERSION = 1;
+const ARTIFACT_STORE_NAME = 'project-vaults';
+const ARTIFACT_VAULT_VERSION = 1;
 const RESOURCE_DOCK_POSITION_KEY = 'auto-card-studio:resource-dock-position:v1';
 const PROJECT_VERSION = 1;
 const MAX_CONTEXT_CHARS = 420000;
@@ -4186,6 +4190,9 @@ let artifactFilterQuery = '';
 let runtimeClaimed = false;
 let runtimeTakeoverCount = 0;
 const artifactSaveTimers = new Map();
+const artifactVaults = new Map();
+let artifactVaultsReady = false;
+let artifactVaultWriteChain = Promise.resolve();
 let environment = {
     checked: false,
     presetName: '',
@@ -4202,6 +4209,167 @@ function openResourceDatabase() {
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error || new Error('资源数据库打开失败'));
     });
+}
+
+function openArtifactDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = (hostWindow.indexedDB || indexedDB).open(ARTIFACT_DATABASE_NAME, ARTIFACT_DATABASE_VERSION);
+        request.onupgradeneeded = () => {
+            const database = request.result;
+            if (!database.objectStoreNames.contains(ARTIFACT_STORE_NAME)) {
+                database.createObjectStore(ARTIFACT_STORE_NAME, { keyPath: 'projectId' });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('独立产物库打开失败'));
+    });
+}
+
+function createArtifactVault(projectId) {
+    return {
+        schemaVersion: ARTIFACT_VAULT_VERSION,
+        projectId: String(projectId || ''),
+        versions: [],
+        migratedAt: null,
+        updatedAt: new Date().toISOString(),
+    };
+}
+
+function normalizeArtifactVault(raw, projectId) {
+    const clean = createArtifactVault(projectId);
+    if (!raw || typeof raw !== 'object') return clean;
+    const versions = Array.isArray(raw.versions) ? raw.versions : [];
+    clean.versions = versions.flatMap(item => {
+        const step = Number(item?.step);
+        const identity = String(item?.identity || item?.tag || '').trim();
+        const content = normalizeFinalArtifactUserMacros(String(item?.content || '').trim(), step);
+        if (!STEPS.some(candidate => candidate.number === step) || !identity || !content) return [];
+        return [{
+            id: String(item.id || globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+            step,
+            identity,
+            content,
+            createdAt: String(item.createdAt || new Date().toISOString()),
+            updatedAt: String(item.updatedAt || item.createdAt || new Date().toISOString()),
+            source: String(item.source || 'stored'),
+        }];
+    });
+    clean.migratedAt = raw.migratedAt ? String(raw.migratedAt) : null;
+    clean.updatedAt = String(raw.updatedAt || new Date().toISOString());
+    return clean;
+}
+
+function artifactVaultFor(projectId = project?.id) {
+    const key = String(projectId || '');
+    if (!artifactVaults.has(key)) artifactVaults.set(key, createArtifactVault(key));
+    return artifactVaults.get(key);
+}
+
+function appendArtifactsToVault(vault, text, stepNumber, metadata = {}) {
+    const blocks = extractArtifactBlocks(text, stepNumber);
+    const now = String(metadata.createdAt || new Date().toISOString());
+    for (const block of blocks) {
+        const identity = resolveArtifactIdentity(stepNumber, block, blocks);
+        vault.versions.push({
+            id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            step: Number(stepNumber),
+            identity,
+            content: block.content,
+            createdAt: now,
+            updatedAt: now,
+            source: String(metadata.source || 'generated'),
+        });
+    }
+    if (blocks.length) vault.updatedAt = now;
+    return blocks.length;
+}
+
+function migrateConversationArtifacts(projectData, vault) {
+    if (vault.migratedAt) return 0;
+    let migrated = 0;
+    for (const step of STEPS) {
+        const state = projectData.steps?.[step.number];
+        for (const collectionName of ['artifactHistory', 'turns']) {
+            for (const turn of state?.[collectionName] || []) {
+                if (turn?.role !== 'assistant') continue;
+                migrated += appendArtifactsToVault(vault, turn.content, step.number, {
+                    createdAt: turn.createdAt || state.updatedAt,
+                    source: 'conversation-migration',
+                });
+            }
+        }
+    }
+    vault.migratedAt = new Date().toISOString();
+    vault.updatedAt = vault.migratedAt;
+    return migrated;
+}
+
+async function writeArtifactVault(projectId) {
+    const vault = artifactVaultFor(projectId);
+    const database = await openArtifactDatabase();
+    try {
+        await new Promise((resolve, reject) => {
+            const transaction = database.transaction(ARTIFACT_STORE_NAME, 'readwrite');
+            transaction.objectStore(ARTIFACT_STORE_NAME).put(vault);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error || new Error('独立产物库保存失败'));
+        });
+    } finally {
+        database.close();
+    }
+}
+
+function persistArtifactVault(projectId = project.id) {
+    const targetId = String(projectId);
+    artifactVaultWriteChain = artifactVaultWriteChain
+        .catch(() => undefined)
+        .then(() => writeArtifactVault(targetId))
+        .catch(error => {
+            console.error('[A.U.T.O Card Studio] 独立产物库保存失败。', error);
+            notify('error', '产物保险库保存失败，请立即导出项目备份。');
+            return false;
+        });
+    return artifactVaultWriteChain;
+}
+
+async function deleteArtifactVault(projectId) {
+    const targetId = String(projectId || '');
+    artifactVaults.delete(targetId);
+    const database = await openArtifactDatabase();
+    try {
+        await new Promise((resolve, reject) => {
+            const transaction = database.transaction(ARTIFACT_STORE_NAME, 'readwrite');
+            transaction.objectStore(ARTIFACT_STORE_NAME).delete(targetId);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error || new Error('独立产物库删除失败'));
+        });
+    } finally {
+        database.close();
+    }
+}
+
+async function ensureArtifactVaultsLoaded() {
+    if (artifactVaultsReady) return;
+    const database = await openArtifactDatabase();
+    try {
+        const stored = await new Promise((resolve, reject) => {
+            const request = database.transaction(ARTIFACT_STORE_NAME, 'readonly').objectStore(ARTIFACT_STORE_NAME).getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error || new Error('独立产物库读取失败'));
+        });
+        for (const raw of stored) artifactVaults.set(String(raw.projectId), normalizeArtifactVault(raw, raw.projectId));
+    } finally {
+        database.close();
+    }
+
+    // 旧项目只迁移一次。迁移完成后，产物与对话从此分别保存、互不回写。
+    for (const projectItem of projectLibrary.projects) {
+        const existed = artifactVaults.has(projectItem.id);
+        const vault = artifactVaultFor(projectItem.id);
+        if (!existed) migrateConversationArtifacts(projectItem, vault);
+        if (!existed) await writeArtifactVault(projectItem.id);
+    }
+    artifactVaultsReady = true;
 }
 
 async function readResourceRecord(key) {
@@ -4384,6 +4552,8 @@ function normalizeProject(saved) {
     // v0.6.x 的 Step30 是开场白；新版隐藏重组步骤后迁移为 Step29。
     if (saved.steps?.[30]) normalized.steps[29] = saved.steps[30];
     delete normalized.steps[30];
+    // 产物正文只进入独立 IndexedDB；导入包里的 artifactVault 不回写项目 localStorage。
+    delete normalized.artifactVault;
     normalized.currentStep = Math.min(Number(normalized.currentStep) || 1, STEPS.length);
     repairProjectTemplateMacros(normalized);
     return normalized;
@@ -4495,12 +4665,12 @@ function claimStudioRuntime() {
     runtimeClaimed = true;
 }
 
-function deleteStudioResourceDatabase() {
+function deleteStudioDatabase(databaseName, label) {
     return new Promise((resolve, reject) => {
-        const request = (hostWindow.indexedDB || indexedDB).deleteDatabase(RESOURCE_DATABASE_NAME);
+        const request = (hostWindow.indexedDB || indexedDB).deleteDatabase(databaseName);
         request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error || new Error('独立预设与正则数据库删除失败'));
-        request.onblocked = () => reject(new Error('独立预设与正则数据库仍被占用，请刷新页面后重试'));
+        request.onerror = () => reject(request.error || new Error(`${label}删除失败`));
+        request.onblocked = () => reject(new Error(`${label}仍被占用，请刷新页面后重试`));
     });
 }
 
@@ -4537,7 +4707,12 @@ async function clearAllStudioData() {
     try {
         for (const timer of artifactSaveTimers.values()) hostWindow.clearTimeout(timer);
         artifactSaveTimers.clear();
-        await deleteStudioResourceDatabase();
+        await artifactVaultWriteChain.catch(() => undefined);
+        await Promise.all([
+            deleteStudioDatabase(RESOURCE_DATABASE_NAME, '独立预设与正则数据库'),
+            deleteStudioDatabase(ARTIFACT_DATABASE_NAME, '独立产物数据库'),
+        ]);
+        artifactVaults.clear();
         const localCount = clearStudioStorageArea(localStorage);
         const sessionCount = clearStudioStorageArea(hostWindow.sessionStorage);
         const clearButton = shell?.querySelector('#acs-clear-all-studio-data');
@@ -5465,10 +5640,9 @@ async function clearCurrentStepConversation() {
         danger: true,
     })) return;
 
-    // 对话与产物分开管理：助手回复转入产物历史，保证右侧正式产物不会随对话一起丢失。
-    const assistantTurns = state.turns.filter(turn => turn.role === 'assistant').map(turn => ({ ...turn }));
-    state.artifactHistory = [...(state.artifactHistory || []), ...assistantTurns];
+    // 产物已经保存在独立数据库中，清空对话不会再搬运或改写任何产物。
     state.turns = [];
+    state.artifactHistory = [];
     state.status = 'idle';
     state.updatedAt = new Date().toISOString();
     saveProject();
@@ -5507,34 +5681,17 @@ function toggleArtifactContext(button) {
         : '已显示：后续设计会继续把该产物发送给 AI。');
 }
 
-function collectArtifactGroups() {
+function collectArtifactGroups(projectData = project) {
     const groups = new Map();
-    for (const step of STEPS) {
-        const state = project.steps[step.number];
-        const sources = [
-            ...(state?.artifactHistory || []).map((turn, turnIndex) => ({ turn, turnIndex, archived: true })),
-            ...(state?.turns || []).map((turn, turnIndex) => ({ turn, turnIndex, archived: false })),
-        ];
-        for (const { turn, turnIndex, archived } of sources) {
-            if (turn.role !== 'assistant') continue;
-            const blocks = extractArtifactBlocks(turn.content, step.number);
-            blocks.forEach((block, blockIndex) => {
-                // 同名代码类型可能在不同步骤代表不同产物，历史版本只在当前步骤内合并。
-                const identity = resolveArtifactIdentity(step.number, block, blocks);
-                const groupKey = `${step.number}:${identity}`;
-                if (!groups.has(groupKey)) groups.set(groupKey, { key: groupKey, tag: identity, versions: [] });
-                groups.get(groupKey).versions.push({
-                    ...block,
-                    identity,
-                    blockIndex,
-                    turnIndex,
-                    archived,
-                    step: step.number,
-                    accepted: project.steps[step.number].status === 'accepted',
-                    createdAt: turn.createdAt || project.steps[step.number].updatedAt || '',
-                });
-            });
-        }
+    const vault = artifactVaultFor(projectData.id);
+    for (const stored of vault.versions) {
+        const groupKey = `${stored.step}:${stored.identity}`;
+        if (!groups.has(groupKey)) groups.set(groupKey, { key: groupKey, tag: stored.identity, versions: [] });
+        groups.get(groupKey).versions.push({
+            ...stored,
+            tag: stored.identity,
+            accepted: projectData.steps?.[stored.step]?.status === 'accepted',
+        });
     }
     return [...groups.values()];
 }
@@ -5552,10 +5709,8 @@ function showArtifactVersion(details, requestedIndex) {
     content.value = version.content;
     content.readOnly = !isLatest;
     content.dataset.artifactVersion = String(index);
+    content.dataset.artifactId = version.id;
     content.dataset.artifactStep = String(version.step);
-    content.dataset.artifactTurn = String(version.turnIndex);
-    content.dataset.artifactArchived = String(version.archived);
-    content.dataset.artifactIndex = String(version.blockIndex);
     content.dataset.savedContent = version.content;
     step.textContent = `S${String(version.step).padStart(2, '0')}${version.accepted ? ' · 已确认' : ' · 草案'}`;
     updateArtifactTokenMetric(details, version.content);
@@ -5789,10 +5944,8 @@ function renderArtifacts() {
         content.spellcheck = false;
         content.dataset.artifactGroup = String(groupIndex);
         content.dataset.artifactVersion = String(group.versions.length - 1);
+        content.dataset.artifactId = artifact.id;
         content.dataset.artifactStep = String(artifact.step);
-        content.dataset.artifactTurn = String(artifact.turnIndex);
-        content.dataset.artifactArchived = String(artifact.archived);
-        content.dataset.artifactIndex = String(artifact.blockIndex);
         content.dataset.savedContent = artifact.content;
         content.setAttribute('aria-label', `${artifact.tag} 区块内容`);
         editor.append(toolbar, content);
@@ -5810,28 +5963,24 @@ function toggleArtifactDetails(summary) {
 }
 
 function saveArtifactEdit(textarea) {
-    if (textarea.readOnly || textarea.dataset.artifactArchived === 'true') return false;
-    const stepNumber = Number(textarea.dataset.artifactStep);
-    const turnIndex = Number(textarea.dataset.artifactTurn);
-    const blockIndex = Number(textarea.dataset.artifactIndex);
-    const timerKey = `${stepNumber}:${turnIndex}:${blockIndex}`;
+    if (textarea.readOnly) return false;
+    const artifactId = String(textarea.dataset.artifactId || '');
+    const timerKey = artifactId;
     clearTimeout(artifactSaveTimers.get(timerKey));
     artifactSaveTimers.delete(timerKey);
-    const turn = project.steps[stepNumber]?.turns?.[turnIndex];
-    if (!turn || turn.role !== 'assistant') return false;
+    const vault = artifactVaultFor(project.id);
+    const stored = vault.versions.find(item => item.id === artifactId);
+    if (!stored) return false;
 
-    const source = turn.content;
-    const currentBlock = extractArtifactBlocks(source, stepNumber)[blockIndex];
-    if (!currentBlock) return false;
-
-    turn.content = `${source.slice(0, currentBlock.start)}${textarea.value}${source.slice(currentBlock.end)}`;
-    turn.editedAt = new Date().toISOString();
-    project.steps[stepNumber].updatedAt = turn.editedAt;
+    // 产物编辑只写入独立产物库，不再修改原始 AI 对话。
+    stored.content = textarea.value;
+    stored.updatedAt = new Date().toISOString();
+    vault.updatedAt = stored.updatedAt;
     textarea.dataset.savedContent = textarea.value;
     const group = renderedArtifactGroups[Number(textarea.dataset.artifactGroup)];
     const version = group?.versions?.[Number(textarea.dataset.artifactVersion)];
     if (version) version.content = textarea.value;
-    saveProject();
+    void persistArtifactVault(project.id);
     updateArtifactTokenMetric(textarea.closest('.acs-artifact'), textarea.value);
 
     const state = textarea.closest('.acs-artifact-editor')?.querySelector('.acs-artifact-save-state');
@@ -5844,7 +5993,7 @@ function saveArtifactEdit(textarea) {
 
 function scheduleArtifactSave(textarea) {
     if (textarea.readOnly) return;
-    const key = `${textarea.dataset.artifactStep}:${textarea.dataset.artifactTurn}:${textarea.dataset.artifactIndex}`;
+    const key = String(textarea.dataset.artifactId || '');
     clearTimeout(artifactSaveTimers.get(key));
     const state = textarea.closest('.acs-artifact-editor')?.querySelector('.acs-artifact-save-state');
     if (state) {
@@ -5860,7 +6009,7 @@ function scheduleArtifactSave(textarea) {
 function flushPendingProjectEdits() {
     if (shell) {
         for (const textarea of shell.querySelectorAll('.acs-artifact-content')) {
-            const key = `${textarea.dataset.artifactStep}:${textarea.dataset.artifactTurn}:${textarea.dataset.artifactIndex}`;
+            const key = String(textarea.dataset.artifactId || '');
             if (artifactSaveTimers.has(key)) saveArtifactEdit(textarea);
         }
     }
@@ -5888,26 +6037,19 @@ function restoreArtifactVersion(button) {
     if (!selected || !current || selected === current) return;
 
     flushPendingProjectEdits();
-    const state = project.steps[current.step];
-    const sourceTurn = state?.turns?.[current.turnIndex];
-    const currentBlock = sourceTurn ? extractArtifactBlocks(sourceTurn.content, current.step)[current.blockIndex] : null;
-    if (!sourceTurn || !currentBlock) {
-        notify('error', '无法定位当前产物，未执行版本恢复。');
-        return;
-    }
-
-    // 复制当前完整回复并替换指定区块，既保留其他产物，也让回退本身成为一个新的历史版本。
-    const restoredResponse = `${sourceTurn.content.slice(0, currentBlock.start)}${selected.content}${sourceTurn.content.slice(currentBlock.end)}`;
     const now = new Date().toISOString();
-    state.turns.push({
-        role: 'assistant',
-        content: restoredResponse,
+    const vault = artifactVaultFor(project.id);
+    vault.versions.push({
+        id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        step: current.step,
+        identity: group.tag,
+        content: selected.content,
         createdAt: now,
-        artifactRestore: { tag: group.tag, fromVersion: selectedIndex + 1 },
+        updatedAt: now,
+        source: 'restored',
     });
-    state.status = 'draft';
-    state.updatedAt = now;
-    saveProject();
+    vault.updatedAt = now;
+    void persistArtifactVault(project.id);
     renderAll();
     notify('success', `${group.tag} 已恢复为历史版本 ${selectedIndex + 1}，原版本仍保留。`);
 }
@@ -5952,19 +6094,13 @@ async function deleteArtifact(button) {
     })) return;
 
     flushPendingProjectEdits();
-    const state = project.steps[latest.step];
-    for (const collectionName of ['turns', 'artifactHistory']) {
-        state[collectionName] = (state[collectionName] || []).map(turn => (
-            turn.role === 'assistant'
-                ? { ...turn, content: removeArtifactIdentityFromText(turn.content, latest.step, group.tag) }
-                : turn
-        ));
-    }
-    state.status = state.turns?.length ? 'draft' : 'idle';
-    state.updatedAt = new Date().toISOString();
+    const vault = artifactVaultFor(project.id);
+    vault.versions = vault.versions.filter(item => !(item.step === latest.step && item.identity === group.tag));
+    vault.updatedAt = new Date().toISOString();
     // 产物集合变化后，旧的世界书重组方案不再有效。
     project.autoReorg = null;
     saveProject();
+    await persistArtifactVault(project.id);
     renderAll();
     notify('success', `已删除产物“${displayName}”，可以重新生成。`);
 }
@@ -6496,7 +6632,14 @@ async function deleteProject(projectId) {
     artifactSaveTimers.clear();
     if (target.id !== project.id) saveProject();
     projectLibrary.projects = projectLibrary.projects.filter(item => item.id !== target.id);
-    if (!projectLibrary.projects.length) projectLibrary.projects.push(createDefaultProject());
+    await artifactVaultWriteChain.catch(() => undefined);
+    await deleteArtifactVault(target.id);
+    if (!projectLibrary.projects.length) {
+        const replacement = createDefaultProject();
+        projectLibrary.projects.push(replacement);
+        artifactVaultFor(replacement.id);
+        void persistArtifactVault(replacement.id);
+    }
 
     if (target.id === project.id) {
         project = [...projectLibrary.projects].sort((left, right) =>
@@ -6942,12 +7085,6 @@ function latestAssistantTurn(stepNumber) {
     return null;
 }
 
-function allAssistantArtifactTurns(stepNumber) {
-    const state = project.steps[stepNumber];
-    return [...(state?.artifactHistory || []), ...(state?.turns || [])]
-        .filter(turn => turn.role === 'assistant');
-}
-
 function sanitizeMacroValue(value) {
     return String(value || '').replace(/[{}\r\n]/g, '').trim();
 }
@@ -7050,12 +7187,10 @@ function buildProjectContext(currentStep, preset, options = {}) {
 function conversationContentForPrompt(turn, stepNumber) {
     let content = String(turn?.content || '');
     if (turn?.role !== 'assistant') return content;
-    // 被关闭的产物即使出现在旧 AI 回复中，也不能通过会话记录重新进入上下文。
+    // 正式产物由独立产物库单独提供；会话上下文只保留解释、追问等非产物文字，避免旧正文反向覆盖产物语义。
     const blocks = extractArtifactBlocks(content, stepNumber);
-    const hiddenIdentities = new Set(blocks
-        .map(block => resolveArtifactIdentity(stepNumber, block, blocks))
-        .filter(identity => isArtifactHiddenFromContext(stepNumber, identity)));
-    for (const identity of hiddenIdentities) {
+    const artifactIdentities = new Set(blocks.map(block => resolveArtifactIdentity(stepNumber, block, blocks)));
+    for (const identity of artifactIdentities) {
         content = removeArtifactIdentityFromText(content, stepNumber, identity);
     }
     return content;
@@ -7647,6 +7782,12 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         const response = normalizeFinalArtifactUserMacros(rawResponse, step.number);
         if (streamingTurn) streamingTurn.content = response;
         else state.turns.push({ role: 'assistant', content: response, createdAt: new Date().toISOString() });
+        // AI 回复只在完成时提取一次；入库后产物与对话彻底分离，后续互不回写。
+        const capturedArtifacts = appendArtifactsToVault(artifactVaultFor(project.id), response, step.number, {
+            createdAt: new Date().toISOString(),
+            source: 'generated',
+        });
+        if (capturedArtifacts) await persistArtifactVault(project.id);
         state.status = 'draft';
         state.updatedAt = new Date().toISOString();
         saveProject();
@@ -7671,6 +7812,13 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             notify('error', `生成失败：${message}。详细诊断已输出到浏览器控制台。`);
         } else {
             if (streamingTurn?.content) {
+                const capturedArtifacts = appendArtifactsToVault(
+                    artifactVaultFor(project.id),
+                    streamingTurn.content,
+                    step.number,
+                    { createdAt: new Date().toISOString(), source: 'stopped-stream' },
+                );
+                if (capturedArtifacts) await persistArtifactVault(project.id);
                 state.status = 'draft';
                 state.updatedAt = new Date().toISOString();
                 saveProject();
@@ -7752,7 +7900,9 @@ function saveTurnEdit(turnIndex) {
     state.status = 'draft';
     saveProject();
     renderAll();
-    notify('success', turn.role === 'user' ? '用户消息已保存。' : 'AI 回复已保存，相关产物已重新解析。');
+    notify('success', turn.role === 'user'
+        ? '用户消息已保存。'
+        : 'AI 回复已保存；独立产物库不会随对话修改。');
 }
 
 async function retryLatestUserInput(turnIndex) {
@@ -7777,15 +7927,7 @@ async function retryLatestUserInput(turnIndex) {
     const previousStatus = state.status;
     state.turns = state.turns.slice(0, latestUserIndex + 1);
     const succeeded = await runStepGeneration(step, state, userInput, { appendUserTurn: false, retried: true });
-    if (succeeded && previousTail.length) {
-        // 重试替换掉的旧回复不再占据对话区，但继续作为产物历史供查看和恢复。
-        state.artifactHistory = [
-            ...(state.artifactHistory || []),
-            ...previousTail.filter(turn => turn.role === 'assistant'),
-        ];
-        saveProject();
-        renderAll();
-    } else if (!succeeded && previousTail.length) {
+    if (!succeeded && previousTail.length) {
         state.turns.push(...previousTail);
         state.status = previousStatus;
         saveProject();
@@ -7917,16 +8059,13 @@ function extractArtifactBlocks(text, stepNumber) {
 }
 
 function effectiveStepArtifacts(stepNumber, options = {}) {
-    // 与右侧产物栏共用正式产物提取规则；每个身份只发送最新版，彻底排除说明、思考、评分和追问。
+    // 后续上下文只读取独立产物库；每个身份发送最新版，不再回读 AI 对话。
     const latestArtifacts = new Map();
-    for (const turn of allAssistantArtifactTurns(stepNumber)) {
-        const blocks = extractArtifactBlocks(turn.content, stepNumber);
-        for (const block of blocks) {
-            const identity = resolveArtifactIdentity(stepNumber, block, blocks);
-            // 隐藏状态按“步骤 + 产物身份”保存，因此同类唯一产物生成新版本后仍归入原条目并继续隐藏。
-            if (options.forContext && isArtifactHiddenFromContext(stepNumber, identity)) continue;
-            latestArtifacts.set(identity, block.content);
-        }
+    for (const stored of artifactVaultFor(project.id).versions) {
+        if (stored.step !== Number(stepNumber)) continue;
+        // 隐藏状态按“步骤 + 产物身份”保存，因此同类唯一产物的新版本仍保持隐藏。
+        if (options.forContext && isArtifactHiddenFromContext(stepNumber, stored.identity)) continue;
+        latestArtifacts.set(stored.identity, stored.content);
     }
     return [...latestArtifacts.values()].join('\n\n');
 }
@@ -8823,18 +8962,10 @@ function downloadBlob(content, fileName, type) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function projectDataSummary(targetProject) {
+function projectDataSummary(targetProject, targetVault = artifactVaultFor(targetProject.id)) {
     const stepStates = STEPS.map(step => targetProject.steps?.[step.number]).filter(Boolean);
     const turns = stepStates.reduce((total, state) => total + (Array.isArray(state.turns) ? state.turns.length : 0), 0);
-    let artifacts = 0;
-    for (const step of STEPS) {
-        const latest = new Set();
-        for (const turn of targetProject.steps?.[step.number]?.turns || []) {
-            const blocks = extractArtifactBlocks(turn.content, step.number);
-            for (const block of blocks) latest.add(resolveArtifactIdentity(step.number, block, blocks));
-        }
-        artifacts += latest.size;
-    }
+    const artifacts = new Set((targetVault?.versions || []).map(item => `${item.step}:${item.identity}`)).size;
     return {
         completedSteps: stepStates.filter(state => state.status !== 'idle').length,
         turns,
@@ -8850,7 +8981,9 @@ function projectSummaryText(summary) {
 async function exportProjectJson() {
     // 先立即保存正在编辑的产物，避免导出的 JSON 落后于界面内容。
     flushPendingProjectEdits();
-    const summary = projectDataSummary(project);
+    await artifactVaultWriteChain.catch(() => undefined);
+    const vault = artifactVaultFor(project.id);
+    const summary = projectDataSummary(project, vault);
     const isEmpty = summary.turns === 0 && summary.artifacts === 0 && summary.briefCharacters === 0;
     const confirmed = await showStudioConfirm({
         title: isEmpty ? '当前项目没有创作数据' : '确认导出项目？',
@@ -8860,7 +8993,7 @@ async function exportProjectJson() {
     });
     if (!confirmed) return;
     downloadBlob(
-        JSON.stringify(project, null, 2),
+        JSON.stringify({ ...project, artifactVault: vault }, null, 2),
         `${safeFileName(project.name)}.auto-card-studio.json`,
         'application/json;charset=utf-8',
     );
@@ -8875,13 +9008,22 @@ async function importProjectJson(event) {
         if (isGenerating) throw new Error('请先停止当前生成，再导入项目。');
         if (file.size > 20 * 1024 * 1024) throw new Error('项目文件超过 20 MB，无法导入。');
 
-        const imported = normalizeProject(JSON.parse(await file.text()));
+        const rawProject = JSON.parse(await file.text());
+        const importedVaultData = rawProject?.artifactVault;
+        const imported = normalizeProject(rawProject);
         if (!imported) throw new Error('这不是有效的 A.U.T.O 创作台项目文件，或文件版本不受支持。');
-        const importedSummary = projectDataSummary(imported);
 
         flushPendingProjectEdits();
         const existingIds = new Set(projectLibrary.projects.map(item => item.id));
         if (existingIds.has(imported.id)) imported.id = createDefaultProject().id;
+
+        const importedVault = importedVaultData
+            ? normalizeArtifactVault(importedVaultData, imported.id)
+            : createArtifactVault(imported.id);
+        importedVault.projectId = imported.id;
+        if (!importedVaultData) migrateConversationArtifacts(imported, importedVault);
+        artifactVaults.set(imported.id, importedVault);
+        const importedSummary = projectDataSummary(imported, importedVault);
 
         // 同名项目作为独立副本导入，不覆盖项目库里已有的内容。
         const existingNames = new Set(projectLibrary.projects.map(item => item.name));
@@ -8900,6 +9042,7 @@ async function importProjectJson(event) {
         syncEnvironmentToProject();
         if (artifactPanelExpanded) toggleArtifactPanel(false);
         saveProject();
+        await persistArtifactVault(project.id);
         renderEnvironmentSelectors();
         renderAll();
         toggleProjectMenu(false);
@@ -8923,6 +9066,8 @@ function newProject() {
     }
     flushPendingProjectEdits();
     project = createDefaultProject();
+    artifactVaultFor(project.id);
+    void persistArtifactVault(project.id);
     projectLibrary.projects.push(project);
     projectLibrary.activeProjectId = project.id;
     syncEnvironmentToProject();
@@ -10230,6 +10375,8 @@ function ensureStudioStyle() {
 
 async function ensureStudioLoaded() {
     if (shell?.isConnected) return;
+
+    await ensureArtifactVaultsLoaded();
 
     const existingShells = [...document.querySelectorAll('#auto-card-studio')];
     if (existingShells.length) {
