@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.29 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.30 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -2040,7 +2040,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.29';
+const AUTO_CARD_STUDIO_VERSION = '0.6.30';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -2064,6 +2064,11 @@ const STUDIO_VIEWPORT_MARGIN = 24;
 const STORAGE_KEY = 'auto-card-studio:project:v1';
 const PROJECT_LIBRARY_KEY = 'auto-card-studio:projects:v1';
 const PROJECT_LIBRARY_VERSION = 1;
+const PROJECT_ACTIVE_ID_KEY = 'auto-card-studio:active-project:v1';
+const PROJECT_DATABASE_NAME = 'auto-card-studio-projects';
+const PROJECT_DATABASE_VERSION = 1;
+const PROJECT_STORE_NAME = 'projects';
+const PROJECT_STEP_STORE_NAME = 'steps';
 const CONNECTION_STORAGE_KEY = 'auto-card-studio:connection:v1';
 const CONNECTION_PROFILES_STORAGE_KEY = 'auto-card-studio:connection-profiles:v1';
 const MODEL_PARAMETERS_STORAGE_KEY = 'auto-card-studio:model-parameters:v1';
@@ -2074,9 +2079,10 @@ const ARTIFACT_DATABASE_NAME = 'auto-card-studio-artifacts';
 const ARTIFACT_DATABASE_VERSION = 1;
 const ARTIFACT_STORE_NAME = 'project-vaults';
 const ARTIFACT_VAULT_VERSION = 1;
-const CONVERSATION_DATABASE_NAME = 'auto-card-studio-conversations';
-const CONVERSATION_DATABASE_VERSION = 1;
-const CONVERSATION_STORE_NAME = 'step-conversations';
+// v0.6.29 及更早版本的分步骤保护库。新版只在首次迁移时读取，暂不主动删除，便于降级恢复。
+const LEGACY_CONVERSATION_DATABASE_NAME = 'auto-card-studio-conversations';
+const LEGACY_CONVERSATION_DATABASE_VERSION = 1;
+const LEGACY_CONVERSATION_STORE_NAME = 'step-conversations';
 const RESOURCE_DOCK_POSITION_KEY = 'auto-card-studio:resource-dock-position:v1';
 const PROJECT_VERSION = 1;
 const MAX_CONTEXT_CHARS = 420000;
@@ -4198,7 +4204,9 @@ let artifactVaultsReady = false;
 let artifactVaultWriteChain = Promise.resolve();
 const conversationVaults = new Map();
 let conversationVaultsReady = false;
-let conversationVaultWriteChain = Promise.resolve();
+let projectDatabaseReady = false;
+let projectDatabaseUnavailable = false;
+let projectDatabaseWriteChain = Promise.resolve();
 let environment = {
     checked: false,
     presetName: '',
@@ -4228,6 +4236,23 @@ function openArtifactDatabase() {
         };
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error || new Error('独立产物库打开失败'));
+    });
+}
+
+function openProjectDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = (hostWindow.indexedDB || indexedDB).open(PROJECT_DATABASE_NAME, PROJECT_DATABASE_VERSION);
+        request.onupgradeneeded = () => {
+            const database = request.result;
+            if (!database.objectStoreNames.contains(PROJECT_STORE_NAME)) {
+                database.createObjectStore(PROJECT_STORE_NAME, { keyPath: 'id' });
+            }
+            if (!database.objectStoreNames.contains(PROJECT_STEP_STORE_NAME)) {
+                database.createObjectStore(PROJECT_STEP_STORE_NAME, { keyPath: 'key' });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('项目数据库打开失败'));
     });
 }
 
@@ -4565,6 +4590,59 @@ function normalizeProject(saved) {
     return normalized;
 }
 
+function projectMetadataRecordFor(projectData) {
+    const { steps: _steps, artifactVault: _artifactVault, ...metadata } = projectData;
+    return JSON.parse(JSON.stringify(metadata));
+}
+
+function applyStoredStepRecord(projectData, record) {
+    const stepNumber = Number(record?.step);
+    const state = projectData.steps?.[stepNumber];
+    if (!state) return false;
+    state.turns = cloneConversationData(Array.isArray(record.turns) ? record.turns : []);
+    state.artifactHistory = cloneConversationData(Array.isArray(record.artifactHistory) ? record.artifactHistory : []);
+    state.status = ['idle', 'draft', 'accepted'].includes(record.status)
+        ? record.status
+        : (state.status === 'idle' && state.turns.length ? 'draft' : state.status);
+    state.updatedAt = record.updatedAt ? String(record.updatedAt) : state.updatedAt;
+    return true;
+}
+
+async function readProjectDatabaseSnapshot() {
+    const database = await openProjectDatabase();
+    try {
+        return await new Promise((resolve, reject) => {
+            const transaction = database.transaction([PROJECT_STORE_NAME, PROJECT_STEP_STORE_NAME], 'readonly');
+            const projectRequest = transaction.objectStore(PROJECT_STORE_NAME).getAll();
+            const stepRequest = transaction.objectStore(PROJECT_STEP_STORE_NAME).getAll();
+            transaction.oncomplete = () => resolve({
+                projects: projectRequest.result || [],
+                steps: stepRequest.result || [],
+            });
+            transaction.onerror = () => reject(transaction.error || new Error('项目数据库读取失败'));
+        });
+    } finally {
+        database.close();
+    }
+}
+
+async function writeProjectDatabaseSnapshot(projects, stepRecords) {
+    const database = await openProjectDatabase();
+    try {
+        await new Promise((resolve, reject) => {
+            const transaction = database.transaction([PROJECT_STORE_NAME, PROJECT_STEP_STORE_NAME], 'readwrite');
+            const projectStore = transaction.objectStore(PROJECT_STORE_NAME);
+            const stepStore = transaction.objectStore(PROJECT_STEP_STORE_NAME);
+            for (const projectItem of projects) projectStore.put(projectMetadataRecordFor(projectItem));
+            for (const record of stepRecords) stepStore.put(record);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error || new Error('项目数据库迁移失败'));
+        });
+    } finally {
+        database.close();
+    }
+}
+
 function loadProjectLibrary() {
     try {
         const savedLibrary = JSON.parse(localStorage.getItem(PROJECT_LIBRARY_KEY));
@@ -4594,8 +4672,82 @@ function loadProjectLibrary() {
         activeProjectId: initialProject.id,
         projects: [initialProject],
     };
-    localStorage.setItem(PROJECT_LIBRARY_KEY, JSON.stringify(library));
     return library;
+}
+
+function saveActiveProjectId(projectId) {
+    try {
+        localStorage.setItem(PROJECT_ACTIVE_ID_KEY, String(projectId || ''));
+    } catch (error) {
+        // 旧项目整包可能已经占满 localStorage；不能让轻量指针写入失败阻断 IndexedDB 主存储。
+        console.warn('[A.U.T.O Card Studio] 当前项目指针保存失败，项目正文仍会保存到 IndexedDB。', error);
+    }
+}
+
+async function ensureProjectDatabaseLoaded() {
+    if (projectDatabaseReady || projectDatabaseUnavailable) return;
+    try {
+        const stored = await readProjectDatabaseSnapshot();
+        const storedProjects = stored.projects.map(normalizeProject).filter(Boolean);
+        if (storedProjects.length) {
+            const activeId = String(localStorage.getItem(PROJECT_ACTIVE_ID_KEY) || projectLibrary.activeProjectId || '');
+            projectLibrary = {
+                version: PROJECT_LIBRARY_VERSION,
+                activeProjectId: storedProjects.some(item => item.id === activeId) ? activeId : storedProjects[0].id,
+                projects: storedProjects,
+            };
+            conversationVaults.clear();
+            for (const record of stored.steps) {
+                const target = projectLibrary.projects.find(item => item.id === String(record.projectId));
+                if (!target || !applyStoredStepRecord(target, record)) continue;
+                conversationVaults.set(String(record.key), record);
+            }
+            for (const projectItem of projectLibrary.projects) repairProjectTemplateMacros(projectItem);
+            const repaired = projectLibrary.projects.reduce((total, projectItem) => (
+                total + repairCrossStepTurnOwnership(projectItem)
+            ), 0);
+            const repairedOrMissing = projectLibrary.projects.flatMap(projectItem => STEPS.map(step => (
+                conversationRecordFor(projectItem, step.number)
+            ))).filter(record => (
+                !conversationVaults.has(record.key)
+                || conversationRecordSignature(conversationVaults.get(record.key)) !== conversationRecordSignature(record)
+            ));
+            if (repairedOrMissing.length) {
+                await writeProjectDatabaseChanges([], repairedOrMissing);
+                for (const record of repairedOrMissing) conversationVaults.set(record.key, record);
+            }
+            if (repaired) {
+                console.warn(`[A.U.T.O Card Studio] 加载时修复了 ${repaired} 条写入错误步骤的对话。`);
+            }
+        } else {
+            // 首次升级：旧分步骤保护库优先于 localStorage 中可能被旧实例覆盖的对话。
+            const legacyRecords = await readLegacyConversationRecords();
+            for (const record of legacyRecords) {
+                const target = projectLibrary.projects.find(item => item.id === String(record.projectId));
+                if (target) applyStoredStepRecord(target, record);
+            }
+            for (const projectItem of projectLibrary.projects) {
+                repairProjectTemplateMacros(projectItem);
+                repairCrossStepTurnOwnership(projectItem);
+            }
+            const stepRecords = projectLibrary.projects.flatMap(projectItem => STEPS.map(step => (
+                conversationRecordFor(projectItem, step.number)
+            )));
+            // 项目元数据和全部步骤在同一个事务中落库，成功前不切换事实源。
+            await writeProjectDatabaseSnapshot(projectLibrary.projects, stepRecords);
+            conversationVaults.clear();
+            for (const record of stepRecords) conversationVaults.set(record.key, record);
+        }
+        project = getActiveProject(projectLibrary);
+        projectDatabaseReady = true;
+        conversationVaultsReady = true;
+        saveActiveProjectId(project.id);
+    } catch (error) {
+        // IndexedDB 不可用时保留旧版 localStorage 路径，确保用户仍能继续工作和导出。
+        projectDatabaseUnavailable = true;
+        console.error('[A.U.T.O Card Studio] 项目数据库初始化失败，已回退旧存储。', error);
+        notify('error', '项目数据库不可用，已临时回退旧存储；请立即导出项目备份。');
+    }
 }
 
 function getActiveProject(library) {
@@ -4605,9 +4757,21 @@ function getActiveProject(library) {
 }
 
 function saveProjectLibrary() {
-    localStorage.setItem(PROJECT_LIBRARY_KEY, JSON.stringify(projectLibrary));
-    // 同步保留旧版单项目键，便于回退旧版本时仍可读取当前项目。
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+    saveActiveProjectId(projectLibrary.activeProjectId || project?.id || '');
+    if (projectDatabaseReady) {
+        void persistProjectSnapshot(project);
+        return;
+    }
+    // 仅在 IndexedDB 确实不可用时继续写旧存储；正常迁移后旧快照保持不动，便于短期降级。
+    if (projectDatabaseUnavailable) {
+        try {
+            localStorage.setItem(PROJECT_LIBRARY_KEY, JSON.stringify(projectLibrary));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+        } catch (error) {
+            console.error('[A.U.T.O Card Studio] 旧存储回退保存失败。', error);
+            notify('error', '浏览器本地存储空间不足，请立即导出项目备份。');
+        }
+    }
 }
 
 function saveProject() {
@@ -4620,9 +4784,9 @@ function saveProject() {
     if (index >= 0) projectLibrary.projects[index] = project;
     else projectLibrary.projects.push(project);
     projectLibrary.activeProjectId = project.id;
-    // 对话按步骤独立备份；项目主存档即使被旧实例覆盖，也能在下次加载时恢复。
-    void syncConversationVaults(project);
-    saveProjectLibrary();
+    saveActiveProjectId(project.id);
+    if (projectDatabaseReady) void persistProjectSnapshot(project);
+    else saveProjectLibrary();
     if (shell?.querySelector('#acs-project-menu:not([hidden])')) renderProjectMenu();
 }
 
@@ -4720,11 +4884,12 @@ async function clearAllStudioData() {
         for (const timer of artifactSaveTimers.values()) hostWindow.clearTimeout(timer);
         artifactSaveTimers.clear();
         await artifactVaultWriteChain.catch(() => undefined);
-        await conversationVaultWriteChain.catch(() => undefined);
+        await projectDatabaseWriteChain.catch(() => undefined);
         await Promise.all([
             deleteStudioDatabase(RESOURCE_DATABASE_NAME, '独立预设与正则数据库'),
             deleteStudioDatabase(ARTIFACT_DATABASE_NAME, '独立产物数据库'),
-            deleteStudioDatabase(CONVERSATION_DATABASE_NAME, '分步骤对话备份数据库'),
+            deleteStudioDatabase(PROJECT_DATABASE_NAME, '项目数据库'),
+            deleteStudioDatabase(LEGACY_CONVERSATION_DATABASE_NAME, '旧分步骤对话备份数据库'),
         ]);
         artifactVaults.clear();
         conversationVaults.clear();
@@ -6069,17 +6234,20 @@ function restoreArtifactVersion(button) {
     notify('success', `${group.tag} 的当前版本已恢复为历史版本 ${selectedIndex + 1}，没有新增版本页。`);
 }
 
-function openConversationDatabase() {
+function openLegacyConversationDatabase() {
     return new Promise((resolve, reject) => {
-        const request = (hostWindow.indexedDB || indexedDB).open(CONVERSATION_DATABASE_NAME, CONVERSATION_DATABASE_VERSION);
+        const request = (hostWindow.indexedDB || indexedDB).open(
+            LEGACY_CONVERSATION_DATABASE_NAME,
+            LEGACY_CONVERSATION_DATABASE_VERSION,
+        );
         request.onupgradeneeded = () => {
             const database = request.result;
-            if (!database.objectStoreNames.contains(CONVERSATION_STORE_NAME)) {
-                database.createObjectStore(CONVERSATION_STORE_NAME, { keyPath: 'key' });
+            if (!database.objectStoreNames.contains(LEGACY_CONVERSATION_STORE_NAME)) {
+                database.createObjectStore(LEGACY_CONVERSATION_STORE_NAME, { keyPath: 'key' });
             }
         };
         request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error || new Error('分步骤对话备份库打开失败'));
+        request.onerror = () => reject(request.error || new Error('旧分步骤对话库打开失败'));
     });
 }
 
@@ -6101,24 +6269,32 @@ function conversationRecordFor(projectData, stepNumber) {
         key: conversationVaultKey(projectData.id, stepNumber),
         projectId: String(projectData.id),
         step: Number(stepNumber),
+        status: ['idle', 'draft', 'accepted'].includes(state.status) ? state.status : 'idle',
         turns: cloneConversationData(turns),
         artifactHistory: cloneConversationData(Array.isArray(state.artifactHistory) ? state.artifactHistory : []),
-        updatedAt: String(state.updatedAt || new Date().toISOString()),
+        updatedAt: state.updatedAt ? String(state.updatedAt) : null,
     };
 }
 
 function conversationRecordSignature(record) {
-    return JSON.stringify([record?.turns || [], record?.artifactHistory || []]);
+    return JSON.stringify([
+        record?.status || 'idle',
+        record?.turns || [],
+        record?.artifactHistory || [],
+        record?.updatedAt || null,
+    ]);
 }
 
 function repairCrossStepTurnOwnership(projectData) {
     const misplaced = [];
+    const changedSteps = new Set();
     for (const step of STEPS) {
         const state = projectData.steps?.[step.number];
         if (!Array.isArray(state?.turns)) continue;
         state.turns = state.turns.filter(turn => {
             if (turn?.step === undefined || Number(turn.step) === step.number) return true;
             misplaced.push(turn);
+            changedSteps.add(step.number);
             return false;
         });
     }
@@ -6130,21 +6306,48 @@ function repairCrossStepTurnOwnership(projectData) {
             (turn.id && existing.id === turn.id)
             || (!turn.id && existing.role === turn.role && existing.createdAt === turn.createdAt && existing.content === turn.content)
         ));
-        if (!duplicate) target.turns.push(turn);
+        if (!duplicate) {
+            target.turns.push(turn);
+            changedSteps.add(targetStep);
+        }
+    }
+    if (changedSteps.size) {
+        const now = new Date().toISOString();
+        for (const stepNumber of changedSteps) {
+            const state = projectData.steps?.[stepNumber];
+            if (!state) continue;
+            state.updatedAt = now;
+            if (state.status === 'idle' && state.turns.length) state.status = 'draft';
+        }
     }
     return misplaced.length;
 }
 
-async function writeConversationRecords(records) {
+async function readLegacyConversationRecords() {
+    const database = await openLegacyConversationDatabase();
+    try {
+        return await new Promise((resolve, reject) => {
+            const request = database.transaction(LEGACY_CONVERSATION_STORE_NAME, 'readonly')
+                .objectStore(LEGACY_CONVERSATION_STORE_NAME)
+                .getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error || new Error('旧分步骤对话库读取失败'));
+        });
+    } finally {
+        database.close();
+    }
+}
+
+async function writeLegacyConversationRecords(records) {
     if (!records.length) return true;
-    const database = await openConversationDatabase();
+    const database = await openLegacyConversationDatabase();
     try {
         await new Promise((resolve, reject) => {
-            const transaction = database.transaction(CONVERSATION_STORE_NAME, 'readwrite');
-            const store = transaction.objectStore(CONVERSATION_STORE_NAME);
+            const transaction = database.transaction(LEGACY_CONVERSATION_STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(LEGACY_CONVERSATION_STORE_NAME);
             for (const record of records) store.put(record);
             transaction.oncomplete = resolve;
-            transaction.onerror = () => reject(transaction.error || new Error('分步骤对话备份失败'));
+            transaction.onerror = () => reject(transaction.error || new Error('旧分步骤对话备份失败'));
         });
         return true;
     } finally {
@@ -6152,42 +6355,106 @@ async function writeConversationRecords(records) {
     }
 }
 
-function syncConversationVaults(projectData = project) {
-    if (!conversationVaultsReady || !projectData?.id) return Promise.resolve(true);
-    const changed = [];
-    for (const step of STEPS) {
-        const record = conversationRecordFor(projectData, step.number);
-        const previous = conversationVaults.get(record.key);
-        if (conversationRecordSignature(previous) === conversationRecordSignature(record)) continue;
-        conversationVaults.set(record.key, record);
-        changed.push(record);
-    }
-    if (!changed.length) return conversationVaultWriteChain;
-    conversationVaultWriteChain = conversationVaultWriteChain
-        .catch(() => undefined)
-        .then(() => writeConversationRecords(changed))
-        .catch(error => {
-            console.error('[A.U.T.O Card Studio] 分步骤对话备份失败。', error);
-            notify('error', '对话保护备份失败，请立即导出项目备份。');
-            return false;
-        });
-    return conversationVaultWriteChain;
-}
-
-async function deleteProjectConversationVaults(projectId) {
-    await conversationVaultWriteChain.catch(() => undefined);
-    const targetId = String(projectId || '');
-    const keys = [...conversationVaults.keys()].filter(key => conversationVaults.get(key)?.projectId === targetId);
-    for (const key of keys) conversationVaults.delete(key);
-    if (!keys.length) return;
-    const database = await openConversationDatabase();
+async function writeProjectDatabaseChanges(projectRecords = [], stepRecords = []) {
+    if (!projectRecords.length && !stepRecords.length) return true;
+    const database = await openProjectDatabase();
     try {
         await new Promise((resolve, reject) => {
-            const transaction = database.transaction(CONVERSATION_STORE_NAME, 'readwrite');
-            const store = transaction.objectStore(CONVERSATION_STORE_NAME);
-            for (const key of keys) store.delete(key);
+            const storeNames = [];
+            if (projectRecords.length) storeNames.push(PROJECT_STORE_NAME);
+            if (stepRecords.length) storeNames.push(PROJECT_STEP_STORE_NAME);
+            const transaction = database.transaction(storeNames, 'readwrite');
+            if (projectRecords.length) {
+                const store = transaction.objectStore(PROJECT_STORE_NAME);
+                for (const record of projectRecords) store.put(record);
+            }
+            if (stepRecords.length) {
+                const store = transaction.objectStore(PROJECT_STEP_STORE_NAME);
+                for (const record of stepRecords) store.put(record);
+            }
             transaction.oncomplete = resolve;
-            transaction.onerror = () => reject(transaction.error || new Error('项目对话备份删除失败'));
+            transaction.onerror = () => reject(transaction.error || new Error('项目数据保存失败'));
+        });
+        return true;
+    } finally {
+        database.close();
+    }
+}
+
+function queueProjectDatabaseWrite(projectRecords, stepRecords, success) {
+    projectDatabaseWriteChain = projectDatabaseWriteChain
+        .catch(() => undefined)
+        .then(() => writeProjectDatabaseChanges(projectRecords, stepRecords))
+        .then(result => {
+            success?.();
+            return result;
+        })
+        .catch(error => {
+            console.error('[A.U.T.O Card Studio] 项目数据库保存失败。', error);
+            notify('error', '项目数据库保存失败，请立即导出项目备份。');
+            return false;
+        });
+    return projectDatabaseWriteChain;
+}
+
+function persistProjectSnapshot(projectData = project) {
+    if (!projectDatabaseReady || !projectData?.id) return Promise.resolve(true);
+    const changed = [];
+    for (const step of STEPS) {
+        const key = conversationVaultKey(projectData.id, step.number);
+        const previous = conversationVaults.get(key);
+        const state = projectData.steps?.[step.number] || {};
+        if (
+            !previous
+            || String(previous.status || 'idle') !== String(state.status || 'idle')
+            || String(previous.updatedAt || '') !== String(state.updatedAt || '')
+        ) changed.push(conversationRecordFor(projectData, step.number));
+    }
+    const metadata = projectMetadataRecordFor(projectData);
+    return queueProjectDatabaseWrite([metadata], changed, () => {
+        for (const record of changed) conversationVaults.set(record.key, record);
+    });
+}
+
+function syncConversationVaults(projectData = project) {
+    if (!conversationVaultsReady || !projectData?.id) return Promise.resolve(true);
+    if (projectDatabaseReady) return persistProjectSnapshot(projectData);
+    if (!projectDatabaseUnavailable) return Promise.resolve(true);
+    const changed = STEPS.flatMap(step => {
+        const key = conversationVaultKey(projectData.id, step.number);
+        const previous = conversationVaults.get(key);
+        const state = projectData.steps?.[step.number] || {};
+        return !previous
+            || String(previous.status || 'idle') !== String(state.status || 'idle')
+            || String(previous.updatedAt || '') !== String(state.updatedAt || '')
+            ? [conversationRecordFor(projectData, step.number)]
+            : [];
+    });
+    if (!changed.length) return Promise.resolve(true);
+    return writeLegacyConversationRecords(changed).then(result => {
+        for (const record of changed) conversationVaults.set(record.key, record);
+        return result;
+    }).catch(error => {
+        console.warn('[A.U.T.O Card Studio] 降级对话保护保存失败，项目仍保存在 localStorage。', error);
+        return false;
+    });
+}
+
+async function deleteProjectDatabaseRecords(projectId) {
+    await projectDatabaseWriteChain.catch(() => undefined);
+    const targetId = String(projectId || '');
+    const keys = STEPS.map(step => conversationVaultKey(targetId, step.number));
+    for (const key of keys) conversationVaults.delete(key);
+    if (!projectDatabaseReady) return;
+    const database = await openProjectDatabase();
+    try {
+        await new Promise((resolve, reject) => {
+            const transaction = database.transaction([PROJECT_STORE_NAME, PROJECT_STEP_STORE_NAME], 'readwrite');
+            transaction.objectStore(PROJECT_STORE_NAME).delete(targetId);
+            const stepStore = transaction.objectStore(PROJECT_STEP_STORE_NAME);
+            for (const key of keys) stepStore.delete(key);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error || new Error('项目数据库删除失败'));
         });
     } finally {
         database.close();
@@ -6196,47 +6463,21 @@ async function deleteProjectConversationVaults(projectId) {
 
 async function ensureConversationVaultsLoaded() {
     if (conversationVaultsReady) return;
-    const database = await openConversationDatabase();
+    await ensureProjectDatabaseLoaded();
+    if (conversationVaultsReady || !projectDatabaseUnavailable) return;
+    // 仅在浏览器禁用新项目数据库时，继续使用旧保护库作为降级方案。
     try {
-        const stored = await new Promise((resolve, reject) => {
-            const request = database.transaction(CONVERSATION_STORE_NAME, 'readonly').objectStore(CONVERSATION_STORE_NAME).getAll();
-            request.onsuccess = () => resolve(request.result || []);
-            request.onerror = () => reject(request.error || new Error('分步骤对话备份读取失败'));
-        });
-        for (const record of stored) conversationVaults.set(String(record.key), record);
-    } finally {
-        database.close();
-    }
-
-    const seeds = [];
-    for (const projectItem of projectLibrary.projects) {
-        for (const step of STEPS) {
-            const key = conversationVaultKey(projectItem.id, step.number);
-            const stored = conversationVaults.get(key);
-            const state = projectItem.steps?.[step.number];
-            if (!state) continue;
-            if (stored) {
-                // 分步骤备份是对话的保护副本，可修复项目主存档被旧实例整包覆盖的情况。
-                state.turns = cloneConversationData(stored.turns || []);
-                state.artifactHistory = cloneConversationData(stored.artifactHistory || []);
-                if (state.status === 'idle' && state.turns.length) state.status = 'draft';
-            } else {
-                const record = conversationRecordFor(projectItem, step.number);
-                conversationVaults.set(key, record);
-                seeds.push(record);
-            }
+        const stored = await readLegacyConversationRecords();
+        for (const record of stored) {
+            const target = projectLibrary.projects.find(item => item.id === String(record.projectId));
+            if (!target || !applyStoredStepRecord(target, record)) continue;
+            conversationVaults.set(String(record.key), record);
         }
+    } catch (error) {
+        // 浏览器完全禁用 IndexedDB 时仍允许使用 localStorage 项目，不阻断创作台启动。
+        console.warn('[A.U.T.O Card Studio] 旧对话保护库也不可用，继续使用项目主存档。', error);
     }
-    if (seeds.length) await writeConversationRecords(seeds);
-    const repaired = projectLibrary.projects.reduce((total, projectItem) => (
-        total + repairCrossStepTurnOwnership(projectItem)
-    ), 0);
     conversationVaultsReady = true;
-    if (repaired) {
-        console.warn(`[A.U.T.O Card Studio] 加载时修复了 ${repaired} 条写入错误步骤的对话。`);
-        for (const projectItem of projectLibrary.projects) await syncConversationVaults(projectItem);
-    }
-    saveProjectLibrary();
 }
 
 function artifactRemovalRange(source, block) {
@@ -6819,7 +7060,7 @@ async function deleteProject(projectId) {
     projectLibrary.projects = projectLibrary.projects.filter(item => item.id !== target.id);
     await artifactVaultWriteChain.catch(() => undefined);
     await deleteArtifactVault(target.id);
-    await deleteProjectConversationVaults(target.id);
+    await deleteProjectDatabaseRecords(target.id);
     if (!projectLibrary.projects.length) {
         const replacement = createDefaultProject();
         projectLibrary.projects.push(replacement);
@@ -6838,6 +7079,7 @@ async function deleteProject(projectId) {
         renderAll();
     }
     saveProjectLibrary();
+    await projectDatabaseWriteChain.catch(() => undefined);
     renderProjectMenu();
     notify('success', `已删除“${target.name}”。`);
 }
@@ -7902,6 +8144,7 @@ function snapshotOtherStepConversations(projectData, targetStepNumber) {
         if (step.number === Number(targetStepNumber)) continue;
         const state = projectData.steps?.[step.number];
         snapshots.set(step.number, {
+            status: state?.status || 'idle',
             turns: cloneConversationData(state?.turns || []),
             artifactHistory: cloneConversationData(state?.artifactHistory || []),
             updatedAt: state?.updatedAt || null,
@@ -7920,6 +8163,7 @@ function restoreUnexpectedStepConversationChanges(projectData, snapshots) {
         if (currentSignature === protectedSignature) continue;
         state.turns = cloneConversationData(snapshot.turns);
         state.artifactHistory = cloneConversationData(snapshot.artifactHistory);
+        state.status = snapshot.status;
         state.updatedAt = snapshot.updatedAt;
         restored += 1;
     }
@@ -7947,6 +8191,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         });
     }
     state.status = 'draft';
+    state.updatedAt = new Date().toISOString();
     saveProject();
     shell.querySelector('#acs-user-input').value = '';
     setGenerating(true);
@@ -8186,6 +8431,7 @@ async function retryLatestUserInput(turnIndex) {
     if (!succeeded && previousTail.length) {
         state.turns.push(...previousTail);
         state.status = previousStatus;
+        state.updatedAt = new Date().toISOString();
         saveProject();
         renderAll();
         notify('info', '重试未完成，已恢复原来的回复。');
@@ -9238,6 +9484,7 @@ async function exportProjectJson() {
     // 先立即保存正在编辑的产物，避免导出的 JSON 落后于界面内容。
     flushPendingProjectEdits();
     await artifactVaultWriteChain.catch(() => undefined);
+    await projectDatabaseWriteChain.catch(() => undefined);
     const vault = artifactVaultFor(project.id);
     const summary = projectDataSummary(project, vault);
     const isEmpty = summary.turns === 0 && summary.artifacts === 0 && summary.briefCharacters === 0;
@@ -9298,6 +9545,7 @@ async function importProjectJson(event) {
         syncEnvironmentToProject();
         if (artifactPanelExpanded) toggleArtifactPanel(false);
         saveProject();
+        await projectDatabaseWriteChain.catch(() => undefined);
         await persistArtifactVault(project.id);
         renderEnvironmentSelectors();
         renderAll();
@@ -9315,7 +9563,7 @@ function downloadDossier() {
     downloadBlob(projectDossier(), `${safeFileName(project.name)}-创作档案.md`, 'text/markdown;charset=utf-8');
 }
 
-function newProject() {
+async function newProject() {
     if (isGenerating) {
         notify('warning', '请先停止当前生成，再新建项目。');
         return;
@@ -9329,6 +9577,7 @@ function newProject() {
     syncEnvironmentToProject();
     if (artifactPanelExpanded) toggleArtifactPanel(false);
     saveProject();
+    await projectDatabaseWriteChain.catch(() => undefined);
     renderEnvironmentSelectors();
     renderAll();
     toggleProjectMenu(false);
@@ -10632,6 +10881,7 @@ function ensureStudioStyle() {
 async function ensureStudioLoaded() {
     if (shell?.isConnected) return;
 
+    await ensureProjectDatabaseLoaded();
     await ensureConversationVaultsLoaded();
     await ensureArtifactVaultsLoaded();
 
