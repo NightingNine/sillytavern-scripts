@@ -2050,7 +2050,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-41';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-42';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2074,6 +2074,9 @@ const ARTIFACT_DATABASE_NAME = 'auto-card-studio-artifacts';
 const ARTIFACT_DATABASE_VERSION = 1;
 const ARTIFACT_STORE_NAME = 'project-vaults';
 const ARTIFACT_VAULT_VERSION = 1;
+const CONVERSATION_DATABASE_NAME = 'auto-card-studio-conversations';
+const CONVERSATION_DATABASE_VERSION = 1;
+const CONVERSATION_STORE_NAME = 'step-conversations';
 const RESOURCE_DOCK_POSITION_KEY = 'auto-card-studio:resource-dock-position:v1';
 const PROJECT_VERSION = 1;
 const MAX_CONTEXT_CHARS = 420000;
@@ -4193,6 +4196,9 @@ const artifactSaveTimers = new Map();
 const artifactVaults = new Map();
 let artifactVaultsReady = false;
 let artifactVaultWriteChain = Promise.resolve();
+const conversationVaults = new Map();
+let conversationVaultsReady = false;
+let conversationVaultWriteChain = Promise.resolve();
 let environment = {
     checked: false,
     presetName: '',
@@ -4605,11 +4611,17 @@ function saveProjectLibrary() {
 }
 
 function saveProject() {
+    const repairedTurns = repairCrossStepTurnOwnership(project);
+    if (repairedTurns) {
+        console.warn(`[A.U.T.O Card Studio] 已阻止并纠正 ${repairedTurns} 条跨步骤对话写入。`);
+    }
     project.updatedAt = new Date().toISOString();
     const index = projectLibrary.projects.findIndex(item => item.id === project.id);
     if (index >= 0) projectLibrary.projects[index] = project;
     else projectLibrary.projects.push(project);
     projectLibrary.activeProjectId = project.id;
+    // 对话按步骤独立备份；项目主存档即使被旧实例覆盖，也能在下次加载时恢复。
+    void syncConversationVaults(project);
     saveProjectLibrary();
     if (shell?.querySelector('#acs-project-menu:not([hidden])')) renderProjectMenu();
 }
@@ -4708,11 +4720,14 @@ async function clearAllStudioData() {
         for (const timer of artifactSaveTimers.values()) hostWindow.clearTimeout(timer);
         artifactSaveTimers.clear();
         await artifactVaultWriteChain.catch(() => undefined);
+        await conversationVaultWriteChain.catch(() => undefined);
         await Promise.all([
             deleteStudioDatabase(RESOURCE_DATABASE_NAME, '独立预设与正则数据库'),
             deleteStudioDatabase(ARTIFACT_DATABASE_NAME, '独立产物数据库'),
+            deleteStudioDatabase(CONVERSATION_DATABASE_NAME, '分步骤对话备份数据库'),
         ]);
         artifactVaults.clear();
+        conversationVaults.clear();
         const localCount = clearStudioStorageArea(localStorage);
         const sessionCount = clearStudioStorageArea(hostWindow.sessionStorage);
         const clearButton = shell?.querySelector('#acs-clear-all-studio-data');
@@ -6054,6 +6069,176 @@ function restoreArtifactVersion(button) {
     notify('success', `${group.tag} 的当前版本已恢复为历史版本 ${selectedIndex + 1}，没有新增版本页。`);
 }
 
+function openConversationDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = (hostWindow.indexedDB || indexedDB).open(CONVERSATION_DATABASE_NAME, CONVERSATION_DATABASE_VERSION);
+        request.onupgradeneeded = () => {
+            const database = request.result;
+            if (!database.objectStoreNames.contains(CONVERSATION_STORE_NAME)) {
+                database.createObjectStore(CONVERSATION_STORE_NAME, { keyPath: 'key' });
+            }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('分步骤对话备份库打开失败'));
+    });
+}
+
+function cloneConversationData(value) {
+    if (typeof globalThis.structuredClone === 'function') return globalThis.structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+}
+
+function conversationVaultKey(projectId, stepNumber) {
+    return `${String(projectId)}:${Number(stepNumber)}`;
+}
+
+function conversationRecordFor(projectData, stepNumber) {
+    const state = projectData.steps?.[stepNumber] || {};
+    const turns = (Array.isArray(state.turns) ? state.turns : []).filter(turn => (
+        turn?.step === undefined || Number(turn.step) === Number(stepNumber)
+    ));
+    return {
+        key: conversationVaultKey(projectData.id, stepNumber),
+        projectId: String(projectData.id),
+        step: Number(stepNumber),
+        turns: cloneConversationData(turns),
+        artifactHistory: cloneConversationData(Array.isArray(state.artifactHistory) ? state.artifactHistory : []),
+        updatedAt: String(state.updatedAt || new Date().toISOString()),
+    };
+}
+
+function conversationRecordSignature(record) {
+    return JSON.stringify([record?.turns || [], record?.artifactHistory || []]);
+}
+
+function repairCrossStepTurnOwnership(projectData) {
+    const misplaced = [];
+    for (const step of STEPS) {
+        const state = projectData.steps?.[step.number];
+        if (!Array.isArray(state?.turns)) continue;
+        state.turns = state.turns.filter(turn => {
+            if (turn?.step === undefined || Number(turn.step) === step.number) return true;
+            misplaced.push(turn);
+            return false;
+        });
+    }
+    for (const turn of misplaced) {
+        const targetStep = Number(turn.step);
+        const target = projectData.steps?.[targetStep];
+        if (!target || !Array.isArray(target.turns)) continue;
+        const duplicate = target.turns.some(existing => (
+            (turn.id && existing.id === turn.id)
+            || (!turn.id && existing.role === turn.role && existing.createdAt === turn.createdAt && existing.content === turn.content)
+        ));
+        if (!duplicate) target.turns.push(turn);
+    }
+    return misplaced.length;
+}
+
+async function writeConversationRecords(records) {
+    if (!records.length) return true;
+    const database = await openConversationDatabase();
+    try {
+        await new Promise((resolve, reject) => {
+            const transaction = database.transaction(CONVERSATION_STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(CONVERSATION_STORE_NAME);
+            for (const record of records) store.put(record);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error || new Error('分步骤对话备份失败'));
+        });
+        return true;
+    } finally {
+        database.close();
+    }
+}
+
+function syncConversationVaults(projectData = project) {
+    if (!conversationVaultsReady || !projectData?.id) return Promise.resolve(true);
+    const changed = [];
+    for (const step of STEPS) {
+        const record = conversationRecordFor(projectData, step.number);
+        const previous = conversationVaults.get(record.key);
+        if (conversationRecordSignature(previous) === conversationRecordSignature(record)) continue;
+        conversationVaults.set(record.key, record);
+        changed.push(record);
+    }
+    if (!changed.length) return conversationVaultWriteChain;
+    conversationVaultWriteChain = conversationVaultWriteChain
+        .catch(() => undefined)
+        .then(() => writeConversationRecords(changed))
+        .catch(error => {
+            console.error('[A.U.T.O Card Studio] 分步骤对话备份失败。', error);
+            notify('error', '对话保护备份失败，请立即导出项目备份。');
+            return false;
+        });
+    return conversationVaultWriteChain;
+}
+
+async function deleteProjectConversationVaults(projectId) {
+    await conversationVaultWriteChain.catch(() => undefined);
+    const targetId = String(projectId || '');
+    const keys = [...conversationVaults.keys()].filter(key => conversationVaults.get(key)?.projectId === targetId);
+    for (const key of keys) conversationVaults.delete(key);
+    if (!keys.length) return;
+    const database = await openConversationDatabase();
+    try {
+        await new Promise((resolve, reject) => {
+            const transaction = database.transaction(CONVERSATION_STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(CONVERSATION_STORE_NAME);
+            for (const key of keys) store.delete(key);
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error || new Error('项目对话备份删除失败'));
+        });
+    } finally {
+        database.close();
+    }
+}
+
+async function ensureConversationVaultsLoaded() {
+    if (conversationVaultsReady) return;
+    const database = await openConversationDatabase();
+    try {
+        const stored = await new Promise((resolve, reject) => {
+            const request = database.transaction(CONVERSATION_STORE_NAME, 'readonly').objectStore(CONVERSATION_STORE_NAME).getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error || new Error('分步骤对话备份读取失败'));
+        });
+        for (const record of stored) conversationVaults.set(String(record.key), record);
+    } finally {
+        database.close();
+    }
+
+    const seeds = [];
+    for (const projectItem of projectLibrary.projects) {
+        for (const step of STEPS) {
+            const key = conversationVaultKey(projectItem.id, step.number);
+            const stored = conversationVaults.get(key);
+            const state = projectItem.steps?.[step.number];
+            if (!state) continue;
+            if (stored) {
+                // 分步骤备份是对话的保护副本，可修复项目主存档被旧实例整包覆盖的情况。
+                state.turns = cloneConversationData(stored.turns || []);
+                state.artifactHistory = cloneConversationData(stored.artifactHistory || []);
+                if (state.status === 'idle' && state.turns.length) state.status = 'draft';
+            } else {
+                const record = conversationRecordFor(projectItem, step.number);
+                conversationVaults.set(key, record);
+                seeds.push(record);
+            }
+        }
+    }
+    if (seeds.length) await writeConversationRecords(seeds);
+    const repaired = projectLibrary.projects.reduce((total, projectItem) => (
+        total + repairCrossStepTurnOwnership(projectItem)
+    ), 0);
+    conversationVaultsReady = true;
+    if (repaired) {
+        console.warn(`[A.U.T.O Card Studio] 加载时修复了 ${repaired} 条写入错误步骤的对话。`);
+        for (const projectItem of projectLibrary.projects) await syncConversationVaults(projectItem);
+    }
+    saveProjectLibrary();
+}
+
 function artifactRemovalRange(source, block) {
     if (!block.language) return { start: block.start, end: block.end };
     const opener = source.lastIndexOf('```', block.start);
@@ -6624,6 +6809,7 @@ async function deleteProject(projectId) {
     projectLibrary.projects = projectLibrary.projects.filter(item => item.id !== target.id);
     await artifactVaultWriteChain.catch(() => undefined);
     await deleteArtifactVault(target.id);
+    await deleteProjectConversationVaults(target.id);
     if (!projectLibrary.projects.length) {
         const replacement = createDefaultProject();
         projectLibrary.projects.push(replacement);
@@ -7701,9 +7887,55 @@ function prepareGeneration() {
     return { step, state };
 }
 
+function snapshotOtherStepConversations(projectData, targetStepNumber) {
+    const snapshots = new Map();
+    for (const step of STEPS) {
+        if (step.number === Number(targetStepNumber)) continue;
+        const state = projectData.steps?.[step.number];
+        snapshots.set(step.number, {
+            turns: cloneConversationData(state?.turns || []),
+            artifactHistory: cloneConversationData(state?.artifactHistory || []),
+            updatedAt: state?.updatedAt || null,
+        });
+    }
+    return snapshots;
+}
+
+function restoreUnexpectedStepConversationChanges(projectData, snapshots) {
+    let restored = 0;
+    for (const [stepNumber, snapshot] of snapshots) {
+        const state = projectData.steps?.[stepNumber];
+        if (!state) continue;
+        const currentSignature = conversationRecordSignature(state);
+        const protectedSignature = conversationRecordSignature(snapshot);
+        if (currentSignature === protectedSignature) continue;
+        state.turns = cloneConversationData(snapshot.turns);
+        state.artifactHistory = cloneConversationData(snapshot.artifactHistory);
+        state.updatedAt = snapshot.updatedAt;
+        restored += 1;
+    }
+    return restored;
+}
+
 async function runStepGeneration(step, state, userInput, { appendUserTurn = true, retried = false } = {}) {
+    const generationProject = project;
+    const targetStepNumber = Number(step.number);
+    state = generationProject.steps[targetStepNumber];
+    if (!state) throw new Error(`无法定位 Step ${targetStepNumber} 的对话存档`);
+    const repairedBeforeGeneration = repairCrossStepTurnOwnership(generationProject);
+    if (repairedBeforeGeneration) {
+        void syncConversationVaults(generationProject);
+        saveProjectLibrary();
+    }
+    const protectedConversations = snapshotOtherStepConversations(generationProject, targetStepNumber);
     if (appendUserTurn) {
-        state.turns.push({ role: 'user', content: userInput, createdAt: new Date().toISOString() });
+        state.turns.push({
+            id: globalThis.crypto?.randomUUID?.() || `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            role: 'user',
+            content: userInput,
+            step: targetStepNumber,
+            createdAt: new Date().toISOString(),
+        });
     }
     state.status = 'draft';
     saveProject();
@@ -7742,7 +7974,13 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         httpResponseCapture = captureGenerationHttpResponse();
 
         if (shouldStream) {
-            streamingTurn = { role: 'assistant', content: '', createdAt: new Date().toISOString() };
+            streamingTurn = {
+                id: globalThis.crypto?.randomUUID?.() || `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                role: 'assistant',
+                content: '',
+                step: targetStepNumber,
+                createdAt: new Date().toISOString(),
+            };
             state.turns.push(streamingTurn);
             renderCurrentStep();
             streamSubscription = eventOn(iframe_events.STREAM_TOKEN_RECEIVED_FULLY, (fullText, generationId) => {
@@ -7764,6 +8002,11 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             custom_api: customApi,
         }, `Step ${step.number} ${step.name}`);
         const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+        if (project !== generationProject) throw new Error('生成期间项目已切换，已阻止回复写入错误项目');
+        const restoredBeforeWrite = restoreUnexpectedStepConversationChanges(generationProject, protectedConversations);
+        if (restoredBeforeWrite) {
+            console.warn(`[A.U.T.O Card Studio] 已阻止 ${restoredBeforeWrite} 个非目标步骤的对话被本轮生成改写。`);
+        }
         logGenerationDiagnostic('请求完成', {
             ...generationDiagnostic,
             result_type: typeof result,
@@ -7772,7 +8015,13 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         });
         const response = normalizeFinalArtifactUserMacros(rawResponse, step.number);
         if (streamingTurn) streamingTurn.content = response;
-        else state.turns.push({ role: 'assistant', content: response, createdAt: new Date().toISOString() });
+        else state.turns.push({
+            id: globalThis.crypto?.randomUUID?.() || `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            role: 'assistant',
+            content: response,
+            step: targetStepNumber,
+            createdAt: new Date().toISOString(),
+        });
         // AI 回复只在完成时提取一次；入库后产物与对话彻底分离，后续互不回写。
         const capturedArtifacts = appendArtifactsToVault(artifactVaultFor(project.id), response, step.number, {
             createdAt: new Date().toISOString(),
@@ -7819,6 +8068,13 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             notify('info', '本次生成已停止。');
         }
     } finally {
+        const restoredSteps = restoreUnexpectedStepConversationChanges(generationProject, protectedConversations);
+        if (restoredSteps) {
+            console.warn(`[A.U.T.O Card Studio] 生成收尾时恢复了 ${restoredSteps} 个被意外改写的步骤对话。`);
+            void syncConversationVaults(generationProject);
+            saveProjectLibrary();
+            notify('warning', '检测到跨步骤对话写入，已自动恢复原步骤内容。');
+        }
         httpResponseCapture?.stop();
         streamSubscription?.stop?.();
         activeGenerationId = null;
@@ -10367,6 +10623,7 @@ function ensureStudioStyle() {
 async function ensureStudioLoaded() {
     if (shell?.isConnected) return;
 
+    await ensureConversationVaultsLoaded();
     await ensureArtifactVaultsLoaded();
 
     const existingShells = [...document.querySelectorAll('#auto-card-studio')];
