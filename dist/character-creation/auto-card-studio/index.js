@@ -792,6 +792,85 @@ const CONNECTION_PROFILE_CSS = `
 }
 `;
 
+const RUNTIME_DATA_CSS = `
+/* 数据与诊断沿用工作台的检修面板语汇，危险操作只在这里使用红色。 */
+.acs-runtime-data-panel {
+  display: grid;
+  gap: 11px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(232, 224, 212, 0.12);
+  border-radius: 11px;
+  background: rgba(30, 28, 25, 0.34);
+}
+
+.acs-runtime-data-heading,
+.acs-runtime-data-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.acs-runtime-data-heading strong,
+.acs-runtime-data-heading small {
+  display: block;
+}
+
+.acs-runtime-data-heading strong {
+  color: var(--acs-text-soft);
+  font-size: 11px;
+}
+
+.acs-runtime-data-heading small,
+.acs-runtime-data-status {
+  color: var(--acs-muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.acs-runtime-data-status {
+  margin: 0;
+  padding: 8px 9px;
+  border-left: 2px solid var(--acs-green);
+  border-radius: 0 8px 8px 0;
+  background: rgba(147, 189, 145, 0.06);
+}
+
+.acs-runtime-data-status.is-warning {
+  border-left-color: var(--acs-gold);
+  background: rgba(211, 173, 114, 0.07);
+  color: var(--acs-gold);
+}
+
+.acs-runtime-data-actions {
+  align-items: stretch;
+}
+
+.acs-runtime-data-actions .acs-button {
+  flex: 1 1 0;
+  min-height: 36px;
+  margin: 0;
+  font-size: 9px;
+}
+
+.acs-runtime-clear-button {
+  border-color: rgba(217, 132, 127, 0.42);
+  background: rgba(217, 132, 127, 0.08);
+  color: #e7aaa5;
+}
+
+.acs-runtime-clear-button:hover {
+  border-color: rgba(217, 132, 127, 0.7);
+  background: rgba(217, 132, 127, 0.15);
+  color: #f0c1bd;
+}
+
+@media (max-width: 560px) {
+  .acs-runtime-data-actions { display: grid; }
+}
+`;
+
 const PROJECT_LIBRARY_CSS = `
 .acs-project-identity {
   position: relative;
@@ -1959,6 +2038,8 @@ const INTERACTIVE_TOUR_CSS = `
 
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
+const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
+const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const AUTO_CARD_STUDIO_VERSION = '0.6.26';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
@@ -1969,7 +2050,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.20-38';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-39';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -4102,6 +4183,8 @@ let backgroundUpdatePromise = null;
 let pendingAutomaticUpdate = null;
 let artifactFilterScope = 'all';
 let artifactFilterQuery = '';
+let runtimeClaimed = false;
+let runtimeTakeoverCount = 0;
 const artifactSaveTimers = new Map();
 let environment = {
     checked: false,
@@ -4359,6 +4442,112 @@ function saveProject() {
     projectLibrary.activeProjectId = project.id;
     saveProjectLibrary();
     if (shell?.querySelector('#acs-project-menu:not([hidden])')) renderProjectMenu();
+}
+
+function studioRuntimeDiagnostics() {
+    const controller = hostWindow[RUNTIME_CONTROLLER_KEY];
+    const shells = [...document.querySelectorAll('#auto-card-studio')];
+    const owned = controller?.instanceId === RUNTIME_INSTANCE_ID;
+    return {
+        shellCount: shells.length,
+        owned,
+        healthy: shells.length === 1 && owned && shell?.isConnected,
+        takeoverCount: runtimeTakeoverCount,
+    };
+}
+
+function renderRuntimeDataStatus() {
+    const status = shell?.querySelector('#acs-runtime-data-status');
+    if (!status) return;
+    const diagnostics = studioRuntimeDiagnostics();
+    status.classList.toggle('is-warning', !diagnostics.healthy);
+    if (diagnostics.healthy) {
+        status.textContent = diagnostics.takeoverCount
+            ? `单例保护正常：当前 1 个实例，本次启动已清理 ${diagnostics.takeoverCount} 个旧界面。`
+            : '单例保护正常：当前只有 1 个创作台实例。';
+        return;
+    }
+    status.textContent = `检测到异常：${diagnostics.shellCount} 个界面实例，${diagnostics.owned ? '当前实例已持有单例锁' : '当前实例未持有单例锁'}。建议刷新 SillyTavern。`;
+}
+
+function claimStudioRuntime() {
+    if (runtimeClaimed) return;
+    const staleShells = [...document.querySelectorAll('#auto-card-studio')];
+    const previous = hostWindow[RUNTIME_CONTROLLER_KEY];
+    if (previous?.instanceId && previous.instanceId !== RUNTIME_INSTANCE_ID) {
+        try {
+            previous.dispose?.({ reason: 'superseded' });
+        } catch (error) {
+            console.warn('[A.U.T.O Card Studio] 旧运行实例注销失败，将强制清理残留界面。', error);
+        }
+    }
+
+    // 旧版本没有全局控制器时也可能留下同 ID 界面；统一清除后再创建当前实例。
+    for (const staleShell of staleShells) staleShell.remove();
+    document.querySelector(`#${SCRIPT_STYLE_ID}`)?.remove();
+    runtimeTakeoverCount = staleShells.length;
+    hostWindow[RUNTIME_CONTROLLER_KEY] = {
+        instanceId: RUNTIME_INSTANCE_ID,
+        version: AUTO_CARD_STUDIO_VERSION,
+        startedAt: new Date().toISOString(),
+        dispose: cleanupScriptRuntime,
+    };
+    runtimeClaimed = true;
+}
+
+function deleteStudioResourceDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = (hostWindow.indexedDB || indexedDB).deleteDatabase(RESOURCE_DATABASE_NAME);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error || new Error('独立预设与正则数据库删除失败'));
+        request.onblocked = () => reject(new Error('独立预设与正则数据库仍被占用，请刷新页面后重试'));
+    });
+}
+
+function clearStudioStorageArea(storage) {
+    const keys = [];
+    for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key?.startsWith('auto-card-studio:')) keys.push(key);
+    }
+    for (const key of keys) storage.removeItem(key);
+    return keys.length;
+}
+
+async function clearAllStudioData() {
+    if (isGenerating) {
+        notify('warning', '请先停止当前生成，再清空创作台数据。');
+        return;
+    }
+    const firstConfirmed = await showStudioConfirm({
+        title: '清空全部创作台数据？',
+        message: '将删除所有项目、对话、产物、历史版本、连接预设、API Key、模型参数、更新缓存、界面偏好，以及独立导入的 A.U.T.O 预设和正则。不会删除 SillyTavern 的聊天、角色卡或其他脚本数据。',
+        confirmLabel: '继续核对',
+        danger: true,
+    });
+    if (!firstConfirmed) return;
+    const finalConfirmed = await showStudioConfirm({
+        title: '最后确认：此操作无法撤销',
+        message: '只有此前导出的项目 JSON 可以恢复项目内容。确认后将立即清空数据并刷新整个 SillyTavern 页面。',
+        confirmLabel: '彻底清空并刷新',
+        danger: true,
+    });
+    if (!finalConfirmed) return;
+
+    try {
+        for (const timer of artifactSaveTimers.values()) hostWindow.clearTimeout(timer);
+        artifactSaveTimers.clear();
+        await deleteStudioResourceDatabase();
+        const localCount = clearStudioStorageArea(localStorage);
+        const sessionCount = clearStudioStorageArea(hostWindow.sessionStorage);
+        const clearButton = shell?.querySelector('#acs-clear-all-studio-data');
+        if (clearButton) clearButton.disabled = true;
+        notify('success', `已清除全部创作台数据（本地 ${localCount} 项、会话 ${sessionCount} 项），正在刷新页面。`);
+        hostWindow.setTimeout(() => hostWindow.location.reload(), 700);
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 清空全部数据失败。', error);
+        notify('error', `清空失败：${error?.message || error}`);
+    }
 }
 
 function normalizeModelParameters(raw = {}) {
@@ -6031,6 +6220,53 @@ function installStudioToolsUI() {
     }
 }
 
+function installRuntimeDataUI() {
+    const settingsPanel = shell.querySelector('[data-acs-panel="settings"]');
+    if (!settingsPanel || settingsPanel.querySelector('#acs-runtime-data-fold')) return;
+
+    const fold = document.createElement('section');
+    fold.id = 'acs-runtime-data-fold';
+    fold.className = 'acs-settings-fold';
+    fold.innerHTML = `
+      <button class="acs-settings-fold-toggle" type="button" data-settings-fold="runtime-data"
+        aria-expanded="false" aria-controls="acs-runtime-data-fold-body">
+        <span><strong>数据与诊断</strong><small>检查运行实例或重置创作台</small></span>
+        <span class="acs-settings-fold-meta"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>
+      </button>
+      <div id="acs-runtime-data-fold-body" class="acs-settings-fold-body" hidden>
+        <div class="acs-runtime-data-panel">
+          <div class="acs-runtime-data-heading">
+            <span><strong>创作台运行状态</strong><small>仅检查当前页面中的 A.U.T.O 创作台</small></span>
+          </div>
+          <p id="acs-runtime-data-status" class="acs-runtime-data-status" role="status" aria-live="polite"></p>
+          <div class="acs-runtime-data-actions">
+            <button id="acs-check-runtime-instances" class="acs-button" type="button">
+              <i class="fa-solid fa-stethoscope" aria-hidden="true"></i>检测实例
+            </button>
+            <button id="acs-clear-all-studio-data" class="acs-button acs-runtime-clear-button" type="button">
+              <i class="fa-solid fa-trash-can" aria-hidden="true"></i>清空全部创作台数据
+            </button>
+          </div>
+        </div>
+      </div>`;
+    settingsPanel.append(fold);
+
+    fold.querySelector('#acs-check-runtime-instances')?.addEventListener('click', () => {
+        renderRuntimeDataStatus();
+        const diagnostics = studioRuntimeDiagnostics();
+        notify(
+            diagnostics.healthy ? 'success' : 'warning',
+            diagnostics.healthy
+                ? '单例检测正常：当前只有一个创作台实例。'
+                : `检测到 ${diagnostics.shellCount} 个界面实例，建议刷新 SillyTavern。`,
+        );
+    });
+    fold.querySelector('#acs-clear-all-studio-data')?.addEventListener('click', () => {
+        void clearAllStudioData();
+    });
+    renderRuntimeDataStatus();
+}
+
 function installDeliveryUI() {
     // 世界书不再依赖预制模板；旧项目字段继续保留，仅用于兼容历史存档。
     shell.querySelector('#acs-worldbook-select')?.closest('label')?.remove();
@@ -6610,6 +6846,7 @@ function renderAll() {
     renderProgress();
     renderArtifacts();
     renderProjectMenu();
+    renderRuntimeDataStatus();
 }
 
 function updateStudioViewportScale() {
@@ -9987,17 +10224,17 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}`;
     document.head.append(style);
 }
 
 async function ensureStudioLoaded() {
     if (shell?.isConnected) return;
 
-    const existing = document.querySelector('#auto-card-studio');
-    if (existing && existing.dataset.acsRuntime !== SCRIPT_RUNTIME_MARK) {
-        // 删除旧插件留在当前页面中的隐藏界面，脚本版随后接管。
-        existing.remove();
+    const existingShells = [...document.querySelectorAll('#auto-card-studio')];
+    if (existingShells.length) {
+        // 无论旧版是否使用相同标记，都不能让同一页面保留第二个创作台界面。
+        for (const existing of existingShells) existing.remove();
         document.querySelector('#auto-card-studio-launch')?.remove();
         setStudioPageScrollLock(false);
     }
@@ -10007,11 +10244,13 @@ async function ensureStudioLoaded() {
     container.innerHTML = STUDIO_HTML;
     shell = container.querySelector('#auto-card-studio');
     shell.dataset.acsRuntime = SCRIPT_RUNTIME_MARK;
+    shell.dataset.acsRuntimeInstance = RUNTIME_INSTANCE_ID;
     document.body.append(shell);
     installStepHelpUI();
     installResourceManagerUI();
     installProjectLibraryUI();
     installStudioToolsUI();
+    installRuntimeDataUI();
     installConversationNavigation();
     installDeliveryUI();
     installMobileLayoutUI();
@@ -10033,6 +10272,7 @@ function showStudioRuntimeError(error) {
             container.innerHTML = STUDIO_HTML;
             shell = container.querySelector('#auto-card-studio');
             shell.dataset.acsRuntime = SCRIPT_RUNTIME_MARK;
+            shell.dataset.acsRuntimeInstance = RUNTIME_INSTANCE_ID;
             document.body.append(shell);
         }
         shell.classList.add('is-open');
@@ -10136,24 +10376,49 @@ function handleHostKeydown(event) {
 }
 
 function cleanupScriptRuntime() {
+    const ownsController = hostWindow[RUNTIME_CONTROLLER_KEY]?.instanceId === RUNTIME_INSTANCE_ID;
     document.removeEventListener('keydown', handleHostKeydown);
     hostWindow.removeEventListener('resize', handleTourResize);
     hostWindow.visualViewport?.removeEventListener('resize', handleTourResize);
-    if (launcherInstallTimer) hostWindow.clearInterval(launcherInstallTimer);
+    window.removeEventListener('pagehide', cleanupScriptRuntime);
+    if (launcherInstallTimer) {
+        hostWindow.clearInterval(launcherInstallTimer);
+        launcherInstallTimer = null;
+    }
     if (projectMenuCloseTimer) hostWindow.clearTimeout(projectMenuCloseTimer);
     if (updateFeedbackTimer) hostWindow.clearTimeout(updateFeedbackTimer);
     if (tourAnimationFrame) hostWindow.cancelAnimationFrame(tourAnimationFrame);
     if (tourSceneTimer) hostWindow.clearTimeout(tourSceneTimer);
+    for (const timer of artifactSaveTimers.values()) hostWindow.clearTimeout(timer);
+    artifactSaveTimers.clear();
+    if (activeGenerationId && helper?.stopGenerationById) {
+        try {
+            helper.stopGenerationById(activeGenerationId);
+        } catch (error) {
+            console.warn('[A.U.T.O Card Studio] 注销旧实例时停止生成失败。', error);
+        }
+    }
+    activeGenerationId = null;
+    isGenerating = false;
     document.querySelector('#auto-card-studio-wand-launcher')?.remove();
     setStudioPageScrollLock(false);
-    if (shell?.dataset.acsRuntime === SCRIPT_RUNTIME_MARK) shell.remove();
-    document.querySelector(`#${SCRIPT_STYLE_ID}`)?.remove();
+    if (shell?.dataset.acsRuntimeInstance === RUNTIME_INSTANCE_ID) shell.remove();
+    if (ownsController) {
+        document.querySelector(`#${SCRIPT_STYLE_ID}`)?.remove();
+        delete hostWindow[RUNTIME_CONTROLLER_KEY];
+        if (hostWindow[OPEN_HANDLER_KEY] === requestOpenStudio) delete hostWindow[OPEN_HANDLER_KEY];
+    }
+    runtimeClaimed = false;
     shell = null;
 }
 
 const TOOLBAR_LAUNCHER_NAME = '🔨';
 const LEGACY_TOOLBAR_LAUNCHER_NAME = '打开 A.U.T.O 创作台';
 const OPEN_HANDLER_KEY = '__autoCardStudioOpenHandler';
+
+function requestCurrentStudioOpen() {
+    return hostWindow[OPEN_HANDLER_KEY]?.();
+}
 
 function migrateToolbarLauncherName() {
     try {
@@ -10529,14 +10794,15 @@ async function scanForUpdatesInBackground() {
 }
 
 function startStudioRuntime() {
+    claimStudioRuntime();
     hostWindow[OPEN_HANDLER_KEY] = requestOpenStudio;
     document.addEventListener('keydown', handleHostKeydown);
     hostWindow.addEventListener('resize', handleTourResize);
     hostWindow.visualViewport?.addEventListener('resize', handleTourResize);
     migrateToolbarLauncherName();
-    eventOn(getButtonEvent(TOOLBAR_LAUNCHER_NAME), requestOpenStudio);
+    eventOn(getButtonEvent(TOOLBAR_LAUNCHER_NAME), requestCurrentStudioOpen);
     // 首次升级时旧按钮可能已经渲染并持有旧事件，保留一次兼容绑定。
-    eventOn(getButtonEvent(LEGACY_TOOLBAR_LAUNCHER_NAME), requestOpenStudio);
+    eventOn(getButtonEvent(LEGACY_TOOLBAR_LAUNCHER_NAME), requestCurrentStudioOpen);
     installStudioLaunchers();
     // 不阻塞脚本入口与创作台启动；每次载入脚本都独立扫描一次最新版。
     backgroundUpdatePromise = new Promise(resolve => {
