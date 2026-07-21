@@ -2050,7 +2050,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-40';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-41';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -6039,19 +6039,19 @@ function restoreArtifactVersion(button) {
     flushPendingProjectEdits();
     const now = new Date().toISOString();
     const vault = artifactVaultFor(project.id);
-    vault.versions.push({
-        id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        step: current.step,
-        identity: group.tag,
-        content: selected.content,
-        createdAt: now,
-        updatedAt: now,
-        source: 'restored',
-    });
+    const storedCurrent = vault.versions.find(item => item.id === current.id);
+    if (!storedCurrent) {
+        notify('error', '无法定位当前产物，未执行版本恢复。');
+        return;
+    }
+    // 恢复只覆盖当前页，不额外创建历史页；已有历史版本数量保持不变。
+    storedCurrent.content = selected.content;
+    storedCurrent.updatedAt = now;
+    storedCurrent.source = 'restored-overwrite';
     vault.updatedAt = now;
     void persistArtifactVault(project.id);
     renderAll();
-    notify('success', `${group.tag} 已恢复为历史版本 ${selectedIndex + 1}，原版本仍保留。`);
+    notify('success', `${group.tag} 的当前版本已恢复为历史版本 ${selectedIndex + 1}，没有新增版本页。`);
 }
 
 function artifactRemovalRange(source, block) {
