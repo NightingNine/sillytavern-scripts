@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.26 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.27 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -2040,7 +2040,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.26';
+const AUTO_CARD_STUDIO_VERSION = '0.6.27';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
