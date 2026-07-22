@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.34 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.35 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -2035,7 +2035,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.34';
+const AUTO_CARD_STUDIO_VERSION = '0.6.35';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -2210,7 +2210,7 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-editor-head p,.acs-resource-editor-head h2,.acs-update-notes-head p,.acs-update-notes-head h2{margin:0}.acs-resource-editor-head p,.acs-update-notes-head p{color:var(--acs-cyan);font:700 8px/1 var(--acs-mono);letter-spacing:.15em}.acs-resource-editor-head h2,.acs-update-notes-head h2{margin-top:7px;color:var(--acs-text);font:500 23px/1.25 var(--acs-display)}
 .acs-resource-editor-close,.acs-update-notes-close{display:grid;width:34px;height:34px;flex:0 0 auto;place-items:center;border:1px solid var(--acs-line);border-radius:9px;background:transparent;color:var(--acs-muted);cursor:pointer}
 .acs-resource-editor-body{display:grid;min-height:0;padding:18px 22px}.acs-resource-editor-body textarea{width:100%;min-height:360px;resize:vertical;padding:15px;border:1px solid var(--acs-line);border-radius:11px;background:#292722;color:var(--acs-text);font-family:var(--acs-body);font-size:12px;font-weight:450;line-height:1.78;letter-spacing:.008em;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;scrollbar-width:thin;scrollbar-color:var(--acs-line) transparent}
-.acs-resource-editor-actions,.acs-update-notes-actions{display:flex;justify-content:flex-end;gap:8px;padding:13px 18px;border-top:1px solid var(--acs-line-soft);background:#292722}.acs-update-notes-actions{justify-content:center}
+.acs-resource-editor-actions,.acs-update-notes-actions{display:flex;justify-content:flex-end;gap:8px;padding:13px 18px;border-top:1px solid var(--acs-line-soft);background:#292722}.acs-resource-editor-actions{align-items:center;justify-content:center}.acs-resource-editor-actions .acs-button{flex:0 1 154px;width:154px;min-width:0;min-height:43px;margin:0;padding:8px 14px;white-space:nowrap}.acs-resource-editor-actions .acs-button-publish{width:154px;margin-top:0}.acs-update-notes-actions{justify-content:center}
 .acs-update-notes-actions{align-items:center}.acs-update-notes-actions .acs-button{width:auto;min-width:104px;min-height:36px;margin:0;padding:7px 14px;white-space:nowrap}.acs-update-notes-actions .acs-button-publish{width:auto;margin-top:0}
 .acs-update-notes-dialog{grid-template-rows:auto minmax(0,1fr) auto;width:min(680px,94vw)}
 .acs-update-notes-summary{display:block;margin-top:7px;color:var(--acs-muted);font:700 9px/1.4 var(--acs-mono)}
@@ -3628,16 +3628,14 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-resource-editor-actions .acs-button {
-  flex: 0 1 auto;
-  width: auto;
-  min-width: 108px;
-  min-height: 36px;
+  flex: 0 1 154px;
+  width: 154px;
+  min-width: 0;
+  min-height: 43px;
   margin: 0;
-  padding: 7px 14px;
+  padding: 8px 14px;
   white-space: nowrap;
 }
-
-.acs-shell.acs-mobile-layout .acs-resource-editor-actions .acs-button-publish { min-width: 154px; }
 
 @media (max-width: 390px) {
   .acs-shell.acs-mobile-layout .acs-brand-mark {

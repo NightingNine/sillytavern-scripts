@@ -21,7 +21,7 @@ import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-s
 
 ## 数据与更新
 
-- 当前发布版本：`0.6.34`
+- 当前发布版本：`0.6.35`
 
 ### 清理与重新生成
 
