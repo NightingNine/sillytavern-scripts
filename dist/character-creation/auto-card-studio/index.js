@@ -2370,7 +2370,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-56';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-57';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2563,15 +2563,15 @@ const RESOURCE_MANAGER_CSS = `
 `;
 
 const PHASES = [
-    { id: 'concept', label: '概念设计层', range: [1, 3] },
-    { id: 'entity', label: '实体内容设计层', range: [4, 9] },
-    { id: 'state-machine', label: '状态机设计层', range: [10, 12] },
-    { id: 'writing', label: '描写设计层', range: [13, 15] },
-    { id: 'variables', label: '变量设计层', range: [16, 21] },
-    { id: 'summary', label: '汇总层', range: [22, 22] },
-    { id: 'output', label: '输出设计层', range: [23, 24] },
-    { id: 'autotask', label: 'AUTOTASK 配置', range: [25, 28] },
-    { id: 'delivery', label: '启动与交付', range: [29, 29] },
+    { id: 'concept', label: '概念设计层', range: [1, 3], icon: 'fa-compass' },
+    { id: 'entity', label: '实体内容设计层', range: [4, 9], icon: 'fa-cubes-stacked' },
+    { id: 'state-machine', label: '状态机设计层', range: [10, 12], icon: 'fa-diagram-project' },
+    { id: 'writing', label: '描写设计层', range: [13, 15], icon: 'fa-pen-nib' },
+    { id: 'variables', label: '变量设计层', range: [16, 21], icon: 'fa-sliders' },
+    { id: 'summary', label: '汇总层', range: [22, 22], icon: 'fa-layer-group' },
+    { id: 'output', label: '输出设计层', range: [23, 24], icon: 'fa-display' },
+    { id: 'autotask', label: 'AUTOTASK 配置', range: [25, 28], icon: 'fa-gears' },
+    { id: 'delivery', label: '启动与交付', range: [29, 29], icon: 'fa-rocket' },
 ];
 
 const LEGACY_PHASE_REPLACEMENTS = Object.freeze({
@@ -4031,6 +4031,134 @@ body.acs-no-scroll {
     transition: none;
   }
 }
+`;
+
+const MOBILE_POLISH_CSS = `
+.acs-phase-icon { display: none; }
+
+/* 手机端保留触摸滚动，但不显示抢眼的系统滚动条。 */
+.acs-shell.acs-mobile-layout * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.acs-shell.acs-mobile-layout *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 折叠导航用语义图标取代无法辨认的短横线。 */
+.acs-shell.acs-mobile-layout .acs-phase-toggle {
+  width: 42px;
+  min-height: 30px;
+  padding: 2px;
+  border-radius: 10px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle::before { display: none; }
+
+.acs-shell.acs-mobile-layout .acs-phase-toggle .acs-phase-title {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-label { display: none; }
+
+.acs-shell.acs-mobile-layout .acs-phase-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid rgba(171, 162, 151, 0.2);
+  border-radius: 8px;
+  background: rgba(56, 53, 47, 0.52);
+  color: var(--acs-muted);
+  font-size: 10px;
+}
+
+.acs-shell.acs-mobile-layout .acs-phase-group.is-current-phase > .acs-phase-toggle .acs-phase-icon {
+  border-color: rgba(217, 119, 87, 0.42);
+  background: rgba(217, 119, 87, 0.14);
+  color: var(--acs-cyan);
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-toggle .acs-phase-title {
+  display: flex;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-phase-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  font-size: 9px;
+}
+
+/* 四个主要操作共用一行；生成中由“停止”原位接替“生成”。 */
+.acs-shell.acs-mobile-layout .acs-composer-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  align-items: stretch;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-context,
+.acs-shell.acs-mobile-layout .acs-composer-actions > div {
+  display: contents;
+}
+
+.acs-shell.acs-mobile-layout #acs-generation-hint { display: none; }
+
+.acs-shell.acs-mobile-layout .acs-composer-actions .acs-button,
+.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  margin: 0;
+  padding: 6px 4px;
+  border-radius: 9px;
+  font-size: 0;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-actions .acs-button i,
+.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle i {
+  font-size: 9px;
+}
+
+.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle span,
+.acs-shell.acs-mobile-layout #acs-preview-prompt span { display: none; }
+
+.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle::after,
+.acs-shell.acs-mobile-layout #acs-preview-prompt::after,
+.acs-shell.acs-mobile-layout #acs-generate::after,
+.acs-shell.acs-mobile-layout #acs-stop-generation::after,
+.acs-shell.acs-mobile-layout #acs-accept-step::before {
+  font: 650 9px/1 var(--acs-body);
+}
+
+.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle::after { content: '后序'; }
+.acs-shell.acs-mobile-layout #acs-preview-prompt::after { content: '提示词'; }
+.acs-shell.acs-mobile-layout #acs-generate::after { content: '生成'; }
+.acs-shell.acs-mobile-layout #acs-stop-generation::after { content: '停止'; }
+.acs-shell.acs-mobile-layout #acs-accept-step::before { content: '下一站'; }
+.acs-shell.acs-mobile-layout #acs-accept-step { grid-column: auto; }
+.acs-shell.acs-mobile-layout #acs-stop-generation:not([hidden]) + #acs-generate { display: none; }
 `;
 
 const TOUR_STEPS = Object.freeze([
@@ -5895,8 +6023,9 @@ function renderStepRail() {
         toggle.dataset.phaseToggle = phase.id;
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute('aria-controls', `acs-phase-${phase.id}`);
+        toggle.setAttribute('aria-label', `${phase.label}，已完成 ${completed}/${phaseSteps.length}`);
         toggle.innerHTML = `
-            <span class="acs-phase-title">${phase.label}</span>
+            <span class="acs-phase-title"><i class="acs-phase-icon fa-solid ${phase.icon}" aria-hidden="true"></i><span class="acs-phase-label">${phase.label}</span></span>
             <span class="acs-phase-progress">${completed}/${phaseSteps.length}</span>
             <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
         `;
@@ -12274,7 +12403,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}\n${SETTINGS_LAYOUT_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}\n${SETTINGS_LAYOUT_CSS}\n${MOBILE_POLISH_CSS}`;
     document.head.append(style);
 }
 
