@@ -2223,7 +2223,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-52';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-53';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -6144,6 +6144,7 @@ function renderCurrentStep() {
 
     const turns = shell.querySelector('#acs-turns');
     turns.replaceChildren();
+    delete shell.querySelector('.acs-conversation').dataset.previousTurnIndex;
     const hasTurns = Array.isArray(state.turns) && state.turns.length > 0;
     const clearStepButton = shell.querySelector('#acs-clear-step');
     clearStepButton.disabled = !hasTurns || isGenerating;
@@ -7303,10 +7304,10 @@ function installConversationNavigation() {
     const navigation = document.createElement('nav');
     navigation.id = 'acs-conversation-nav';
     navigation.className = 'acs-conversation-nav';
-    navigation.setAttribute('aria-label', '最新消息定位');
+    navigation.setAttribute('aria-label', '消息定位');
     navigation.hidden = true;
     navigation.innerHTML = `
-      <button id="acs-latest-turn-top" class="acs-conversation-nav-button" type="button" title="回到最新消息顶部">
+      <button id="acs-previous-turn-top" class="acs-conversation-nav-button" type="button" title="回到上一条消息顶部">
         <i class="fa-solid fa-arrow-up" aria-hidden="true"></i><span>回顶</span>
       </button>
       <button id="acs-latest-turn-bottom" class="acs-conversation-nav-button" type="button" title="回到最新消息底部">
@@ -7315,15 +7316,35 @@ function installConversationNavigation() {
     composer.append(navigation);
 }
 
-function scrollToLatestTurn(edge) {
+function scrollToPreviousTurnTop() {
+    const conversation = shell.querySelector('.acs-conversation');
+    const turns = [...shell.querySelectorAll('#acs-turns .acs-turn')];
+    if (!conversation || !turns.length) return;
+    const conversationBounds = conversation.getBoundingClientRect();
+    const storedIndex = Number(conversation.dataset.previousTurnIndex);
+    const currentIndex = Number.isInteger(storedIndex) && storedIndex >= 0 && storedIndex < turns.length
+        ? storedIndex
+        : turns.length - 1;
+    const targetIndex = Math.max(0, currentIndex - 1);
+    conversation.dataset.previousTurnIndex = String(targetIndex);
+    const targetBounds = turns[targetIndex].getBoundingClientRect();
+    const target = conversation.scrollTop + targetBounds.top - conversationBounds.top - 10;
+    const maximum = Math.max(0, conversation.scrollHeight - conversation.clientHeight);
+    const prefersReducedMotion = hostWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    conversation.scrollTo({
+        top: Math.max(0, Math.min(maximum, target)),
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    });
+}
+
+function scrollToLatestTurnBottom() {
     const conversation = shell.querySelector('.acs-conversation');
     const latestTurn = shell.querySelector('#acs-turns .acs-turn:last-child');
     if (!conversation || !latestTurn) return;
+    delete conversation.dataset.previousTurnIndex;
     const conversationBounds = conversation.getBoundingClientRect();
     const turnBounds = latestTurn.getBoundingClientRect();
-    const target = edge === 'top'
-        ? conversation.scrollTop + turnBounds.top - conversationBounds.top - 10
-        : conversation.scrollTop + turnBounds.bottom - conversationBounds.bottom + 10;
+    const target = conversation.scrollTop + turnBounds.bottom - conversationBounds.bottom + 10;
     const maximum = Math.max(0, conversation.scrollHeight - conversation.clientHeight);
     const prefersReducedMotion = hostWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     conversation.scrollTo({
@@ -11640,8 +11661,8 @@ function bindStudioEvents() {
         const retry = event.target.closest('[data-retry-turn]');
         if (retry) retryLatestUserInput(Number(retry.dataset.retryTurn));
     });
-    shell.querySelector('#acs-latest-turn-top').addEventListener('click', () => scrollToLatestTurn('top'));
-    shell.querySelector('#acs-latest-turn-bottom').addEventListener('click', () => scrollToLatestTurn('bottom'));
+    shell.querySelector('#acs-previous-turn-top').addEventListener('click', scrollToPreviousTurnTop);
+    shell.querySelector('#acs-latest-turn-bottom').addEventListener('click', scrollToLatestTurnBottom);
     shell.querySelector('#acs-future-artifacts-toggle').addEventListener('click', toggleFutureArtifactsContext);
     shell.querySelector('#acs-generate').addEventListener('click', generateCurrentStep);
     shell.querySelector('#acs-preview-prompt').addEventListener('click', openPromptPreview);
