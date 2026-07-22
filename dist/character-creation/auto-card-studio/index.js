@@ -2045,7 +2045,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-44';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-45';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -4054,6 +4054,20 @@ const STEP_GUIDES = [
 ];
 
 const REORG_PROMPT_ID = 'bdc8f3a0-37a3-415a-b01d-b91359b79104';
+// 重组计划结构升级时递增；旧缓存会自动重建，避免沿用宽松校验阶段的映射。
+const REORG_PLAN_SCHEMA_VERSION = 2;
+const REORG_POSITION_TYPES = new Set([
+    'before_character_definition',
+    'after_character_definition',
+    'before_example_messages',
+    'after_example_messages',
+    'before_author_note',
+    'after_author_note',
+    'at_depth',
+]);
+const REORG_ROLES = new Set(['system', 'user', 'assistant']);
+const REORG_STRATEGIES = new Set(['constant', 'selective']);
+const REORG_SECONDARY_LOGICS = new Set(['and_any', 'and_all', 'not_any', 'not_all']);
 const STEP_PROMPT_IDS = new Set(STEPS.map(step => step.promptId));
 const ALL_PRESET_STEP_PROMPT_IDS = new Set([...STEP_PROMPT_IDS, REORG_PROMPT_ID]);
 const PLACEHOLDER_IDS = new Set([
@@ -4617,7 +4631,7 @@ function createDefaultProject() {
         contextHiddenArtifacts: [],
         artifactContextOverrides: {},
         conversationShieldVersionIds: [],
-        autoReorg: { response: '', plan: null, updatedAt: null },
+        autoReorg: { response: '', plan: null, schemaVersion: null, updatedAt: null },
         ui: {
             collapsedPhases: [],
             overviewCollapsed: true,
@@ -7804,7 +7818,31 @@ function customizeSettingsPrompt(content) {
     return result;
 }
 
+function selectedReorgEntryPlan() {
+    const group = collectArtifactGroups().find(item => (
+        item.tag === 'SOURCE_entry_plan' && item.versions.some(version => version.step === 28)
+    ));
+    return selectedArtifactForGroup(group)?.content || '';
+}
+
+function buildReorgProjectContext(artifacts) {
+    const entryPlan = selectedReorgEntryPlan();
+    return [
+        '<STUDIO_REORG_CONTEXT>',
+        `项目名称: ${project.name}`,
+        `发布目标世界书: ${project.output.worldbookName || defaultOutputWorldbookName()}`,
+        '',
+        buildReorgStructureReport(artifacts),
+        '',
+        '# 当前条目规划表（SOURCE_entry_plan）',
+        entryPlan || '尚未生成 SOURCE_entry_plan；请仅依据结构报告完整安排本次所选内容块。',
+        '',
+        '</STUDIO_REORG_CONTEXT>',
+    ].join('\n');
+}
+
 function buildProjectContext(currentStep, preset, options = {}) {
+    if (options.reorgOnly) return buildReorgProjectContext(options.reorgArtifacts || []);
     const sections = [
         '<STUDIO_PROJECT_CONTEXT>',
         `项目名称: ${project.name}`,
@@ -7828,10 +7866,6 @@ function buildProjectContext(currentStep, preset, options = {}) {
         sections.push(`\n# 当前阶段正式产物（各产物当前选中版本）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
     }
 
-    if (Array.isArray(options.reorgArtifacts)) {
-        // 自动重组的 blockId 必须来自与发布流程一致的结构报告。
-        sections.push(`\n# 创作台虚拟世界书结构报告（供发布时自动重组使用）\n${buildReorgStructureReport(options.reorgArtifacts)}`);
-    }
     sections.push('\n</STUDIO_PROJECT_CONTEXT>');
 
     let context = sections.join('\n');
@@ -7870,9 +7904,11 @@ function buildCurrentConversationMessages(currentStep, options = {}) {
 
 function buildOrderedPrompts(preset, currentStep, options = {}) {
     const includePreviewMetadata = Object.prototype.hasOwnProperty.call(options, 'previewUserInput');
+    const reorgOnly = Boolean(options.reorgOnly);
     const ordered = [];
     for (const prompt of preset.prompts || []) {
         if (PLACEHOLDER_IDS.has(prompt.id)) continue;
+        if (reorgOnly && prompt.id !== currentStep.promptId) continue;
         const isWorkflowStep = ALL_PRESET_STEP_PROMPT_IDS.has(prompt.id);
         if (isWorkflowStep && prompt.id !== currentStep.promptId) continue;
         if (!isWorkflowStep && !prompt.enabled) continue;
@@ -7907,7 +7943,7 @@ function buildOrderedPrompts(preset, currentStep, options = {}) {
     ordered.unshift(macroGuard);
     ordered.push(projectContext);
     // 保留当前步骤的真实对话顺序，让 AI 能接续此前讨论，而不只是读取项目摘要。
-    ordered.push(...buildCurrentConversationMessages(currentStep, options));
+    if (!reorgOnly) ordered.push(...buildCurrentConversationMessages(currentStep, options));
     if (includePreviewMetadata) {
         ordered.push({
             role: 'user',
@@ -8959,7 +8995,8 @@ function buildDefaultOutputWorldbook(selectedArtifacts) {
     for (const artifact of selectedArtifacts.filter(item => item.target.kind === 'worldbook')) {
         if (!grouped.has(artifact.target.name)) grouped.set(artifact.target.name, []);
         const contents = grouped.get(artifact.target.name);
-        if (!contents.includes(artifact.content)) contents.push(artifact.content);
+        // 正文相同的不同产物仍是独立交付项；安全兜底不能按正文去重后造成遗漏。
+        contents.push(artifact.content);
     }
 
     return [...grouped.entries()].map(([name, contents], index) => ({
@@ -8991,6 +9028,28 @@ function buildDefaultOutputWorldbook(selectedArtifacts) {
     }));
 }
 
+function reorgSourceWorldbookName() {
+    return `A.U.T.O 创作台·${project.name}`;
+}
+
+function reorgBlockType(artifact) {
+    const content = String(artifact?.content || '').trim();
+    const tagName = String(artifact?.tag || '').trim();
+    if (tagName) {
+        const escapedTag = escapeReorgRegex(tagName);
+        const hasOpeningTag = new RegExp(`<${escapedTag}(?:\\s[^>]*)?>`, 'u').test(content);
+        const hasClosingTag = new RegExp(`</${escapedTag}>`, 'u').test(content);
+        if (hasOpeningTag && hasClosingTag) return 'xml_tag';
+        if (hasOpeningTag) return 'unclosed_tag';
+    }
+    try {
+        JSON.parse(content);
+        return 'json';
+    } catch {
+        return 'text';
+    }
+}
+
 function createReorgSourceModel(artifacts = collectDeliveryArtifacts()) {
     const grouped = new Map();
     for (const artifact of artifacts.filter(item => item.target.kind === 'worldbook')) {
@@ -9005,7 +9064,13 @@ function createReorgSourceModel(artifacts = collectDeliveryArtifacts()) {
     [...grouped.entries()].forEach(([name, items], uid) => {
         const blocks = items.map((artifact, blockIndex) => {
             const blockId = `uid_${uid}_block_${blockIndex}`;
-            const block = { blockId, artifact, tagName: artifact.tag, entryName: name };
+            const block = {
+                blockId,
+                artifact,
+                type: reorgBlockType(artifact),
+                tagName: artifact.tag,
+                entryName: name,
+            };
             blockById.set(blockId, block);
             return block;
         });
@@ -9036,28 +9101,40 @@ function reorgSelectionSignature(artifacts = []) {
 function cachedReorgMatchesSelection(selectedArtifacts) {
     const cachedSignature = project.autoReorg?.selectionSignature;
     if (!cachedSignature) return false;
-    return cachedSignature === reorgSelectionSignature(selectedArtifacts);
+    return project.autoReorg?.schemaVersion === REORG_PLAN_SCHEMA_VERSION
+        && cachedSignature === reorgSelectionSignature(selectedArtifacts);
 }
 
 function buildReorgStructureReport(artifacts) {
     const model = createReorgSourceModel(artifacts || collectDeliveryArtifacts());
-    const report = {
-        version: '1.0',
-        sourceWorldbook: `A.U.T.O 创作台·${project.name}`,
-        note: '请在 reorg_plan.mappings[].blockIds 中严格使用下列 blockId。',
-        entries: model.entries.map(entry => ({
-            uid: entry.uid,
-            name: entry.name,
-            blocks: entry.blocks.map(block => ({
-                blockId: block.blockId,
-                tagName: block.tagName,
-                displayName: block.artifact.displayName,
-                step: block.artifact.step,
-                characters: block.artifact.content.length,
-            })),
-        })),
+    const typeLabels = {
+        xml_tag: 'XML标签',
+        unclosed_tag: '未闭合标签 ⚠',
+        json: 'JSON ⚠',
+        text: '纯文本 ⚠',
     };
-    return JSON.stringify(report, null, 2);
+    const blocks = model.entries.flatMap(entry => entry.blocks);
+    const xmlCount = blocks.filter(block => block.type === 'xml_tag').length;
+    const abnormalCount = blocks.filter(block => block.type !== 'xml_tag').length;
+    const lines = [
+        '# 世界书结构报告',
+        `源世界书: ${reorgSourceWorldbookName()}`,
+        `条目: ${model.entries.length} | 内容块: ${blocks.length} | XML标签: ${xmlCount} | 异常: ${abnormalCount}`,
+        '说明: 每个 blockId 都代表本次发布勾选的一项独立产物，必须且只能在 mappings 中使用一次。',
+    ];
+
+    for (const entry of model.entries) {
+        lines.push('', `## ${entry.name}`, `UID: ${entry.uid} | 状态: ${worldbookEntryEnabled(entry.name) ? '启用' : '禁用'}`);
+        for (const block of entry.blocks) {
+            lines.push(
+                `[${block.blockId}] ${typeLabels[block.type] || '纯文本 ⚠'}`,
+                `  标签名: ${block.tagName}`,
+                `  来源: Step ${block.artifact.step} · ${block.artifact.displayName}`,
+                `  字符数: ${String(block.artifact.content || '').length}`,
+            );
+        }
+    }
+    return lines.join('\n');
 }
 
 function parseJsonArtifact(content) {
@@ -9089,18 +9166,6 @@ function latestReorgPlanResult() {
     }
 }
 
-function latestReorgBlockTagHints() {
-    const hints = new Map();
-    const latest = project.autoReorg?.response || '';
-    for (const line of String(latest).split(/\r?\n/)) {
-        const tag = line.match(/\[([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)\]/)?.[1];
-        const blockIds = line.match(/uid_\d+_block_\d+/g) || [];
-        if (!tag) continue;
-        for (const blockId of blockIds) hints.set(blockId, tag);
-    }
-    return hints;
-}
-
 function normalizeReorgLabel(value) {
     return String(value || '')
         .replace(/[\u{1F000}-\u{1FAFF}\u2600-\u27BF\uFE0F\u20E3]/gu, '')
@@ -9109,40 +9174,199 @@ function normalizeReorgLabel(value) {
         .toLowerCase();
 }
 
-function fuzzyArtifactsForMapping(mapping, selectedArtifacts, usedArtifactIds) {
-    const wanted = normalizeReorgLabel(mapping.targetEntryName);
-    if (!wanted) return [];
-    return selectedArtifacts.filter(artifact => {
-        if (artifact.target.kind !== 'worldbook' || usedArtifactIds.has(artifact.id)) return false;
-        const labels = [artifact.displayName, artifact.target.name, artifact.tag].map(normalizeReorgLabel);
-        return labels.some(label => label && (label === wanted || label.includes(wanted) || wanted.includes(label)));
-    });
+function validateReorgPlan(plan, selectedArtifacts) {
+    const errors = [];
+    const warnings = [];
+    const model = createReorgSourceModel(selectedArtifacts);
+    const expectedBlockIds = new Set(model.blockById.keys());
+    const usedBlockIds = new Set();
+    const targetNames = new Set();
+    const orderOwners = new Map();
+    const addError = (path, message) => errors.push(`${path}: ${message}`);
+    const validStringArray = (value, path) => {
+        if (!Array.isArray(value)) {
+            addError(path, '必须是数组');
+            return false;
+        }
+        if (value.some(item => typeof item !== 'string')) {
+            addError(path, '只能包含字符串');
+            return false;
+        }
+        return true;
+    };
+    const validOptionalNumber = (value, path) => {
+        if (value !== undefined && value !== null && !Number.isFinite(value)) addError(path, '必须是有限数字或 null');
+    };
+
+    if (!plan || typeof plan !== 'object' || Array.isArray(plan)) {
+        return { valid: false, errors: ['reorg_plan: 必须是 JSON 对象'], warnings, model };
+    }
+    if (typeof plan.sourceWorldbook !== 'string' || !plan.sourceWorldbook.trim()) {
+        addError('sourceWorldbook', '缺失或为空');
+    } else if (plan.sourceWorldbook !== reorgSourceWorldbookName()) {
+        addError('sourceWorldbook', `必须与结构报告一致（${reorgSourceWorldbookName()}）`);
+    }
+    if (typeof plan.targetWorldbook !== 'string' || !plan.targetWorldbook.trim()) {
+        addError('targetWorldbook', '缺失或为空');
+    }
+    if (!Array.isArray(plan.mappings) || !plan.mappings.length) {
+        addError('mappings', '必须是非空数组');
+    }
+    if (plan.blockActions !== undefined && !Array.isArray(plan.blockActions)) {
+        addError('blockActions', '必须是数组');
+    }
+
+    const actionByBlockId = new Map();
+    for (const [index, action] of (Array.isArray(plan.blockActions) ? plan.blockActions : []).entries()) {
+        const path = `blockActions[${index}]`;
+        if (!action || typeof action !== 'object' || Array.isArray(action)) {
+            addError(path, '必须是对象');
+            continue;
+        }
+        if (typeof action.blockId !== 'string' || !expectedBlockIds.has(action.blockId)) {
+            addError(`${path}.blockId`, `不是本次结构报告中的有效 blockId（${String(action.blockId || '空')}）`);
+            continue;
+        }
+        if (actionByBlockId.has(action.blockId)) {
+            addError(`${path}.blockId`, `${action.blockId} 重复设置了预处理动作`);
+            continue;
+        }
+        if (!['wrap', 'rename'].includes(action.action)) {
+            addError(`${path}.action`, '只允许 wrap 或 rename');
+            continue;
+        }
+        const block = model.blockById.get(action.blockId);
+        if (action.action === 'wrap') {
+            if (!['text', 'json'].includes(block.type)) addError(path, `wrap 不能用于 ${block.type} 内容块`);
+            if (typeof action.params?.wrapTagName !== 'string' || !action.params.wrapTagName.trim()) {
+                addError(`${path}.params.wrapTagName`, '缺失或为空');
+            }
+        }
+        if (action.action === 'rename') {
+            if (!['xml_tag', 'unclosed_tag'].includes(block.type)) addError(path, `rename 不能用于 ${block.type} 内容块`);
+            if (typeof action.params?.newTagName !== 'string' || !action.params.newTagName.trim()) {
+                addError(`${path}.params.newTagName`, '缺失或为空');
+            }
+        }
+        actionByBlockId.set(action.blockId, action);
+    }
+
+    const outputTagOwners = new Map();
+    for (const block of model.blockById.values()) {
+        const action = actionByBlockId.get(block.blockId);
+        if (['text', 'json'].includes(block.type) && action?.action !== 'wrap') {
+            warnings.push(`${block.blockId}: ${block.type} 内容未设置 wrap，将原样写入条目`);
+        }
+        const outputTag = action?.action === 'wrap'
+            ? action.params?.wrapTagName
+            : action?.action === 'rename'
+                ? action.params?.newTagName
+                : block.tagName;
+        if (!outputTag) continue;
+        if (outputTagOwners.has(outputTag)) {
+            warnings.push(`${block.blockId}: 标签名“${outputTag}”与 ${outputTagOwners.get(outputTag)} 重复`);
+        } else {
+            outputTagOwners.set(outputTag, block.blockId);
+        }
+    }
+
+    for (const [index, mapping] of (Array.isArray(plan.mappings) ? plan.mappings : []).entries()) {
+        const path = `mappings[${index}]`;
+        if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping)) {
+            addError(path, '必须是对象');
+            continue;
+        }
+        if (typeof mapping.targetEntryName !== 'string' || !mapping.targetEntryName.trim()) {
+            addError(`${path}.targetEntryName`, '缺失或为空');
+        } else if (targetNames.has(mapping.targetEntryName)) {
+            warnings.push(`${path}.targetEntryName: 条目名“${mapping.targetEntryName}”重复`);
+        } else {
+            targetNames.add(mapping.targetEntryName);
+        }
+
+        if (!Array.isArray(mapping.blockIds) || !mapping.blockIds.length) {
+            addError(`${path}.blockIds`, '必须是非空数组');
+        } else {
+            for (const blockId of mapping.blockIds) {
+                if (typeof blockId !== 'string' || !expectedBlockIds.has(blockId)) {
+                    addError(`${path}.blockIds`, `包含不存在的 blockId（${String(blockId)}）`);
+                } else if (usedBlockIds.has(blockId)) {
+                    addError(`${path}.blockIds`, `${blockId} 被重复引用`);
+                } else {
+                    usedBlockIds.add(blockId);
+                }
+            }
+        }
+
+        if (!mapping.attributes || typeof mapping.attributes !== 'object' || Array.isArray(mapping.attributes)) {
+            addError(`${path}.attributes`, '缺失或不是对象');
+            continue;
+        }
+        const overrides = mapping.attributes.overrides;
+        if (overrides !== undefined && (!overrides || typeof overrides !== 'object' || Array.isArray(overrides))) {
+            addError(`${path}.attributes.overrides`, '必须是对象');
+            continue;
+        }
+        const values = overrides || {};
+        if (values.enabled !== undefined && typeof values.enabled !== 'boolean') addError(`${path}.attributes.overrides.enabled`, '必须是布尔值');
+        if (values.keys !== undefined) validStringArray(values.keys, `${path}.attributes.overrides.keys`);
+        if (values.keysSecondary !== undefined) validStringArray(values.keysSecondary, `${path}.attributes.overrides.keysSecondary`);
+        if (values.secondaryLogic !== undefined && !REORG_SECONDARY_LOGICS.has(values.secondaryLogic)) addError(`${path}.attributes.overrides.secondaryLogic`, '枚举值无效');
+        if (values.positionType !== undefined && !REORG_POSITION_TYPES.has(values.positionType)) addError(`${path}.attributes.overrides.positionType`, '枚举值无效');
+        if (values.role !== undefined && !REORG_ROLES.has(values.role)) addError(`${path}.attributes.overrides.role`, '枚举值无效');
+        if (values.strategyType !== undefined && !REORG_STRATEGIES.has(values.strategyType)) addError(`${path}.attributes.overrides.strategyType`, '枚举值无效');
+        validOptionalNumber(values.depth, `${path}.attributes.overrides.depth`);
+        validOptionalNumber(values.order, `${path}.attributes.overrides.order`);
+        validOptionalNumber(values.sticky, `${path}.attributes.overrides.sticky`);
+        validOptionalNumber(values.cooldown, `${path}.attributes.overrides.cooldown`);
+        validOptionalNumber(values.delay, `${path}.attributes.overrides.delay`);
+        if (values.positionType === 'at_depth' && (values.depth === undefined || values.role === undefined)) {
+            warnings.push(`${path}: at_depth 未同时设置 depth 与 role，将使用默认值`);
+        }
+        if (Number.isFinite(values.order)) {
+            if (orderOwners.has(values.order)) warnings.push(`${path}: order ${values.order} 与 ${orderOwners.get(values.order)} 重复`);
+            else orderOwners.set(values.order, mapping.targetEntryName || path);
+        }
+    }
+
+    const missingBlockIds = [...expectedBlockIds].filter(blockId => !usedBlockIds.has(blockId));
+    if (missingBlockIds.length) addError('mappings', `遗漏 ${missingBlockIds.length} 个内容块：${missingBlockIds.join(', ')}`);
+    for (const blockId of actionByBlockId.keys()) {
+        if (!usedBlockIds.has(blockId)) warnings.push(`blockActions: ${blockId} 的动作没有对应 mapping`);
+    }
+    return { valid: errors.length === 0, errors, warnings, model };
 }
 
 function escapeReorgRegex(value) {
     return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function transformReorgContent(content, artifactTag, action) {
-    if (!action) return content;
-    if (action.action === 'wrap' && action.params?.wrapTagName) {
+function transformReorgContent(content, artifactTag, action, blockType) {
+    let transformed = String(content || '');
+    let outputTag = artifactTag;
+    if (action?.action === 'wrap' && action.params?.wrapTagName) {
         const tag = action.params.wrapTagName;
-        return `<${tag}>${content}</${tag}>`;
+        return `<${tag}>${transformed}</${tag}>`;
     }
-    if (action.action === 'rename' && action.params?.newTagName && artifactTag) {
+    if (action?.action === 'rename' && action.params?.newTagName && artifactTag) {
         const oldTag = escapeReorgRegex(artifactTag);
-        const newTag = action.params.newTagName;
-        return String(content)
-            .replace(new RegExp(`<${oldTag}(?=\\s|>)`, 'gu'), `<${newTag}`)
-            .replace(new RegExp(`<\\/${oldTag}>`, 'gu'), `</${newTag}>`);
+        outputTag = action.params.newTagName;
+        transformed = transformed
+            .replace(new RegExp(`<${oldTag}(?=\\s|>)`, 'gu'), `<${outputTag}`)
+            .replace(new RegExp(`<\\/${oldTag}>`, 'gu'), `</${outputTag}>`);
     }
-    return content;
+    // 与原重组器一致：识别为未闭合标签时，在保留正文的前提下自动补全闭合标签。
+    if (blockType === 'unclosed_tag' && outputTag) {
+        const closingTag = new RegExp(`</${escapeReorgRegex(outputTag)}>`, 'u');
+        if (!closingTag.test(transformed)) transformed = `${transformed}</${outputTag}>`;
+    }
+    return transformed;
 }
 
 function reorgWorldbookEntry(mapping, resolvedBlocks, index) {
     const overrides = mapping.attributes?.overrides || {};
-    const content = resolvedBlocks.map(({ artifact, blockId }) => (
-        transformReorgContent(artifact.content, artifact.tag, mapping.actionMap?.get(blockId))
+    const content = resolvedBlocks.map(({ artifact, blockId, type }) => (
+        transformReorgContent(artifact.content, artifact.tag, mapping.actionMap?.get(blockId), type)
     )).join('\n\n');
     return {
         uid: index,
@@ -9187,9 +9411,22 @@ function applyReorgPlan(selectedArtifacts, allArtifacts, planResult) {
     }
 
     const selectedWorldbook = selectedArtifacts.filter(item => item.target.kind === 'worldbook');
-    const selectedIds = new Set(selectedWorldbook.map(item => item.id));
-    const model = createReorgSourceModel(allArtifacts);
-    const hints = latestReorgBlockTagHints();
+    const validation = validateReorgPlan(planResult.plan, selectedWorldbook);
+    if (!validation.valid) {
+        return {
+            applied: false,
+            entries: buildDefaultOutputWorldbook(selectedWorldbook),
+            reason: 'invalid-plan',
+            validationErrors: validation.errors,
+            validationWarnings: validation.warnings,
+            unresolvedBlockIds: [],
+        };
+    }
+    if (validation.warnings.length) {
+        console.warn('[A.U.T.O Card Studio] 世界书重组方案存在非阻断提示。', validation.warnings);
+    }
+    // blockId 必须始终按“本次勾选集合”建立，不能混入未勾选产物后再模糊猜测。
+    const model = validation.model;
     const actionMap = new Map((planResult.plan.blockActions || []).map(action => [action.blockId, action]));
     const usedArtifactIds = new Set();
     const unresolvedBlockIds = [];
@@ -9207,22 +9444,13 @@ function applyReorgPlan(selectedArtifacts, allArtifacts, planResult) {
     for (const mapping of mappings) {
         const resolved = [];
         for (const blockId of mapping.blockIds || []) {
-            let artifact = model.blockById.get(blockId)?.artifact;
-            if (artifact && !selectedIds.has(artifact.id)) artifact = null;
-            if (!artifact && hints.has(blockId)) {
-                artifact = selectedWorldbook.find(item => item.tag === hints.get(blockId) && !usedArtifactIds.has(item.id));
-            }
+            const sourceBlock = model.blockById.get(blockId);
+            const artifact = sourceBlock?.artifact;
             if (artifact && !usedArtifactIds.has(artifact.id)) {
-                resolved.push({ artifact, blockId });
+                resolved.push({ artifact, blockId, type: sourceBlock.type });
                 usedArtifactIds.add(artifact.id);
             } else if (!artifact) {
                 unresolvedBlockIds.push(blockId);
-            }
-        }
-        if (!resolved.length) {
-            for (const artifact of fuzzyArtifactsForMapping(mapping, selectedWorldbook, usedArtifactIds)) {
-                resolved.push({ artifact, blockId: mapping.blockIds?.[0] || '' });
-                usedArtifactIds.add(artifact.id);
             }
         }
         if (resolved.length) resolvedMappings.push({ mapping, resolved });
@@ -9246,6 +9474,7 @@ function applyReorgPlan(selectedArtifacts, allArtifacts, planResult) {
         usedArtifactIds: [...usedArtifactIds],
         omittedArtifacts: Math.max(0, selectedWorldbook.length - usedArtifactIds.size),
         unresolvedBlockIds: [...new Set(unresolvedBlockIds)],
+        validationWarnings: validation.warnings,
     };
 }
 
@@ -9264,14 +9493,17 @@ function isCompleteReorgBuild(build, selectedArtifacts) {
     );
 }
 
-function reorgPlanFromResponse(response) {
+function reorgPlanFromResponse(response, selectedArtifacts) {
     const block = extractArtifactBlocks(response, 30).find(item => item.tag === 'reorg_plan');
     if (!block) throw new Error('A.U.T.O 没有返回 reorg_plan 代码块');
     const plan = parseJsonArtifact(block.content);
-    if (!Array.isArray(plan?.mappings) || !plan.mappings.length) {
-        throw new Error('reorg_plan.mappings 缺失或为空');
+    const validation = validateReorgPlan(plan, selectedArtifacts);
+    if (!validation.valid) {
+        const error = new Error(`重组方案未通过校验：${validation.errors.slice(0, 4).join('；')}`);
+        error.reorgValidation = validation;
+        throw error;
     }
-    return { status: 'ready', plan, artifact: block };
+    return { status: 'ready', plan, artifact: block, validationWarnings: validation.warnings };
 }
 
 async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' } = {}) {
@@ -9283,7 +9515,7 @@ async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' }
     if (!preset?.prompts?.length) throw new Error('导入的 A.U.T.O 预设没有可用提示词');
     const userInput = [
         '请立即执行预设中的世界书重组步骤（原 Step29）。',
-        '只处理项目上下文中“创作台虚拟世界书结构报告”列出的本次已选产物。',
+        '只处理 STUDIO_REORG_CONTEXT 中“世界书结构报告”列出的本次已选产物，并参考其中当前 SOURCE_entry_plan 分组。',
         '每个 blockId 都必须且只能在 mappings 中使用一次，不得遗漏，也不得自行编造 blockId。',
         retryReason ? `上一次方案未通过完整性校验：${retryReason}。请重新核对全部 blockId 后完整输出。` : '',
         '请严格输出 A.U.T.O 规定的 reorg_plan JSON 代码块。',
@@ -9297,18 +9529,20 @@ async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' }
         should_silence: false,
         ordered_prompts: buildOrderedPrompts(preset, step, {
             reorgArtifacts: selectedArtifacts,
+            reorgOnly: true,
             embeddedUserInput: userInput,
         }),
         custom_api: presetGenerationOptions(preset),
     }, '发布前世界书重组');
     const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
     const response = normalizeFinalArtifactUserMacros(rawResponse, 30);
-    const planResult = reorgPlanFromResponse(response);
+    const planResult = reorgPlanFromResponse(response, selectedArtifacts);
 
     // 重组是发布阶段的内部过程，不占用左侧创作步骤。
     project.autoReorg = {
         response,
         plan: planResult.plan,
+        schemaVersion: REORG_PLAN_SCHEMA_VERSION,
         selectionSignature: reorgSelectionSignature(selectedArtifacts),
         updatedAt: new Date().toISOString(),
     };
@@ -9377,17 +9611,26 @@ async function ensureDeliveryReorg(selectedArtifacts) {
     }
 
     notify('info', '正在根据本次勾选的产物自动执行世界书重组…');
-    let generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook);
-    build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
+    let generatedPlan = null;
+    let generationError = null;
+    try {
+        generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook);
+        build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
+    } catch (error) {
+        generationError = error;
+        console.warn('[A.U.T.O Card Studio] 首轮世界书重组方案不可用，将自动修正一次。', error);
+    }
     if (!isCompleteReorgBuild(build, selectedWorldbook)) {
         const retryReasons = [];
-        if (!build.applied) retryReasons.push('方案没有生成可用映射');
-        if (build.omittedArtifacts) retryReasons.push(`遗漏 ${build.omittedArtifacts} 项产物`);
-        if (build.unresolvedBlockIds?.length) retryReasons.push(`${build.unresolvedBlockIds.length} 个 blockId 无法匹配`);
-        notify('info', '重组方案存在遗漏，正在自动修正一次…');
+        if (generationError) retryReasons.push(String(generationError?.message || generationError));
+        if (build && !build.applied) retryReasons.push('方案没有生成可用映射');
+        if (build?.validationErrors?.length) retryReasons.push(build.validationErrors.slice(0, 4).join('；'));
+        if (build?.omittedArtifacts) retryReasons.push(`遗漏 ${build.omittedArtifacts} 项产物`);
+        if (build?.unresolvedBlockIds?.length) retryReasons.push(`${build.unresolvedBlockIds.length} 个 blockId 无法匹配`);
+        notify('info', '重组方案未通过完整性校验，正在自动修正一次…');
         try {
             generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook, {
-                retryReason: retryReasons.join('，') || '方案不完整',
+                retryReason: (retryReasons.join('，') || '方案不完整').slice(0, 1200),
             });
             build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
         } catch (error) {
@@ -9398,7 +9641,7 @@ async function ensureDeliveryReorg(selectedArtifacts) {
 
     if (!isCompleteReorgBuild(build, selectedWorldbook)) {
         build = recoverIncompleteReorgBuild(build, selectedWorldbook);
-        notify('warning', `重组方案仍不完整，已安全补入 ${build.recoveredArtifacts || 0} 项产物。`);
+        notify('warning', `重组方案仍不可用，已通过本地安全方案完整交付 ${build.recoveredArtifacts || 0} 项产物。`);
     }
     renderAll();
     return build;
