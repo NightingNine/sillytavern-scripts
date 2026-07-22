@@ -384,6 +384,19 @@ const CONVERSATION_NAV_CSS = `
 `;
 
 const COMPACT_STAGE_HEADER_CSS = `
+/* 等宽字体保留给英文与数字；中文缺字时回退到正文无衬线字体，避免系统等宽宋体发虚。 */
+.acs-shell {
+  --acs-mono: "JetBrains Mono", "Cascadia Code", Consolas, var(--acs-body), monospace;
+}
+
+/* 分类名称始终使用正文字体；桌面与手机展开导航保持一致。 */
+.acs-shell .acs-phase-title {
+  font-family: var(--acs-body);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
 /* 桌面端放大左侧阶段分类，提升名称与进度的辨识度。 */
 .acs-shell:not(.acs-mobile-layout) .acs-phase-title {
   font-size: 11px;
@@ -2210,7 +2223,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-50';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-51';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
