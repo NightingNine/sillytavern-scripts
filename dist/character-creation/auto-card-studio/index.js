@@ -2094,6 +2094,108 @@ const INTERACTIVE_TOUR_CSS = `
 }
 `;
 
+const CONVERSATION_READING_CSS = `
+/* 对话阅读字号由设置页控制；使用 ID 选择器覆盖桌面缩放与移动端旧字号。 */
+#auto-card-studio {
+  --acs-conversation-font-size: 15px;
+}
+
+#auto-card-studio .acs-turn-content,
+#auto-card-studio .acs-turn-editor textarea,
+#auto-card-studio .acs-turn-content pre,
+#auto-card-studio .acs-turn-content .acs-code-block > pre.acs-code-content,
+#auto-card-studio .acs-turn-content details:not(.acs-code-block) > pre {
+  font-size: var(--acs-conversation-font-size);
+  line-height: 1.72;
+}
+
+.acs-reading-settings {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 20px;
+  padding: 13px;
+  border: 1px solid rgba(232, 224, 212, 0.12);
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(217, 119, 87, 0.08), rgba(30, 28, 25, 0.34));
+}
+
+.acs-reading-settings-head,
+.acs-reading-size-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.acs-reading-settings-head strong,
+.acs-reading-settings-head small {
+  display: block;
+}
+
+.acs-reading-settings-head strong {
+  color: var(--acs-text-soft);
+  font-size: 11px;
+}
+
+.acs-reading-settings-head small {
+  margin-top: 3px;
+  color: var(--acs-muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.acs-reading-size-value {
+  flex: 0 0 auto;
+  min-width: 48px;
+  padding: 5px 8px;
+  border: 1px solid rgba(217, 119, 87, 0.34);
+  border-radius: 999px;
+  background: rgba(217, 119, 87, 0.1);
+  color: var(--acs-cyan);
+  font: 700 9px/1 var(--acs-mono);
+  text-align: center;
+}
+
+.acs-reading-size-control input[type="range"] {
+  min-width: 0;
+  flex: 1 1 auto;
+  accent-color: var(--acs-cyan);
+  cursor: pointer;
+}
+
+.acs-reading-size-step {
+  display: grid;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--acs-line);
+  border-radius: 8px;
+  background: #3b3832;
+  color: var(--acs-text-soft);
+  cursor: pointer;
+  font: 700 15px/1 var(--acs-body);
+  place-items: center;
+}
+
+.acs-reading-size-step:hover,
+.acs-reading-size-step:focus-visible {
+  border-color: rgba(217, 119, 87, 0.5);
+  color: var(--acs-cyan);
+}
+
+.acs-reading-preview {
+  margin: 0;
+  padding: 9px 10px;
+  border-left: 2px solid rgba(183, 163, 207, 0.58);
+  border-radius: 0 8px 8px 0;
+  background: rgba(183, 163, 207, 0.06);
+  color: var(--acs-text-soft);
+  font-size: var(--acs-conversation-font-size);
+  line-height: 1.55;
+}
+`;
+
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
@@ -2108,7 +2210,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-46';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-47';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2142,6 +2244,10 @@ const LEGACY_CONVERSATION_DATABASE_NAME = 'auto-card-studio-conversations';
 const LEGACY_CONVERSATION_DATABASE_VERSION = 1;
 const LEGACY_CONVERSATION_STORE_NAME = 'step-conversations';
 const RESOURCE_DOCK_POSITION_KEY = 'auto-card-studio:resource-dock-position:v1';
+const CONVERSATION_FONT_SIZE_KEY = 'auto-card-studio:conversation-font-size:v1';
+const DEFAULT_CONVERSATION_FONT_SIZE = 15;
+const MIN_CONVERSATION_FONT_SIZE = 12;
+const MAX_CONVERSATION_FONT_SIZE = 20;
 const PROJECT_VERSION = 1;
 const DEFAULT_MAX_CONTEXT_TOKENS = 2000000;
 const TEMPLATE_MACRO_SENTINELS = Object.freeze({
@@ -4270,6 +4376,7 @@ let connectionSettings = loadConnectionSettings();
 // 模型参数独立于接口连接与连接预设保存，切换模型连接时不会跟随变化。
 let modelParameterSettings = loadModelParameterSettings(connectionSettings);
 if (!localStorage.getItem(MODEL_PARAMETERS_STORAGE_KEY)) saveModelParameterSettings();
+let conversationFontSize = loadConversationFontSize();
 // 密钥仅保存在独立的浏览器连接设置中，不进入项目存档、导出文件或提示词。
 let customApiKey = connectionSettings.apiKey || '';
 let availableCustomModels = [];
@@ -7772,6 +7879,71 @@ function installModelParameterUI() {
     }
     shell.querySelector('#acs-reset-model-parameters').addEventListener('click', resetModelParametersToPreset);
     renderModelParameterControls();
+}
+
+function normalizeConversationFontSize(value) {
+    if (value === null || value === undefined || value === '') return DEFAULT_CONVERSATION_FONT_SIZE;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return DEFAULT_CONVERSATION_FONT_SIZE;
+    return Math.min(MAX_CONVERSATION_FONT_SIZE, Math.max(MIN_CONVERSATION_FONT_SIZE, Math.round(parsed)));
+}
+
+function loadConversationFontSize() {
+    try {
+        return normalizeConversationFontSize(localStorage.getItem(CONVERSATION_FONT_SIZE_KEY));
+    } catch (error) {
+        console.warn('[A.U.T.O Card Studio] 读取对话字号失败，将使用默认值。', error);
+        return DEFAULT_CONVERSATION_FONT_SIZE;
+    }
+}
+
+function applyConversationFontSize(value, { persist = false } = {}) {
+    conversationFontSize = normalizeConversationFontSize(value);
+    shell?.style.setProperty('--acs-conversation-font-size', `${conversationFontSize}px`);
+
+    const input = shell?.querySelector('#acs-conversation-font-size');
+    const output = shell?.querySelector('#acs-conversation-font-size-value');
+    if (input) {
+        input.value = String(conversationFontSize);
+        input.setAttribute('aria-valuetext', `${conversationFontSize} 像素`);
+    }
+    if (output) output.textContent = `${conversationFontSize} px`;
+    if (persist) localStorage.setItem(CONVERSATION_FONT_SIZE_KEY, String(conversationFontSize));
+}
+
+function installConversationReadingUI() {
+    const modelPanel = shell.querySelector('#acs-model-parameter-panel');
+    if (!modelPanel || shell.querySelector('#acs-reading-settings')) return;
+
+    const panel = document.createElement('section');
+    panel.id = 'acs-reading-settings';
+    panel.className = 'acs-reading-settings';
+    panel.setAttribute('aria-labelledby', 'acs-reading-settings-title');
+    panel.innerHTML = `
+      <div class="acs-reading-settings-head">
+        <div>
+          <strong id="acs-reading-settings-title">对话字体大小</strong>
+          <small>只调整中间对话正文，并保存在当前浏览器</small>
+        </div>
+        <output id="acs-conversation-font-size-value" class="acs-reading-size-value" for="acs-conversation-font-size">${conversationFontSize} px</output>
+      </div>
+      <div class="acs-reading-size-control">
+        <button class="acs-reading-size-step" type="button" data-conversation-font-step="-1" aria-label="缩小对话字体">−</button>
+        <input id="acs-conversation-font-size" type="range" min="${MIN_CONVERSATION_FONT_SIZE}" max="${MAX_CONVERSATION_FONT_SIZE}" step="1" value="${conversationFontSize}" aria-label="对话字体大小">
+        <button class="acs-reading-size-step" type="button" data-conversation-font-step="1" aria-label="放大对话字体">＋</button>
+      </div>
+      <p class="acs-reading-preview">示例：角色设定、生成建议与代码内容都会同步放大。</p>`;
+    modelPanel.insertAdjacentElement('afterend', panel);
+
+    panel.querySelector('#acs-conversation-font-size').addEventListener('input', event => {
+        applyConversationFontSize(event.target.value, { persist: true });
+    });
+    for (const button of panel.querySelectorAll('[data-conversation-font-step]')) {
+        button.addEventListener('click', () => {
+            applyConversationFontSize(conversationFontSize + Number(button.dataset.conversationFontStep), { persist: true });
+        });
+    }
+    applyConversationFontSize(conversationFontSize);
 }
 
 function ensureOutputModeControls() {
@@ -11660,7 +11832,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}`;
     document.head.append(style);
 }
 
@@ -11696,6 +11868,7 @@ async function ensureStudioLoaded() {
     installMobileLayoutUI();
     installConnectionProfileUI();
     installModelParameterUI();
+    installConversationReadingUI();
     installStyledSelects();
     installCustomModelPicker();
     updateStudioViewportScale();
