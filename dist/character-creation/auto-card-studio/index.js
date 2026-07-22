@@ -2223,7 +2223,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-51';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-52';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -4324,7 +4324,11 @@ const STEP_ARTIFACT_RULES = Object.freeze({
     4: { tags: ['WORLD_blueprint'] },
     // 预设要求 Step 5 交付原点、画像、状态。兼容少数模型把“状态”误写成 SOURCE，
     // 但不会把其他 SOURCE_main_characters_* 中间分析误算为正式产物。
-    5: { patterns: [/^WORLD_main_characters_.+_(?:原点|画像|状态)$/, /^SOURCE_main_characters_.+_状态$/] },
+    5: {
+        patterns: [/^WORLD_main_characters_.+_(?:原点|画像|状态)$/, /^SOURCE_main_characters_.+_状态$/],
+        // 主要角色三类正式产物各自位于专用围栏中；仅这些围栏允许修复模型漏写的闭合标签。
+        recoverableXmlFences: ['mai_ori', 'mai_por', 'mai_sta'],
+    },
     6: { prefixes: ['WORLD_relationship_map'] },
     7: { prefixes: ['WORLD_generative_rules_'] },
     8: { prefixes: ['WORLD_specific_instances_'] },
@@ -4508,6 +4512,7 @@ function createArtifactVault(projectId) {
         versions: [],
         selectedVersionIds: {},
         migratedAt: null,
+        malformedFenceRepairAt: null,
         updatedAt: new Date().toISOString(),
     };
 }
@@ -4547,6 +4552,7 @@ function normalizeArtifactVault(raw, projectId) {
             : grouped.at(-1).id;
     }
     clean.migratedAt = raw.migratedAt ? String(raw.migratedAt) : null;
+    clean.malformedFenceRepairAt = raw.malformedFenceRepairAt ? String(raw.malformedFenceRepairAt) : null;
     clean.updatedAt = String(raw.updatedAt || new Date().toISOString());
     return clean;
 }
@@ -4644,6 +4650,44 @@ function recoverRestoreOverwriteArtifacts(projectData, vault) {
     return { attempted: true, recovered };
 }
 
+function recoverMalformedFencedArtifacts(projectData, vault) {
+    if (vault.malformedFenceRepairAt) return { attempted: false, recovered: 0 };
+    let recovered = 0;
+    const stepNumber = 5;
+    const turns = projectData.steps?.[stepNumber]?.turns || [];
+    for (const turn of turns) {
+        if (turn?.role !== 'assistant') continue;
+        const blocks = extractArtifactBlocks(turn.content, stepNumber).filter(block => block.recoveredFromFence);
+        for (const block of blocks) {
+            const identity = resolveArtifactIdentity(stepNumber, block, blocks);
+            const key = artifactContextKey(stepNumber, identity);
+            let version = vault.versions.find(item => (
+                item.step === stepNumber
+                && item.identity === identity
+                && item.content === block.content
+            ));
+            if (!version) {
+                const createdAt = String(turn.createdAt || new Date().toISOString());
+                version = {
+                    id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                    step: stepNumber,
+                    identity,
+                    content: block.content,
+                    createdAt,
+                    updatedAt: createdAt,
+                    source: 'malformed-fence-recovery',
+                };
+                vault.versions.push(version);
+                recovered += 1;
+            }
+            vault.selectedVersionIds[key] = version.id;
+        }
+    }
+    vault.malformedFenceRepairAt = new Date().toISOString();
+    vault.updatedAt = vault.malformedFenceRepairAt;
+    return { attempted: true, recovered };
+}
+
 async function writeArtifactVault(projectId) {
     const vault = artifactVaultFor(projectId);
     const database = await openArtifactDatabase();
@@ -4708,9 +4752,13 @@ async function ensureArtifactVaultsLoaded() {
         const vault = artifactVaultFor(projectItem.id);
         if (!existed) migrateConversationArtifacts(projectItem, vault);
         const recovery = recoverRestoreOverwriteArtifacts(projectItem, vault);
-        if (!existed || recovery.attempted) await writeArtifactVault(projectItem.id);
+        const malformedRecovery = recoverMalformedFencedArtifacts(projectItem, vault);
+        if (!existed || recovery.attempted || malformedRecovery.attempted) await writeArtifactVault(projectItem.id);
         if (recovery.recovered) {
             console.warn(`[A.U.T.O Card Studio] 已从对话中找回 ${recovery.recovered} 个曾被覆盖的产物版本。`);
+        }
+        if (malformedRecovery.recovered) {
+            console.warn(`[A.U.T.O Card Studio] 已从未闭合的正式围栏中找回 ${malformedRecovery.recovered} 个产物版本。`);
         }
     }
     artifactVaultsReady = true;
@@ -8863,6 +8911,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
     let protectedConversations = null;
     let streamSubscription = null;
     let streamingTurn = null;
+    let requestGenerationId = null;
     let generationDiagnostic = null;
     let httpResponseCapture = null;
     try {
@@ -8887,10 +8936,11 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         state.updatedAt = new Date().toISOString();
         saveProject();
         shell.querySelector('#acs-user-input').value = '';
-        activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
+        requestGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
+        activeGenerationId = requestGenerationId;
         generationDiagnostic = {
             step: `${step.number} · ${step.name}`,
-            generation_id: activeGenerationId,
+            generation_id: requestGenerationId,
             should_stream: shouldStream,
             connection_mode: connectionSettings.mode,
             output_mode: connectionSettings.outputMode,
@@ -8923,7 +8973,8 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             state.turns.push(streamingTurn);
             renderCurrentStep();
             streamSubscription = eventOn(iframe_events.STREAM_TOKEN_RECEIVED_FULLY, (fullText, generationId) => {
-                if (generationId !== activeGenerationId || !streamingTurn) return;
+                // 监听永久绑定本轮请求。即使宿主延迟解绑旧监听，也绝不能写入下一轮的正文。
+                if (generationId !== requestGenerationId || activeGenerationId !== requestGenerationId || !streamingTurn) return;
                 streamingTurn.content = normalizeFinalArtifactUserMacros(String(fullText || ''), step.number);
                 const content = shell.querySelector('#acs-turns .acs-turn:last-child .acs-turn-content');
                 if (content) content.textContent = streamingTurn.content;
@@ -8933,7 +8984,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         }
 
         const result = await generateRawWithOpaqueRetry({
-            generation_id: activeGenerationId,
+            generation_id: requestGenerationId,
             user_input: prepareTemplateMacrosForGeneration(userInput),
             should_stream: shouldStream,
             should_silence: false,
@@ -9303,15 +9354,41 @@ function resolveArtifactIdentity(stepNumber, block, siblingBlocks = []) {
     return block.tag;
 }
 
+function artifactTagMatchesRule(tag, rules) {
+    return Boolean(
+        rules.tags?.includes(tag)
+        || rules.prefixes?.some(prefix => tag.startsWith(prefix))
+        || rules.patterns?.some(pattern => pattern.test(tag))
+    );
+}
+
+function extractRecoverableFencedXmlBlocks(text, rules, existingBlocks) {
+    if (!rules.recoverableXmlFences?.length) return [];
+    const recovered = [];
+    const openingPattern = /^<([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)(?:\s[^>]*)?>/;
+    for (const fence of extractFencedBlocks(text)) {
+        if (!rules.recoverableXmlFences.includes(fence.language)) continue;
+        const match = fence.content.match(openingPattern);
+        const tag = match?.[1];
+        if (!tag || !artifactTagMatchesRule(tag, rules)) continue;
+        if (new RegExp(`</${tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*>`).test(fence.content)) continue;
+        if (existingBlocks.some(block => block.tag === tag && block.start >= fence.start && block.end <= fence.end)) continue;
+        recovered.push({
+            ...fence,
+            tag,
+            content: `${fence.content.trimEnd()}\n</${tag}>`,
+            recoveredFromFence: true,
+        });
+    }
+    return recovered;
+}
+
 function extractArtifactBlocks(text, stepNumber) {
     const rules = STEP_ARTIFACT_RULES[Number(stepNumber)];
     if (!rules) return [];
 
-    const xmlBlocks = extractXmlBlocks(text).filter(block => (
-        rules.tags?.includes(block.tag)
-        || rules.prefixes?.some(prefix => block.tag.startsWith(prefix))
-        || rules.patterns?.some(pattern => pattern.test(block.tag))
-    ));
+    const xmlBlocks = extractXmlBlocks(text).filter(block => artifactTagMatchesRule(block.tag, rules));
+    xmlBlocks.push(...extractRecoverableFencedXmlBlocks(text, rules, xmlBlocks));
     const fencedBlocks = extractFencedBlocks(text).filter(block => rules.fences?.includes(block.language));
 
     if (rules.statusbarFences) {
