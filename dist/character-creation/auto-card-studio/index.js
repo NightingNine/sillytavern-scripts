@@ -4615,6 +4615,8 @@ function createDefaultProject() {
             worldbookName: '',
         },
         contextHiddenArtifacts: [],
+        artifactContextOverrides: {},
+        conversationShieldVersionIds: [],
         autoReorg: { response: '', plan: null, updatedAt: null },
         ui: {
             collapsedPhases: [],
@@ -4629,6 +4631,23 @@ function createDefaultProject() {
 function normalizeProject(saved) {
     if (!saved || typeof saved !== 'object' || saved.version !== PROJECT_VERSION) return null;
     const clean = createDefaultProject();
+    const legacyHiddenArtifacts = Array.isArray(saved.contextHiddenArtifacts)
+        ? [...new Set(saved.contextHiddenArtifacts.map(value => String(value)))]
+        : [];
+    const artifactContextOverrides = {};
+    if (saved.artifactContextOverrides && typeof saved.artifactContextOverrides === 'object') {
+        for (const [key, value] of Object.entries(saved.artifactContextOverrides)) {
+            if (!value || typeof value !== 'object' || !['on', 'off'].includes(value.mode)) continue;
+            artifactContextOverrides[String(key)] = {
+                versionId: String(value.versionId || '*'),
+                mode: value.mode,
+            };
+        }
+    }
+    // 旧版手动关闭的产物继续保持关闭；新式覆盖则随所选版本分别保存。
+    for (const key of legacyHiddenArtifacts) {
+        if (!artifactContextOverrides[key]) artifactContextOverrides[key] = { versionId: '*', mode: 'off' };
+    }
     const normalized = {
         ...clean,
         ...saved,
@@ -4636,8 +4655,10 @@ function normalizeProject(saved) {
         name: String(saved.name || '未命名世界'),
         preferences: { ...clean.preferences, ...(saved.preferences || {}) },
         output: { ...clean.output, ...(saved.output || {}) },
-        contextHiddenArtifacts: Array.isArray(saved.contextHiddenArtifacts)
-            ? [...new Set(saved.contextHiddenArtifacts.map(value => String(value)))]
+        contextHiddenArtifacts: legacyHiddenArtifacts,
+        artifactContextOverrides,
+        conversationShieldVersionIds: Array.isArray(saved.conversationShieldVersionIds)
+            ? [...new Set(saved.conversationShieldVersionIds.map(value => String(value)).filter(Boolean))]
             : [],
         ui: { ...clean.ui, ...(saved.ui || {}) },
         steps: { ...clean.steps, ...(saved.steps || {}) },
@@ -5874,12 +5895,15 @@ function renderCurrentStep() {
     }
 
     const dependencyMessage = generationDependencyMessage();
+    const conversationHidden = isCurrentStepConversationHidden(step.number);
     const generateButton = shell.querySelector('#acs-generate');
     shell.querySelector('#acs-accept-step').disabled = !latestAssistantResponse(step.number) || isGenerating;
     generateButton.disabled = isGenerating || Boolean(dependencyMessage);
     generateButton.title = dependencyMessage || '使用 A.U.T.O 预设生成本阶段草案';
     shell.querySelector('#acs-generation-hint').textContent = dependencyMessage || (state.turns?.length
-        ? `会带上修改要求与各步骤正式产物继续生成 · ${connectionDisplayName()}`
+        ? conversationHidden
+            ? `当前步骤会话不发送，只使用母题与正式产物 · ${connectionDisplayName()}`
+            : `会带上当前会话与各步骤正式产物继续生成 · ${connectionDisplayName()}`
         : `可留空生成；本阶段将整理「${step.name}」 · ${connectionDisplayName()}`);
 
     requestAnimationFrame(() => {
@@ -5908,6 +5932,8 @@ async function clearCurrentStepConversation() {
     state.artifactHistory = [];
     state.status = 'idle';
     state.updatedAt = new Date().toISOString();
+    // 新会话不应继承旧会话的“屏蔽会话”选择，重新按内容自动判断。
+    clearConversationShieldsForStep(step.number);
     saveProject();
     renderAll();
     notify('success', `Step ${step.number} 的对话已清空，产物仍保留。`);
@@ -5925,23 +5951,108 @@ function artifactContextKey(stepNumber, identity) {
     return `${Number(stepNumber)}:${String(identity || '')}`;
 }
 
-function isArtifactHiddenFromContext(stepNumber, identity) {
-    return (project.contextHiddenArtifacts || []).includes(artifactContextKey(stepNumber, identity));
+function selectedArtifactVersionForIdentity(stepNumber, identity, projectData = project) {
+    const vault = artifactVaultFor(projectData.id);
+    const key = artifactContextKey(stepNumber, identity);
+    const versions = vault.versions.filter(item => (
+        item.step === Number(stepNumber) && item.identity === String(identity)
+    ));
+    if (!versions.length) return null;
+    const selectedId = String(vault.selectedVersionIds?.[key] || '');
+    return versions.find(item => item.id === selectedId) || versions.at(-1);
 }
 
-function toggleArtifactContext(button) {
+function conversationContainsArtifactVersion(stepNumber, version, projectData = project) {
+    if (!version?.content) return false;
+    const turns = projectData.steps?.[Number(stepNumber)]?.turns || [];
+    return turns.some(turn => String(turn?.content || '').includes(version.content));
+}
+
+function isArtifactHiddenFromContext(stepNumber, identity) {
+    const key = artifactContextKey(stepNumber, identity);
+    const version = selectedArtifactVersionForIdentity(stepNumber, identity);
+    const override = project.artifactContextOverrides?.[key];
+    if (override && (override.versionId === '*' || override.versionId === version?.id)) {
+        return override.mode === 'off';
+    }
+    // 只有当前步骤会发送本步骤会话；若会话已含所选产物，默认关闭重复的产物上下文。
+    return Number(stepNumber) === Number(project.currentStep)
+        && conversationContainsArtifactVersion(stepNumber, version);
+}
+
+function isCurrentStepConversationHidden(stepNumber = project.currentStep) {
+    const shieldedIds = new Set(project.conversationShieldVersionIds || []);
+    if (!shieldedIds.size) return false;
+    return collectArtifactGroups().some(group => {
+        const version = selectedArtifactForGroup(group);
+        return version?.step === Number(stepNumber)
+            && shieldedIds.has(version.id)
+            && !isArtifactHiddenFromContext(version.step, group.tag)
+            && conversationContainsArtifactVersion(version.step, version);
+    });
+}
+
+function clearConversationShieldsForStep(stepNumber) {
+    const stepVersionIds = new Set(artifactVaultFor(project.id).versions
+        .filter(item => item.step === Number(stepNumber))
+        .map(item => item.id));
+    project.conversationShieldVersionIds = (project.conversationShieldVersionIds || [])
+        .filter(id => !stepVersionIds.has(id));
+}
+
+function pruneConversationShieldsForStep(stepNumber) {
+    const versions = artifactVaultFor(project.id).versions.filter(item => item.step === Number(stepNumber));
+    const versionById = new Map(versions.map(item => [item.id, item]));
+    project.conversationShieldVersionIds = (project.conversationShieldVersionIds || []).filter(id => {
+        const version = versionById.get(id);
+        // 其他步骤的状态保留；本步骤仅保留仍能在会话中找到对应产物的屏蔽项。
+        return !version || conversationContainsArtifactVersion(stepNumber, version);
+    });
+}
+
+async function toggleArtifactContext(button) {
     const key = String(button.dataset.artifactContextKey || '');
     if (!key) return;
+    const separator = key.indexOf(':');
+    const stepNumber = Number(key.slice(0, separator));
+    const identity = key.slice(separator + 1);
+    const version = selectedArtifactVersionForIdentity(stepNumber, identity);
+    if (!version) return;
+    const isVisible = !isArtifactHiddenFromContext(stepNumber, identity);
+    const willHide = isVisible;
+    if (!project.artifactContextOverrides || typeof project.artifactContextOverrides !== 'object') {
+        project.artifactContextOverrides = {};
+    }
+    project.artifactContextOverrides[key] = { versionId: version.id, mode: willHide ? 'off' : 'on' };
+
     const hiddenKeys = new Set(project.contextHiddenArtifacts || []);
-    const willHide = !hiddenKeys.has(key);
     if (willHide) hiddenKeys.add(key);
     else hiddenKeys.delete(key);
     project.contextHiddenArtifacts = [...hiddenKeys];
+    const shieldedIds = new Set(project.conversationShieldVersionIds || []);
+    if (willHide) {
+        shieldedIds.delete(version.id);
+    } else if (conversationContainsArtifactVersion(stepNumber, version)) {
+        const shouldShieldConversation = await showStudioConfirm({
+            title: '当前对话已包含这项产物',
+            message: '开启产物上下文后，同一内容会同时出现在产物与当前会话中。是否屏蔽当前步骤的会话历史，只发送正式产物上下文？',
+            confirmLabel: '屏蔽会话并开启',
+            cancelLabel: '保留会话并开启',
+        });
+        if (shouldShieldConversation) shieldedIds.add(version.id);
+        else shieldedIds.delete(version.id);
+    } else {
+        shieldedIds.delete(version.id);
+    }
+    project.conversationShieldVersionIds = [...shieldedIds];
     saveProject();
     renderArtifacts();
+    renderCurrentStep();
     notify('success', willHide
-        ? '已隐藏：后续设计不会把该产物发送给 AI，产物编辑与发布不受影响。'
-        : '已显示：后续设计会继续把该产物发送给 AI。');
+        ? '已关闭当前产物上下文；当前步骤会话将继续发送给 AI。'
+        : isCurrentStepConversationHidden(stepNumber)
+            ? '已开启产物上下文，并屏蔽当前步骤会话。'
+            : '已开启产物上下文；当前步骤会话也会继续发送。');
 }
 
 function collectArtifactGroups(projectData = project) {
@@ -5999,6 +6110,25 @@ function showArtifactVersion(details, requestedIndex, { persistSelection = true 
         vault.selectedVersionIds[group.key] = version.id;
         vault.updatedAt = new Date().toISOString();
         void persistArtifactVault(project.id);
+    }
+    const isContextVisible = !isArtifactHiddenFromContext(version.step, group.tag);
+    const isDuplicatedInConversation = version.step === Number(project.currentStep)
+        && conversationContainsArtifactVersion(version.step, version);
+    const isConversationShielded = isCurrentStepConversationHidden(version.step);
+    const contextToggle = details.querySelector('[data-artifact-context-key]');
+    details.classList.toggle('is-context-hidden', !isContextVisible);
+    if (contextToggle) {
+        contextToggle.setAttribute('aria-pressed', String(isContextVisible));
+        contextToggle.setAttribute('aria-label', isContextVisible ? '产物上下文已开启' : '产物上下文已关闭');
+        contextToggle.title = isContextVisible
+            ? isConversationShielded && isDuplicatedInConversation
+                ? '已开启：发送产物，当前步骤会话已屏蔽；点击关闭产物并恢复会话'
+                : isDuplicatedInConversation
+                    ? '已开启：产物与当前会话会重复发送；点击关闭产物'
+                    : '已开启：后续设计会发送此产物；点击关闭'
+            : isDuplicatedInConversation
+                ? '默认关闭：当前步骤会话已经包含此产物；点击开启'
+                : '已关闭：后续设计不发送此产物；点击开启';
     }
 }
 
@@ -6143,6 +6273,9 @@ function renderArtifacts() {
         details.className = 'acs-artifact';
         details.dataset.artifactGroup = String(groupIndex);
         const isContextVisible = !isArtifactHiddenFromContext(artifact.step, group.tag);
+        const isDuplicatedInConversation = artifact.step === Number(project.currentStep)
+            && conversationContainsArtifactVersion(artifact.step, artifact);
+        const isConversationShielded = isCurrentStepConversationHidden(artifact.step);
         details.classList.toggle('is-context-hidden', !isContextVisible);
         if (renderedArtifactGroups.length === 1) details.open = true;
         const summary = document.createElement('summary');
@@ -6164,10 +6297,16 @@ function renderArtifacts() {
         contextToggle.className = 'acs-artifact-context-toggle';
         contextToggle.dataset.artifactContextKey = group.key;
         contextToggle.setAttribute('aria-pressed', String(isContextVisible));
-        contextToggle.setAttribute('aria-label', isContextVisible ? '后续设计会发送给 AI' : '后续设计不发送给 AI');
+        contextToggle.setAttribute('aria-label', isContextVisible ? '产物上下文已开启' : '产物上下文已关闭');
         contextToggle.title = isContextVisible
-            ? '已开启：后续设计会发送给 AI；点击隐藏'
-            : '已隐藏：后续设计不发送给 AI；点击恢复';
+            ? isConversationShielded && isDuplicatedInConversation
+                ? '已开启：发送产物，当前步骤会话已屏蔽；点击关闭产物并恢复会话'
+                : isDuplicatedInConversation
+                    ? '已开启：产物与当前会话会重复发送；点击关闭产物'
+                    : '已开启：后续设计会发送此产物；点击关闭'
+            : isDuplicatedInConversation
+                ? '默认关闭：当前步骤会话已经包含此产物；点击开启'
+                : '已关闭：后续设计不发送此产物；点击开启';
         const tokenCount = document.createElement('span');
         tokenCount.className = 'acs-artifact-token-count';
         tokenCount.dataset.artifactTokenCount = '';
@@ -7689,19 +7828,13 @@ function buildProjectContext(currentStep, preset, options = {}) {
 }
 
 function conversationContentForPrompt(turn, stepNumber) {
-    let content = String(turn?.content || '');
-    if (turn?.role !== 'assistant') return content;
-    // 正式产物由独立产物库单独提供；会话上下文只保留解释、追问等非产物文字，避免旧正文反向覆盖产物语义。
-    const blocks = extractArtifactBlocks(content, stepNumber);
-    const artifactIdentities = new Set(blocks.map(block => resolveArtifactIdentity(stepNumber, block, blocks)));
-    for (const identity of artifactIdentities) {
-        content = removeArtifactIdentityFromText(content, stepNumber, identity);
-    }
-    return content;
+    // 产物关闭时，完整会话承担上下文来源；产物与会话同时开启时允许用户明确接受重复发送。
+    return String(turn?.content || '');
 }
 
 function buildCurrentConversationMessages(currentStep, options = {}) {
     const state = project.steps[currentStep.number];
+    if (isCurrentStepConversationHidden(currentStep.number)) return [];
     if (!Array.isArray(state?.turns) || !state.turns.length) return [];
     let turns = [...state.turns];
     const previewing = Object.prototype.hasOwnProperty.call(options, 'previewUserInput');
@@ -8475,6 +8608,7 @@ function saveTurnEdit(turnIndex) {
     turn.editedAt = new Date().toISOString();
     state.updatedAt = turn.editedAt;
     state.status = 'draft';
+    pruneConversationShieldsForStep(project.currentStep);
     saveProject();
     renderAll();
     notify('success', turn.role === 'user'
@@ -8500,6 +8634,7 @@ async function deleteConversationTurn(turnIndex) {
     state.turns.splice(turnIndex, 1);
     state.status = state.turns.length ? 'draft' : 'idle';
     state.updatedAt = new Date().toISOString();
+    pruneConversationShieldsForStep(project.currentStep);
     saveProject();
     renderAll();
     notify('success', `已删除这条${roleName}，独立产物不受影响。`);
@@ -10876,7 +11011,7 @@ function bindStudioEvents() {
         if (contextToggle) {
             event.preventDefault();
             event.stopPropagation();
-            toggleArtifactContext(contextToggle);
+            void toggleArtifactContext(contextToggle);
             return;
         }
         const summary = event.target.closest('summary');
