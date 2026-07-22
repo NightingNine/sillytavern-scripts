@@ -2045,7 +2045,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-43';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-44';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -4641,6 +4641,9 @@ function normalizeProject(saved) {
             artifactContextOverrides[String(key)] = {
                 versionId: String(value.versionId || '*'),
                 mode: value.mode,
+                setFromStep: Number.isInteger(Number(value.setFromStep))
+                    ? Number(value.setFromStep)
+                    : null,
             };
         }
     }
@@ -5973,6 +5976,12 @@ function isArtifactHiddenFromContext(stepNumber, identity) {
     const version = selectedArtifactVersionForIdentity(stepNumber, identity);
     const override = project.artifactContextOverrides?.[key];
     if (override && (override.versionId === '*' || override.versionId === version?.id)) {
+        // 产物还是当前步骤时做出的“关闭”选择不延续到下一步；成为前序产物后自动开启。
+        // 用户在后续步骤再次关闭时，setFromStep 会记录新步骤，该选择继续生效。
+        const closedWhileCurrent = override.mode === 'off'
+            && Number(override.setFromStep) === Number(stepNumber)
+            && Number(project.currentStep) !== Number(stepNumber);
+        if (closedWhileCurrent) return false;
         return override.mode === 'off';
     }
     // 只有当前步骤会发送本步骤会话；若会话已含所选产物，默认关闭重复的产物上下文。
@@ -6023,7 +6032,11 @@ async function toggleArtifactContext(button) {
     if (!project.artifactContextOverrides || typeof project.artifactContextOverrides !== 'object') {
         project.artifactContextOverrides = {};
     }
-    project.artifactContextOverrides[key] = { versionId: version.id, mode: willHide ? 'off' : 'on' };
+    project.artifactContextOverrides[key] = {
+        versionId: version.id,
+        mode: willHide ? 'off' : 'on',
+        setFromStep: Number(project.currentStep),
+    };
 
     const hiddenKeys = new Set(project.contextHiddenArtifacts || []);
     if (willHide) hiddenKeys.add(key);
@@ -6032,7 +6045,8 @@ async function toggleArtifactContext(button) {
     const shieldedIds = new Set(project.conversationShieldVersionIds || []);
     if (willHide) {
         shieldedIds.delete(version.id);
-    } else if (conversationContainsArtifactVersion(stepNumber, version)) {
+    } else if (Number(stepNumber) === Number(project.currentStep)
+        && conversationContainsArtifactVersion(stepNumber, version)) {
         const shouldShieldConversation = await showStudioConfirm({
             title: '当前对话已包含这项产物',
             message: '开启产物上下文后，同一内容会同时出现在产物与当前会话中。是否屏蔽当前步骤的会话历史，只发送正式产物上下文？',
