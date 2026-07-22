@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.37 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.38 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -2098,7 +2098,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.37';
+const AUTO_CARD_STUDIO_VERSION = '0.6.38';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -2143,7 +2143,7 @@ const LEGACY_CONVERSATION_DATABASE_VERSION = 1;
 const LEGACY_CONVERSATION_STORE_NAME = 'step-conversations';
 const RESOURCE_DOCK_POSITION_KEY = 'auto-card-studio:resource-dock-position:v1';
 const PROJECT_VERSION = 1;
-const MAX_CONTEXT_CHARS = 420000;
+const DEFAULT_MAX_CONTEXT_TOKENS = 2000000;
 const TEMPLATE_MACRO_SENTINELS = Object.freeze({
     char: '__AUTO_LITERAL_CHAR_MACRO_7F3A__',
     user: '__AUTO_LITERAL_USER_MACRO_7F3A__',
@@ -2168,6 +2168,7 @@ const DEFAULT_CONNECTION_SETTINGS = Object.freeze({
 });
 
 const MODEL_PARAMETER_FIELDS = Object.freeze([
+    ['max_context_tokens', '最大上下文 Token', 1, 4000000],
     ['max_completion_tokens', '最大回复 Token', 1, 200000],
     ['temperature', '温度', 0, 2],
     ['top_p', 'Top P', 0, 1],
@@ -4667,6 +4668,7 @@ function normalizeImportedPreset(raw, fileName = '') {
         importFormatVersion: 2,
         prompts,
         settings: {
+            max_context_tokens: Number(raw.openai_max_context) || DEFAULT_MAX_CONTEXT_TOKENS,
             max_completion_tokens: Number(raw.openai_max_tokens) || undefined,
             temperature: Number(raw.temperature),
             frequency_penalty: Number(raw.frequency_penalty),
@@ -5114,7 +5116,11 @@ function normalizeModelParameters(raw = {}) {
 }
 
 function presetDefaultModelParameters(preset = studioResources?.preset) {
-    return normalizeModelParameters(preset?.settings || {});
+    const normalized = normalizeModelParameters(preset?.settings || {});
+    if (!Number.isFinite(normalized.max_context_tokens) || normalized.max_context_tokens <= 0) {
+        normalized.max_context_tokens = DEFAULT_MAX_CONTEXT_TOKENS;
+    }
+    return normalized;
 }
 
 function loadModelParameterSettings(fallbackConnection = {}) {
@@ -5142,8 +5148,17 @@ function saveModelParameterSettings() {
 
 function ensureModelParameters(preset = studioResources?.preset, force = false) {
     const current = normalizeModelParameters(modelParameterSettings.values || {});
-    if (!force && Object.keys(current).length) return current;
-    modelParameterSettings.values = presetDefaultModelParameters(preset);
+    const defaults = presetDefaultModelParameters(preset);
+    if (!force && Object.keys(current).length) {
+        // v0.6.38 新增必填的本地上下文上限；仅迁移这个新字段，避免把用户主动清空的采样参数重新补回。
+        if (!Number.isFinite(current.max_context_tokens) || current.max_context_tokens <= 0) {
+            current.max_context_tokens = defaults.max_context_tokens;
+            modelParameterSettings.values = current;
+            saveModelParameterSettings();
+        }
+        return current;
+    }
+    modelParameterSettings.values = defaults;
     if (force) modelParameterSettings.customized = false;
     saveModelParameterSettings();
     return modelParameterSettings.values;
@@ -6309,6 +6324,38 @@ async function measureTokenCount(text) {
         console.warn('[A.U.T.O Card Studio] Token 统计失败，将显示估算值。', error);
     }
     return { count: estimateTokenCount(source), approximate: true };
+}
+
+async function measureOrderedPromptTokens(orderedPrompts, userInput = '') {
+    const contents = (orderedPrompts || []).map(message => {
+        if (message === 'user_input') return String(userInput || '');
+        if (typeof message === 'string') return message;
+        return String(message?.content || '');
+    });
+    const metrics = await Promise.all(contents.map(content => measureTokenCount(content)));
+    return metrics.reduce((total, metric) => ({
+        count: total.count + metric.count,
+        approximate: total.approximate || metric.approximate,
+    }), { count: 0, approximate: false });
+}
+
+async function assertContextWithinLimit(preset, orderedPrompts, userInput = '') {
+    const settings = ensureModelParameters(preset);
+    const maxContextTokens = Math.max(1, Math.floor(Number(settings.max_context_tokens)));
+    const maxCompletionTokens = Math.max(0, Math.floor(Number(settings.max_completion_tokens) || 0));
+    const inputMetric = await measureOrderedPromptTokens(orderedPrompts, userInput);
+    const requiredTokens = inputMetric.count + maxCompletionTokens;
+    if (requiredTokens <= maxContextTokens) {
+        return { inputMetric, maxCompletionTokens, maxContextTokens, requiredTokens };
+    }
+
+    const approximate = inputMetric.approximate ? '约 ' : '';
+    const error = new Error(
+        `上下文超限：输入${approximate}${inputMetric.count.toLocaleString()} Token + 最大回复 ${maxCompletionTokens.toLocaleString()} Token = ${requiredTokens.toLocaleString()} Token，超过设置的 ${maxContextTokens.toLocaleString()} Token。请求未发送，请关闭部分产物、缩短内容或调高“最大上下文 Token”。`,
+    );
+    error.contextLimitExceeded = true;
+    error.contextLimitDetails = { inputMetric, maxCompletionTokens, maxContextTokens, requiredTokens };
+    throw error;
 }
 
 function formatTokenMetric(metric) {
@@ -7713,7 +7760,7 @@ function installModelParameterUI() {
               <input type="number" data-model-parameter="${key}" min="${min}" max="${max}" step="any" placeholder="未设置">
             </label>`).join('')}
         </div>
-        <p class="acs-model-parameter-note">这里的参数独立于模型连接和连接预设。导入的 A.U.T.O 参数只作为初始默认值。</p>
+        <p class="acs-model-parameter-note">这里的参数独立于模型连接和连接预设。最大上下文按“输入 Token + 最大回复 Token”校验，超限时不会发送请求；导入的 A.U.T.O 参数只作为初始默认值。</p>
       </div>`;
     connectionSection.insertAdjacentElement('afterend', panel);
     shell.querySelector('#acs-model-parameter-toggle').addEventListener('click', event => {
@@ -8003,12 +8050,12 @@ function buildProjectContext(currentStep, preset, options = {}) {
         if (!response) continue;
         const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
         const promptResponse = responseForPrompt(response, preset);
-        sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse.slice(0, 22000)}`);
+        sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse}`);
     }
 
     const currentArtifacts = effectiveStepArtifacts(currentStep.number, { forContext: true });
     if (currentArtifacts) {
-        sections.push(`\n# 当前阶段正式产物（各产物当前选中版本）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
+        sections.push(`\n# 当前阶段正式产物（各产物当前选中版本）\n${responseForPrompt(currentArtifacts, preset)}`);
     }
 
     if (project.includeFutureArtifacts) {
@@ -8023,17 +8070,13 @@ function buildProjectContext(currentStep, preset, options = {}) {
             }
             const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
             const promptResponse = responseForPrompt(response, preset);
-            sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse.slice(0, 22000)}`);
+            sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse}`);
         }
     }
 
     sections.push('\n</STUDIO_PROJECT_CONTEXT>');
 
-    let context = sections.join('\n');
-    if (context.length > MAX_CONTEXT_CHARS) {
-        context = `${context.slice(0, 180000)}\n\n[中间较早的产物因上下文长度省略]\n\n${context.slice(-(MAX_CONTEXT_CHARS - 180000))}`;
-    }
-    return context;
+    return sections.join('\n');
 }
 
 function conversationContentForPrompt(turn, stepNumber) {
@@ -8213,7 +8256,12 @@ function renderPromptPreview(messages, step) {
                 : '按 SillyTavern 当前 tokenizer 统计';
         });
         const totalMetric = formatTokenMetric({ count: total, approximate });
-        shell.querySelector('#acs-prompt-preview-summary').textContent = `Step ${step.number} · ${messages.length} 条消息 · ${totalMetric} · ${connectionDisplayName()}`;
+        const settings = ensureModelParameters();
+        const maxCompletionTokens = Math.max(0, Math.floor(Number(settings.max_completion_tokens) || 0));
+        const maxContextTokens = Math.max(1, Math.floor(Number(settings.max_context_tokens)));
+        const requiredTokens = total + maxCompletionTokens;
+        const budgetState = requiredTokens > maxContextTokens ? ' · 已超限，生成时不会发送' : '';
+        shell.querySelector('#acs-prompt-preview-summary').textContent = `Step ${step.number} · ${messages.length} 条消息 · 输入 ${totalMetric} · 含最大回复 ${requiredTokens.toLocaleString()} / ${maxContextTokens.toLocaleString()} tokens${budgetState} · ${connectionDisplayName()}`;
     });
     // 手机端先显示预览外壳，token 统计延后一帧，避免长上下文阻塞打开动画。
     if (deferMessageBodies) hostWindow.setTimeout(() => { void renderTokenMetrics(); }, 0);
@@ -8600,36 +8648,39 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         void syncConversationVaults(generationProject);
         saveProjectLibrary();
     }
-    const protectedConversations = snapshotOtherStepConversations(generationProject, targetStepNumber);
-    if (appendUserTurn) {
-        state.turns.push({
-            id: globalThis.crypto?.randomUUID?.() || `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            role: 'user',
-            content: userInput,
-            step: targetStepNumber,
-            createdAt: new Date().toISOString(),
-        });
-    }
-    state.status = 'draft';
-    state.updatedAt = new Date().toISOString();
-    saveProject();
-    shell.querySelector('#acs-user-input').value = '';
     setGenerating(true);
     renderCurrentStep();
     renderStepRail();
 
     let succeeded = false;
+    let protectedConversations = null;
     let streamSubscription = null;
     let streamingTurn = null;
     let generationDiagnostic = null;
     let httpResponseCapture = null;
     try {
         const preset = studioResources.preset;
-        activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
         const shouldStream = connectionSettings.outputMode === 'stream';
         const customApi = presetGenerationOptions(preset);
         // 同一轮只构建一次，确保日志的条目数与实际传给酒馆助手的内容一致。
         const orderedPrompts = buildOrderedPrompts(preset, step);
+        // 必须在写入对话、清空输入框和建立网络请求之前完成校验，确保超限时完全不改变本轮状态。
+        const contextBudget = await assertContextWithinLimit(preset, orderedPrompts, userInput);
+        protectedConversations = snapshotOtherStepConversations(generationProject, targetStepNumber);
+        if (appendUserTurn) {
+            state.turns.push({
+                id: globalThis.crypto?.randomUUID?.() || `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                role: 'user',
+                content: userInput,
+                step: targetStepNumber,
+                createdAt: new Date().toISOString(),
+            });
+        }
+        state.status = 'draft';
+        state.updatedAt = new Date().toISOString();
+        saveProject();
+        shell.querySelector('#acs-user-input').value = '';
+        activeGenerationId = `auto-card-studio-${project.id}-${step.number}-${Date.now()}`;
         generationDiagnostic = {
             step: `${step.number} · ${step.name}`,
             generation_id: activeGenerationId,
@@ -8642,6 +8693,13 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
                 ? { index: index + 1, type: 'user_input 占位符' }
                 : { index: index + 1, role: prompt.role || 'system', characters: String(prompt.content || '').length }),
             user_input_characters: String(userInput || '').length,
+            context_budget: {
+                input_tokens: contextBudget.inputMetric.count,
+                approximate: contextBudget.inputMetric.approximate,
+                max_completion_tokens: contextBudget.maxCompletionTokens,
+                required_tokens: contextBudget.requiredTokens,
+                max_context_tokens: contextBudget.maxContextTokens,
+            },
             custom_api: generationDiagnosticOptions(customApi),
         };
         logGenerationDiagnostic('请求开始（不含提示词正文）', generationDiagnostic);
@@ -8712,7 +8770,9 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
     } catch (error) {
         const message = generationErrorMessage(error, String(error?.message || error));
         const stopped = /abort|stop|停止|中断/i.test(message);
-        if (!stopped) {
+        if (error?.contextLimitExceeded) {
+            notify('error', String(error.message || '上下文超过设置上限，请缩短内容后重试。'));
+        } else if (!stopped) {
             if (streamingTurn) state.turns = state.turns.filter(turn => turn !== streamingTurn);
             const details = generationErrorDetails(error);
             console.error('[A.U.T.O Card Studio] 生成失败', error);
@@ -8742,7 +8802,9 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             notify('info', '本次生成已停止。');
         }
     } finally {
-        const restoredSteps = restoreUnexpectedStepConversationChanges(generationProject, protectedConversations);
+        const restoredSteps = protectedConversations
+            ? restoreUnexpectedStepConversationChanges(generationProject, protectedConversations)
+            : 0;
         if (restoredSteps) {
             console.warn(`[A.U.T.O Card Studio] 生成收尾时恢复了 ${restoredSteps} 个被意外改写的步骤对话。`);
             void syncConversationVaults(generationProject);
@@ -9684,15 +9746,17 @@ async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' }
     const generationId = `auto-card-studio-delivery-reorg-${project.id}-${Date.now()}`;
     // 发布阶段的重组与普通步骤使用同一输出方式，避免部分渠道把非流式请求路由到不同鉴权路径。
     const shouldStream = connectionSettings.outputMode === 'stream';
+    const orderedPrompts = buildOrderedPrompts(preset, step, {
+        reorgArtifacts: selectedArtifacts,
+        reorgOnly: true,
+        embeddedUserInput: userInput,
+    });
+    await assertContextWithinLimit(preset, orderedPrompts);
     const result = await generateRawWithOpaqueRetry({
         generation_id: generationId,
         should_stream: shouldStream,
         should_silence: false,
-        ordered_prompts: buildOrderedPrompts(preset, step, {
-            reorgArtifacts: selectedArtifacts,
-            reorgOnly: true,
-            embeddedUserInput: userInput,
-        }),
+        ordered_prompts: orderedPrompts,
         custom_api: presetGenerationOptions(preset),
     }, '发布前世界书重组');
     const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
