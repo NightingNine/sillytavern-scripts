@@ -2292,6 +2292,70 @@ const CONVERSATION_READING_CSS = `
 }
 `;
 
+const SETTINGS_LAYOUT_CSS = `
+/* 设置页只保留一层主分组；展开项以左侧暖色导轨标记当前位置。 */
+[data-acs-panel="settings"] > .acs-settings-layout-section {
+  margin-bottom: 10px;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+[data-acs-panel="settings"] > .acs-settings-layout-section.is-open {
+  border-color: rgba(217, 119, 87, 0.32);
+  background: #312e29;
+  box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.72);
+}
+
+.acs-settings-layout-section > .acs-settings-fold-toggle {
+  min-height: 58px;
+  padding: 12px 14px;
+}
+
+.acs-settings-layout-section > .acs-settings-fold-toggle strong {
+  font-family: var(--acs-body);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.acs-settings-layout-section > .acs-settings-fold-body {
+  padding: 4px 13px 13px 15px;
+}
+
+.acs-settings-layout-section .acs-connection-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.acs-settings-layout-section .acs-model-parameter-panel,
+.acs-settings-layout-section .acs-reading-settings,
+.acs-settings-layout-section #acs-runtime-data-fold {
+  margin: 12px 0 0;
+}
+
+.acs-settings-layout-section .acs-reading-settings {
+  margin-top: 0;
+}
+
+.acs-settings-layout-section .acs-runtime-data-panel {
+  margin-top: 0;
+}
+
+.acs-settings-resource-stack,
+.acs-settings-preference-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.acs-settings-layout-section > .acs-settings-fold-toggle .acs-settings-fold-meta > strong {
+  max-width: 96px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-acs-panel="settings"] > .acs-settings-layout-section { transition: none; }
+}
+`;
+
 const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
@@ -2306,7 +2370,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-55';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-56';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -11443,53 +11507,80 @@ function closeStepHelp() {
 function installSettingsCollapsibles() {
     const settingsPanel = shell.querySelector('[data-acs-panel="settings"]');
     const connection = settingsPanel?.querySelector('.acs-connection-section');
-    if (!settingsPanel || !connection || settingsPanel.querySelector('[data-settings-fold="connection"]')) return;
+    if (!settingsPanel || !connection || settingsPanel.querySelector('.acs-settings-layout-section')) return;
 
+    const createSection = (id, title, description, expanded = false) => {
+        const section = document.createElement('section');
+        section.className = `acs-settings-fold acs-settings-layout-section${expanded ? ' is-open' : ''}`;
+        section.dataset.settingsSection = id;
+        const body = document.createElement('div');
+        body.id = `acs-settings-${id}-body`;
+        body.className = 'acs-settings-fold-body';
+        body.hidden = !expanded;
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'acs-settings-fold-toggle';
+        toggle.dataset.settingsSectionToggle = id;
+        toggle.setAttribute('aria-expanded', String(expanded));
+        toggle.setAttribute('aria-controls', body.id);
+        toggle.innerHTML = `<span><strong>${title}</strong><small>${description}</small></span><span class="acs-settings-fold-meta"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>`;
+        section.append(toggle, body);
+        return { section, body, toggle };
+    };
+
+    const model = createSection('model', '模型与生成', '连接来源、输出方式与生成参数', true);
     const connectionHeading = connection.querySelector('.acs-settings-heading');
-    const connectionBody = document.createElement('div');
-    connectionBody.id = 'acs-connection-fold-body';
-    connectionBody.className = 'acs-settings-fold-body';
-    for (const child of [...connection.children]) {
-        if (child !== connectionHeading) connectionBody.append(child);
-    }
-    const connectionToggle = document.createElement('button');
-    connectionToggle.type = 'button';
-    connectionToggle.className = 'acs-settings-fold-toggle';
-    connectionToggle.dataset.settingsFold = 'connection';
-    connectionToggle.setAttribute('aria-expanded', 'true');
-    connectionToggle.setAttribute('aria-controls', connectionBody.id);
-    const headingCopy = connectionHeading?.querySelector('div');
     const summary = connectionHeading?.querySelector('#acs-connection-summary');
-    connectionToggle.innerHTML = '<span><strong>模型连接</strong><small>决定创作台从哪里调用 AI</small></span><span class="acs-settings-fold-meta"></span>';
-    const meta = connectionToggle.querySelector('.acs-settings-fold-meta');
-    if (summary) meta.append(summary);
-    meta.insertAdjacentHTML('beforeend', '<i class="fa-solid fa-chevron-down" aria-hidden="true"></i>');
-    headingCopy?.remove();
+    if (summary) model.toggle.querySelector('.acs-settings-fold-meta').prepend(summary);
     connectionHeading?.remove();
-    connection.classList.add('acs-settings-fold');
-    connection.append(connectionToggle, connectionBody);
+    model.body.append(connection);
+    const modelParameters = settingsPanel.querySelector('#acs-model-parameter-panel');
+    if (modelParameters) model.body.append(modelParameters);
 
     const flowLabel = settingsPanel.querySelector('.acs-settings-section-label');
     const flowFields = flowLabel?.nextElementSibling;
-    if (flowLabel && flowFields?.classList.contains('acs-field-stack')) {
-        const flow = document.createElement('section');
-        flow.className = 'acs-settings-fold';
-        const flowBody = document.createElement('div');
-        flowBody.id = 'acs-workflow-fold-body';
-        flowBody.className = 'acs-settings-fold-body';
-        flowBody.append(flowFields);
-        const flowToggle = document.createElement('button');
-        flowToggle.type = 'button';
-        flowToggle.className = 'acs-settings-fold-toggle';
-        flowToggle.dataset.settingsFold = 'workflow';
-        flowToggle.setAttribute('aria-expanded', 'true');
-        flowToggle.setAttribute('aria-controls', flowBody.id);
-        flowToggle.innerHTML = '<span><strong>创作流程</strong><small>管理预设、正则与生成偏好</small></span><span class="acs-settings-fold-meta"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></span>';
-        flowLabel.replaceWith(flow);
-        flow.append(flowToggle, flowBody);
-    }
+    const resources = createSection('resources', '创作资源', '导入和管理独立预设、正则');
+    const resourceStack = document.createElement('div');
+    resourceStack.className = 'acs-field-stack acs-settings-resource-stack';
+    const presetCard = flowFields?.querySelector('#acs-preset-lock');
+    const regexCard = flowFields?.querySelector('.acs-resource-import-card');
+    if (presetCard) resourceStack.append(presetCard);
+    if (regexCard) resourceStack.append(regexCard);
+    resources.body.append(resourceStack);
+
+    const preferences = createSection('preferences', '创作偏好', '称呼、作者、篇幅、语言与叙事人称');
+    const preferenceStack = document.createElement('div');
+    preferenceStack.className = 'acs-field-stack acs-settings-preference-stack';
+    const preferenceGrid = flowFields?.querySelector('.acs-field-grid');
+    const personField = flowFields?.querySelector('#acs-person')?.closest('label');
+    if (preferenceGrid) preferenceStack.append(preferenceGrid);
+    if (personField) preferenceStack.append(personField);
+    preferences.body.append(preferenceStack);
+
+    const interfaceData = createSection('interface-data', '界面与数据', '对话显示、运行检查与数据重置');
+    const reading = settingsPanel.querySelector('#acs-reading-settings');
+    const runtime = settingsPanel.querySelector('#acs-runtime-data-fold');
+    if (reading) interfaceData.body.append(reading);
+    if (runtime) interfaceData.body.append(runtime);
+
+    flowLabel?.remove();
+    flowFields?.remove();
+    settingsPanel.replaceChildren(model.section, resources.section, preferences.section, interfaceData.section);
 
     settingsPanel.addEventListener('click', event => {
+        const sectionToggle = event.target.closest('[data-settings-section-toggle]');
+        if (sectionToggle) {
+            const willExpand = sectionToggle.getAttribute('aria-expanded') === 'false';
+            for (const section of settingsPanel.querySelectorAll('.acs-settings-layout-section')) {
+                const toggle = section.querySelector(':scope > [data-settings-section-toggle]');
+                const body = section.querySelector(':scope > .acs-settings-fold-body');
+                const expanded = section === sectionToggle.closest('.acs-settings-layout-section') && willExpand;
+                section.classList.toggle('is-open', expanded);
+                toggle?.setAttribute('aria-expanded', String(expanded));
+                if (body) body.hidden = !expanded;
+            }
+            return;
+        }
         const toggle = event.target.closest('[data-settings-fold]');
         if (!toggle) return;
         const body = shell.querySelector(`#${toggle.getAttribute('aria-controls')}`);
@@ -11656,7 +11747,6 @@ function installResourceManagerUI() {
         </footer>
       </section>`;
     shell.append(updateOverlay);
-    installSettingsCollapsibles();
 }
 
 function toggleResourceDrawer(force) {
@@ -12184,7 +12274,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}\n${SETTINGS_LAYOUT_CSS}`;
     document.head.append(style);
 }
 
@@ -12222,6 +12312,7 @@ async function ensureStudioLoaded() {
     installConnectionProfileUI();
     installModelParameterUI();
     installConversationReadingUI();
+    installSettingsCollapsibles();
     installStyledSelects();
     installCustomModelPicker();
     updateStudioViewportScale();
