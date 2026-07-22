@@ -2210,7 +2210,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-47';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-48';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2402,13 +2402,33 @@ const RESOURCE_MANAGER_CSS = `
 `;
 
 const PHASES = [
-    { id: 'foundation', label: 'I · 核心与世界', range: [1, 9] },
-    { id: 'narrative', label: 'II · 叙事与体验', range: [10, 15] },
-    { id: 'variables', label: 'III · 变量化系统', range: [16, 21] },
-    { id: 'production', label: 'IV · 装配设计', range: [22, 24] },
-    { id: 'autotask', label: 'V · AutoTask 配置', range: [25, 28] },
-    { id: 'delivery', label: 'VI · 启动与交付', range: [29, 29] },
+    { id: 'concept', label: 'I · 概念设计层', range: [1, 3] },
+    { id: 'entity', label: 'II · 实体内容设计层', range: [4, 9] },
+    { id: 'state-machine', label: 'III · 状态机设计层', range: [10, 12] },
+    { id: 'writing', label: 'IV · 描写设计层', range: [13, 15] },
+    { id: 'variables', label: 'V · 变量设计层', range: [16, 21] },
+    { id: 'summary', label: 'VI · 汇总层', range: [22, 22] },
+    { id: 'output', label: 'VII · 输出设计层', range: [23, 24] },
+    { id: 'autotask', label: 'VIII · AUTOTASK 配置', range: [25, 28] },
+    { id: 'delivery', label: 'IX · 启动与交付', range: [29, 29] },
 ];
+
+const LEGACY_PHASE_REPLACEMENTS = Object.freeze({
+    foundation: ['concept', 'entity'],
+    narrative: ['state-machine', 'writing'],
+    production: ['summary', 'output'],
+});
+
+function normalizeCollapsedPhaseIds(values) {
+    const validIds = new Set(PHASES.map(phase => phase.id));
+    const normalized = new Set();
+    for (const value of Array.isArray(values) ? values : []) {
+        const id = String(value || '');
+        if (validIds.has(id)) normalized.add(id);
+        for (const replacement of LEGACY_PHASE_REPLACEMENTS[id] || []) normalized.add(replacement);
+    }
+    return [...normalized];
+}
 
 const DELIVERY_DIALOG_CSS = `
 .acs-delivery-overlay {
@@ -3860,7 +3880,7 @@ const TOUR_STEPS = Object.freeze([
         scene: 'welcome',
         eyebrow: 'ORIENTATION 01',
         title: '先看懂 A.U.T.O 怎样制卡',
-        description: '创作台把 A.U.T.O 预设变成 29 个可对话、可返工的步骤：先确定体验，再设计世界、叙事、变量、装配、AutoTask，最后生成开场并发布。',
+        description: '创作台把 A.U.T.O 预设变成 29 个可对话、可返工的步骤：从概念、实体内容、状态机和描写，到变量、汇总、输出、AutoTask，最后生成开场并发布。',
         points: ['你负责提出方向、检查结果和决定取舍；AI 负责按当前步骤产出正式区块。', '引导会切换页面和展开区域，但不会生成内容、删除数据或发布角色卡。'],
         actionNote: '完成引导后，界面会恢复到开始前的状态。',
     },
@@ -3912,8 +3932,8 @@ const TOUR_STEPS = Object.freeze([
         placement: 'right',
         scene: 'route',
         eyebrow: 'ROUTE 06',
-        title: '29 步按完成建议分成三类',
-        description: '左侧依次是核心与世界、叙事与体验、变量化系统、装配设计、AutoTask 配置、启动与交付。每一步都会标记“必做”“建议”或“复杂卡”。',
+        title: '29 步按设计层级清晰分组',
+        description: '左侧按概念、实体内容、状态机、描写、变量、汇总和输出七个设计层级排列，再进入 AutoTask 配置与启动交付。每一步仍会标记“必做”“建议”或“复杂卡”。',
         points: ['“必做”组成最小可玩闭环；“建议”适合大多数剧情卡；“复杂卡”用于状态机、变量、状态栏或副 AI。', '这些标记只帮助取舍，不会锁定步骤；当前选中的产物版本仍会进入后续上下文。'],
         actionNote: '已展开第一阶段并定位必做的 Step 1。',
     },
@@ -3977,7 +3997,7 @@ const TOUR_STEPS = Object.freeze([
         title: '输出格式决定游玩时每轮回复的结构',
         description: 'Step 23 设计状态栏，Step 24 设计正文、摘要、选项、变量更新和状态栏数据如何组合。两者必须与变量方案和 AutoTask 分工保持一致。',
         points: ['选择导出 Step 24 的输出格式时，发布流程会询问是否同时载入 9 条配套局部正则。', '状态栏显示正则不使用示例包，而是由 Step 23 根据当前项目动态生成。'],
-        actionNote: '已展开装配设计并定位核心 Step 24。',
+        actionNote: '已展开输出设计层并定位核心 Step 24。',
     },
     {
         selector: '#acs-step-rail',
@@ -4884,7 +4904,11 @@ function normalizeProject(saved) {
         conversationShieldVersionIds: Array.isArray(saved.conversationShieldVersionIds)
             ? [...new Set(saved.conversationShieldVersionIds.map(value => String(value)).filter(Boolean))]
             : [],
-        ui: { ...clean.ui, ...(saved.ui || {}) },
+        ui: {
+            ...clean.ui,
+            ...(saved.ui || {}),
+            collapsedPhases: normalizeCollapsedPhaseIds(saved.ui?.collapsedPhases),
+        },
         steps: { ...clean.steps, ...(saved.steps || {}) },
         autoReorg: { ...clean.autoReorg, ...(saved.autoReorg || {}) },
     };
@@ -10750,7 +10774,7 @@ function applyTourScene(step) {
             switchInspectorTab('structure');
             project.currentStep = 24;
             project.ui.overviewCollapsed = true;
-            project.ui.collapsedPhases = PHASES.filter(phase => phase.id !== 'production').map(phase => phase.id);
+            project.ui.collapsedPhases = PHASES.filter(phase => phase.id !== 'output').map(phase => phase.id);
             renderStepRail();
             renderCurrentStep();
             renderOverviewState();
