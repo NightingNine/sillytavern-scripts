@@ -390,12 +390,6 @@ const COMPACT_STAGE_HEADER_CSS = `
   line-height: 1.35;
 }
 
-/* AutoTask 含较长英文词，在中等宽度桌面保持完整显示。 */
-.acs-shell:not(.acs-mobile-layout) [data-phase="autotask"] .acs-phase-title {
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
-}
-
 .acs-shell:not(.acs-mobile-layout) .acs-phase-progress {
   font-size: 8px;
 }
@@ -2216,7 +2210,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-49';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-50';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2408,15 +2402,15 @@ const RESOURCE_MANAGER_CSS = `
 `;
 
 const PHASES = [
-    { id: 'concept', label: 'I · 概念设计层', range: [1, 3] },
-    { id: 'entity', label: 'II · 实体内容设计层', range: [4, 9] },
-    { id: 'state-machine', label: 'III · 状态机设计层', range: [10, 12] },
-    { id: 'writing', label: 'IV · 描写设计层', range: [13, 15] },
-    { id: 'variables', label: 'V · 变量设计层', range: [16, 21] },
-    { id: 'summary', label: 'VI · 汇总层', range: [22, 22] },
-    { id: 'output', label: 'VII · 输出设计层', range: [23, 24] },
-    { id: 'autotask', label: 'VIII · AUTOTASK 配置', range: [25, 28] },
-    { id: 'delivery', label: 'IX · 启动与交付', range: [29, 29] },
+    { id: 'concept', label: '概念设计层', range: [1, 3] },
+    { id: 'entity', label: '实体内容设计层', range: [4, 9] },
+    { id: 'state-machine', label: '状态机设计层', range: [10, 12] },
+    { id: 'writing', label: '描写设计层', range: [13, 15] },
+    { id: 'variables', label: '变量设计层', range: [16, 21] },
+    { id: 'summary', label: '汇总层', range: [22, 22] },
+    { id: 'output', label: '输出设计层', range: [23, 24] },
+    { id: 'autotask', label: 'AUTOTASK 配置', range: [25, 28] },
+    { id: 'delivery', label: '启动与交付', range: [29, 29] },
 ];
 
 const LEGACY_PHASE_REPLACEMENTS = Object.freeze({
@@ -3453,11 +3447,10 @@ body.acs-no-scroll {
 }
 
 .acs-shell.acs-mobile-layout .acs-phase-toggle::before {
-  content: attr(data-mobile-label);
-  font-family: var(--acs-mono);
-  font-size: 7px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  width: 18px;
+  height: 1px;
+  background: currentColor;
+  content: '';
 }
 
 .acs-shell.acs-mobile-layout .acs-phase-toggle > i {
@@ -5691,7 +5684,6 @@ function renderStepRail() {
         toggle.type = 'button';
         toggle.className = 'acs-phase-toggle';
         toggle.dataset.phaseToggle = phase.id;
-        toggle.dataset.mobileLabel = phase.label.split('·')[0].trim();
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute('aria-controls', `acs-phase-${phase.id}`);
         toggle.innerHTML = `
