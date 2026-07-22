@@ -1314,6 +1314,69 @@ const ARTIFACT_HISTORY_CSS = `
 }
 `;
 
+const FUTURE_ARTIFACT_CONTEXT_CSS = `
+.acs-composer-context {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.acs-context-range-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(171, 162, 151, 0.34);
+  border-radius: 999px;
+  background: rgba(171, 162, 151, 0.07);
+  color: var(--acs-muted);
+  cursor: pointer;
+  font: 650 9px/1 var(--acs-body);
+  white-space: nowrap;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.acs-context-range-toggle i {
+  color: var(--acs-muted);
+  font-size: 9px;
+}
+
+.acs-context-range-toggle:hover:not(:disabled) {
+  border-color: rgba(183, 163, 207, 0.58);
+  color: var(--acs-text-soft);
+  transform: translateY(-1px);
+}
+
+.acs-context-range-toggle[aria-pressed="true"] {
+  border-color: rgba(183, 163, 207, 0.54);
+  background: rgba(183, 163, 207, 0.13);
+  color: #d8cce5;
+}
+
+.acs-context-range-toggle[aria-pressed="true"] i {
+  color: var(--acs-violet);
+}
+
+.acs-context-range-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+@media (max-width: 860px) {
+  .acs-composer-context {
+    margin-bottom: 8px;
+  }
+}
+
+.acs-shell.acs-mobile-layout .acs-composer-context {
+  margin-bottom: 6px;
+}
+`;
+
 const PROMPT_INSPECTOR_CSS = `
 /* 检查器采用固定工具区 + 独立内容滚动，长产物不会带走筛选控件。 */
 .acs-inspector {
@@ -2045,7 +2108,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.22-45';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-46';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -4628,6 +4691,7 @@ function createDefaultProject() {
             characterName: '',
             worldbookName: '',
         },
+        includeFutureArtifacts: false,
         contextHiddenArtifacts: [],
         artifactContextOverrides: {},
         conversationShieldVersionIds: [],
@@ -4672,6 +4736,7 @@ function normalizeProject(saved) {
         name: String(saved.name || '未命名世界'),
         preferences: { ...clean.preferences, ...(saved.preferences || {}) },
         output: { ...clean.output, ...(saved.output || {}) },
+        includeFutureArtifacts: saved.includeFutureArtifacts === true,
         contextHiddenArtifacts: legacyHiddenArtifacts,
         artifactContextOverrides,
         conversationShieldVersionIds: Array.isArray(saved.conversationShieldVersionIds)
@@ -5911,6 +5976,7 @@ function renderCurrentStep() {
         turns.append(article);
     }
 
+    renderFutureArtifactsToggle();
     const dependencyMessage = generationDependencyMessage();
     const conversationHidden = isCurrentStepConversationHidden(step.number);
     const generateButton = shell.querySelector('#acs-generate');
@@ -5919,14 +5985,37 @@ function renderCurrentStep() {
     generateButton.title = dependencyMessage || '使用 A.U.T.O 预设生成本阶段草案';
     shell.querySelector('#acs-generation-hint').textContent = dependencyMessage || (state.turns?.length
         ? conversationHidden
-            ? `当前步骤会话不发送，只使用母题与正式产物 · ${connectionDisplayName()}`
-            : `会带上当前会话与各步骤正式产物继续生成 · ${connectionDisplayName()}`
-        : `可留空生成；本阶段将整理「${step.name}」 · ${connectionDisplayName()}`);
+            ? `当前步骤会话不发送，${project.includeFutureArtifacts ? '包含后序正式产物' : '不含后序产物'} · ${connectionDisplayName()}`
+            : `会带上当前会话，${project.includeFutureArtifacts ? '包含后序正式产物' : '不含后序产物'} · ${connectionDisplayName()}`
+        : `可留空生成；${project.includeFutureArtifacts ? '包含后序正式产物' : '默认不含后序产物'} · ${connectionDisplayName()}`);
 
     requestAnimationFrame(() => {
         const conversation = shell.querySelector('.acs-conversation');
         conversation.scrollTop = conversation.scrollHeight;
     });
+}
+
+function renderFutureArtifactsToggle() {
+    const button = shell?.querySelector('#acs-future-artifacts-toggle');
+    if (!button) return;
+    const enabled = project.includeFutureArtifacts === true;
+    button.disabled = isGenerating;
+    button.setAttribute('aria-pressed', String(enabled));
+    button.setAttribute('aria-label', enabled ? '已包含后序产物' : '未包含后序产物');
+    button.title = enabled
+        ? '当前会把本步骤之后已有的正式产物一并发送；点击关闭'
+        : '当前不发送本步骤之后的产物；点击开启';
+    button.querySelector('span').textContent = enabled ? '包含后序' : '不含后序';
+}
+
+function toggleFutureArtifactsContext() {
+    if (isGenerating) return;
+    project.includeFutureArtifacts = project.includeFutureArtifacts !== true;
+    saveProject();
+    renderCurrentStep();
+    notify('success', project.includeFutureArtifacts
+        ? '已开启后序产物：本步骤之后已有的正式产物也会发送给 AI。'
+        : '已关闭后序产物：恢复为只发送前序与当前阶段的正式产物。');
 }
 
 async function clearCurrentStepConversation() {
@@ -6986,6 +7075,22 @@ function installStudioToolsUI() {
     }
 
     const composerButtons = shell.querySelector('.acs-composer-actions > div');
+    if (!shell.querySelector('#acs-future-artifacts-toggle')) {
+        const generationHint = shell.querySelector('#acs-generation-hint');
+        const contextControls = document.createElement('aside');
+        contextControls.className = 'acs-composer-context';
+        contextControls.setAttribute('aria-label', '项目上下文范围');
+
+        const futureArtifactsToggle = document.createElement('button');
+        futureArtifactsToggle.id = 'acs-future-artifacts-toggle';
+        futureArtifactsToggle.className = 'acs-context-range-toggle';
+        futureArtifactsToggle.type = 'button';
+        futureArtifactsToggle.setAttribute('aria-pressed', 'false');
+        futureArtifactsToggle.innerHTML = '<i class="fa-solid fa-forward-step" aria-hidden="true"></i><span>不含后序</span>';
+
+        generationHint.before(contextControls);
+        contextControls.append(futureArtifactsToggle, generationHint);
+    }
     if (!shell.querySelector('#acs-preview-prompt')) {
         const previewButton = document.createElement('button');
         previewButton.id = 'acs-preview-prompt';
@@ -7864,6 +7969,22 @@ function buildProjectContext(currentStep, preset, options = {}) {
     const currentArtifacts = effectiveStepArtifacts(currentStep.number, { forContext: true });
     if (currentArtifacts) {
         sections.push(`\n# 当前阶段正式产物（各产物当前选中版本）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
+    }
+
+    if (project.includeFutureArtifacts) {
+        let futureHeadingAdded = false;
+        for (const step of STEPS) {
+            if (step.number <= currentStep.number) continue;
+            const response = effectiveStepArtifacts(step.number, { forContext: true });
+            if (!response) continue;
+            if (!futureHeadingAdded) {
+                sections.push('\n# 后序阶段现有正式产物（用户已开启发送）');
+                futureHeadingAdded = true;
+            }
+            const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
+            const promptResponse = responseForPrompt(response, preset);
+            sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse.slice(0, 22000)}`);
+        }
     }
 
     sections.push('\n</STUDIO_PROJECT_CONTEXT>');
@@ -11122,6 +11243,7 @@ function bindStudioEvents() {
     });
     shell.querySelector('#acs-latest-turn-top').addEventListener('click', () => scrollToLatestTurn('top'));
     shell.querySelector('#acs-latest-turn-bottom').addEventListener('click', () => scrollToLatestTurn('bottom'));
+    shell.querySelector('#acs-future-artifacts-toggle').addEventListener('click', toggleFutureArtifactsContext);
     shell.querySelector('#acs-generate').addEventListener('click', generateCurrentStep);
     shell.querySelector('#acs-preview-prompt').addEventListener('click', openPromptPreview);
     shell.querySelector('#acs-copy-prompt-preview').addEventListener('click', copyPromptPreview);
@@ -11423,7 +11545,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}`;
     document.head.append(style);
 }
 
