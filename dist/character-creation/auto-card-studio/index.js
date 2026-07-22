@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.30 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.31 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -1252,11 +1252,6 @@ const ARTIFACT_HISTORY_CSS = `
   opacity: 0.3;
 }
 
-.acs-artifact-restore {
-  border-color: rgba(211, 173, 114, 0.42);
-  color: var(--acs-gold);
-}
-
 .acs-artifact-content[readonly] {
   color: var(--acs-text-soft) !important;
   background: #2d2b27 !important;
@@ -2040,7 +2035,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.30';
+const AUTO_CARD_STUDIO_VERSION = '0.6.31';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -2078,7 +2073,7 @@ const RESOURCE_STORE_NAME = 'resources';
 const ARTIFACT_DATABASE_NAME = 'auto-card-studio-artifacts';
 const ARTIFACT_DATABASE_VERSION = 1;
 const ARTIFACT_STORE_NAME = 'project-vaults';
-const ARTIFACT_VAULT_VERSION = 1;
+const ARTIFACT_VAULT_VERSION = 2;
 // v0.6.29 及更早版本的分步骤保护库。新版只在首次迁移时读取，暂不主动删除，便于降级恢复。
 const LEGACY_CONVERSATION_DATABASE_NAME = 'auto-card-studio-conversations';
 const LEGACY_CONVERSATION_DATABASE_VERSION = 1;
@@ -3741,7 +3736,7 @@ const TOUR_STEPS = Object.freeze([
         eyebrow: 'ROUTE 06',
         title: '29 步分成六个阶段，不要求全部完成',
         description: '左侧依次是核心与世界、叙事与体验、变量化系统、装配设计、AutoTask 配置、启动与交付。大类可以折叠，步骤可以随时返回。',
-        points: ['“核心”只标出最能代表流程的 1、4、7、8、24、29 步，不等于强制完成。', '确认后的最新版会进入后续上下文；是否跳过其他步骤取决于角色卡复杂度。'],
+        points: ['“核心”只标出最能代表流程的 1、4、7、8、24、29 步，不等于强制完成。', '当前选中的产物版本会进入后续上下文；是否跳过其他步骤取决于角色卡复杂度。'],
         actionNote: '已展开第一阶段并定位核心 Step 1。',
     },
     {
@@ -3771,7 +3766,7 @@ const TOUR_STEPS = Object.freeze([
         eyebrow: 'REQUEST 09',
         title: '发送前可以检查完整提示词',
         description: '“查看提示词”按实际发送顺序列出辅助条目、当前步骤、项目上下文和本轮输入，适合排查模型为什么得到某些信息。',
-        points: ['项目上下文只使用正式产物的最新版，不会把所有旧代码块重复发送。', '{{char}} 与 {{user}} 会在查看器中保持模板变量形式。'],
+        points: ['项目上下文只使用每项正式产物当前选中的版本，不会把全部历史重复发送。', '{{char}} 与 {{user}} 会在查看器中保持模板变量形式。'],
         actionNote: '引导不打开大型提示词窗口，结束后可自行点击检查。',
     },
     {
@@ -3782,7 +3777,7 @@ const TOUR_STEPS = Object.freeze([
         eyebrow: 'ARTIFACT 10',
         title: '右侧产物栏才是最终交付内容',
         description: '这里仅提取预设明确要求复制的正式区块，不收录 AI 的思考、评分、解释或追问。产物可直接编辑，修改会自动保存。',
-        points: ['同名产物默认使用最新版，也能切换历史、恢复、复制或按分类搜索。', '删除会移除该产物的全部历史版本；重新生成后它会作为新产物再次出现。'],
+        points: ['同名产物默认选中最新版；切换版本后会记住选择，并用于后续设计与发布。', '删除会移除该产物的全部历史版本；重新生成后它会作为新产物再次出现。'],
         actionNote: '已切换到产物页；小屏幕会自动打开右侧栏。',
     },
     {
@@ -4261,6 +4256,7 @@ function createArtifactVault(projectId) {
         schemaVersion: ARTIFACT_VAULT_VERSION,
         projectId: String(projectId || ''),
         versions: [],
+        selectedVersionIds: {},
         migratedAt: null,
         updatedAt: new Date().toISOString(),
     };
@@ -4285,6 +4281,21 @@ function normalizeArtifactVault(raw, projectId) {
             source: String(item.source || 'stored'),
         }];
     });
+    const storedSelections = raw.selectedVersionIds && typeof raw.selectedVersionIds === 'object'
+        ? raw.selectedVersionIds
+        : {};
+    const groupedVersions = new Map();
+    for (const version of clean.versions) {
+        const key = artifactContextKey(version.step, version.identity);
+        if (!groupedVersions.has(key)) groupedVersions.set(key, []);
+        groupedVersions.get(key).push(version);
+    }
+    for (const [key, grouped] of groupedVersions) {
+        const selectedId = String(storedSelections[key] || '');
+        clean.selectedVersionIds[key] = grouped.some(item => item.id === selectedId)
+            ? selectedId
+            : grouped.at(-1).id;
+    }
     clean.migratedAt = raw.migratedAt ? String(raw.migratedAt) : null;
     clean.updatedAt = String(raw.updatedAt || new Date().toISOString());
     return clean;
@@ -4310,6 +4321,7 @@ function appendArtifactsToVault(vault, text, stepNumber, metadata = {}) {
             updatedAt: now,
             source: String(metadata.source || 'generated'),
         });
+        vault.selectedVersionIds[artifactContextKey(stepNumber, identity)] = vault.versions.at(-1).id;
     }
     if (blocks.length) vault.updatedAt = now;
     return blocks.length;
@@ -4333,6 +4345,53 @@ function migrateConversationArtifacts(projectData, vault) {
     vault.migratedAt = new Date().toISOString();
     vault.updatedAt = vault.migratedAt;
     return migrated;
+}
+
+function recoverRestoreOverwriteArtifacts(projectData, vault) {
+    const affectedKeys = new Set(vault.versions
+        .filter(item => item.source === 'restored-overwrite')
+        .map(item => artifactContextKey(item.step, item.identity)));
+    if (!affectedKeys.size) return { attempted: false, recovered: 0 };
+
+    let recovered = 0;
+    for (const step of STEPS) {
+        const turns = projectData.steps?.[step.number]?.turns || [];
+        for (const turn of turns) {
+            if (turn?.role !== 'assistant') continue;
+            const blocks = extractArtifactBlocks(turn.content, step.number);
+            for (const block of blocks) {
+                const identity = resolveArtifactIdentity(step.number, block, blocks);
+                const key = artifactContextKey(step.number, identity);
+                if (!affectedKeys.has(key)) continue;
+                let version = vault.versions.find(item => (
+                    item.step === step.number
+                    && item.identity === identity
+                    && item.content === block.content
+                ));
+                if (!version) {
+                    const createdAt = String(turn.createdAt || new Date().toISOString());
+                    version = {
+                        id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                        step: step.number,
+                        identity,
+                        content: block.content,
+                        createdAt,
+                        updatedAt: createdAt,
+                        source: 'restore-overwrite-recovery',
+                    };
+                    vault.versions.push(version);
+                    recovered += 1;
+                }
+                // 对话按时间顺序扫描，最后一次对应回复最终成为所选版本。
+                vault.selectedVersionIds[key] = version.id;
+            }
+        }
+    }
+    for (const version of vault.versions) {
+        if (version.source === 'restored-overwrite') version.source = 'legacy-restored-overwrite';
+    }
+    vault.updatedAt = new Date().toISOString();
+    return { attempted: true, recovered };
 }
 
 async function writeArtifactVault(projectId) {
@@ -4398,7 +4457,11 @@ async function ensureArtifactVaultsLoaded() {
         const existed = artifactVaults.has(projectItem.id);
         const vault = artifactVaultFor(projectItem.id);
         if (!existed) migrateConversationArtifacts(projectItem, vault);
-        if (!existed) await writeArtifactVault(projectItem.id);
+        const recovery = recoverRestoreOverwriteArtifacts(projectItem, vault);
+        if (!existed || recovery.attempted) await writeArtifactVault(projectItem.id);
+        if (recovery.recovered) {
+            console.warn(`[A.U.T.O Card Studio] 已从对话中找回 ${recovery.recovered} 个曾被覆盖的产物版本。`);
+        }
     }
     artifactVaultsReady = true;
 }
@@ -5768,6 +5831,17 @@ function renderCurrentStep() {
         edit.setAttribute('aria-label', '编辑这条消息');
         edit.innerHTML = '<i class="fa-solid fa-pencil" aria-hidden="true"></i>';
         actions.append(edit);
+        if (turn.role === 'assistant' && extractArtifactBlocks(turn.content, step.number).length) {
+            const addArtifacts = document.createElement('button');
+            addArtifacts.className = 'acs-turn-action acs-turn-add-artifacts';
+            addArtifacts.type = 'button';
+            addArtifacts.dataset.addTurnArtifacts = String(turnIndex);
+            addArtifacts.disabled = isGenerating;
+            addArtifacts.title = '把这条 AI 回复中的合规产物加入产物库';
+            addArtifacts.setAttribute('aria-label', '添加回复中的产物');
+            addArtifacts.innerHTML = '<i class="fa-solid fa-box-archive" aria-hidden="true"></i><span>加入产物</span>';
+            actions.append(addArtifacts);
+        }
         if (turn.role === 'user' && turnIndex === latestUserIndex) {
             const retry = document.createElement('button');
             retry.className = 'acs-turn-action acs-turn-retry';
@@ -5778,6 +5852,15 @@ function renderCurrentStep() {
             retry.innerHTML = '<i class="fa-solid fa-rotate-right" aria-hidden="true"></i><span>重试</span>';
             actions.append(retry);
         }
+        const removeTurn = document.createElement('button');
+        removeTurn.className = 'acs-turn-action acs-turn-delete';
+        removeTurn.type = 'button';
+        removeTurn.dataset.deleteTurn = String(turnIndex);
+        removeTurn.disabled = isGenerating;
+        removeTurn.title = turn.role === 'user' ? '删除这条用户消息' : '删除这条 AI 回复';
+        removeTurn.setAttribute('aria-label', removeTurn.title);
+        removeTurn.innerHTML = '<i class="fa-regular fa-trash-can" aria-hidden="true"></i>';
+        actions.append(removeTurn);
         label.append(actions);
         const content = document.createElement(turn.role === 'user' ? 'pre' : 'div');
         content.className = 'acs-turn-content';
@@ -5873,33 +5956,50 @@ function collectArtifactGroups(projectData = project) {
             accepted: projectData.steps?.[stored.step]?.status === 'accepted',
         });
     }
+    for (const group of groups.values()) {
+        const selectedId = String(vault.selectedVersionIds?.[group.key] || '');
+        group.selectedIndex = group.versions.findIndex(item => item.id === selectedId);
+        if (group.selectedIndex < 0) group.selectedIndex = group.versions.length - 1;
+        group.selectedVersionId = group.versions[group.selectedIndex]?.id || '';
+    }
     return [...groups.values()];
 }
 
-function showArtifactVersion(details, requestedIndex) {
+function selectedArtifactForGroup(group) {
+    return group?.versions?.[Number(group.selectedIndex)] || group?.versions?.at(-1) || null;
+}
+
+function showArtifactVersion(details, requestedIndex, { persistSelection = true } = {}) {
     const group = renderedArtifactGroups[Number(details.dataset.artifactGroup)];
     if (!group) return;
     const index = Math.max(0, Math.min(Number(requestedIndex), group.versions.length - 1));
     const version = group.versions[index];
-    const isLatest = index === group.versions.length - 1;
+    const isEditable = index === group.versions.length - 1;
     const content = details.querySelector('.acs-artifact-content');
     const step = details.querySelector('.acs-artifact-step');
     const saveState = details.querySelector('.acs-artifact-save-state');
 
     content.value = version.content;
-    content.readOnly = !isLatest;
+    content.readOnly = !isEditable;
     content.dataset.artifactVersion = String(index);
     content.dataset.artifactId = version.id;
     content.dataset.artifactStep = String(version.step);
     content.dataset.savedContent = version.content;
     step.textContent = `S${String(version.step).padStart(2, '0')}${version.accepted ? ' · 已确认' : ' · 草案'}`;
     updateArtifactTokenMetric(details, version.content);
-    saveState.textContent = isLatest ? '当前版本 · 可编辑' : '历史版本 · 只读';
+    saveState.textContent = isEditable ? '已选版本 · 可编辑' : '已选版本 · 只读';
     saveState.classList.remove('is-pending');
     details.querySelector('[data-artifact-version-label]').textContent = `${index + 1} / ${group.versions.length}`;
     details.querySelector('[data-artifact-history="previous"]').disabled = index <= 0;
     details.querySelector('[data-artifact-history="next"]').disabled = index >= group.versions.length - 1;
-    details.querySelector('[data-restore-artifact]').hidden = isLatest;
+    group.selectedIndex = index;
+    group.selectedVersionId = version.id;
+    if (persistSelection) {
+        const vault = artifactVaultFor(project.id);
+        vault.selectedVersionIds[group.key] = version.id;
+        vault.updatedAt = new Date().toISOString();
+        void persistArtifactVault(project.id);
+    }
 }
 
 // 优先使用 SillyTavern 当前 tokenizer；只有接口不可用时才显示带“≈”的估算值。
@@ -6011,6 +6111,8 @@ function syncArtifactFilterControls() {
 
 function renderArtifacts() {
     const list = shell.querySelector('#acs-artifact-list');
+    const help = shell.querySelector('.acs-inspector-help');
+    if (help) help.textContent = '仅显示 A.U.T.O 预设规定的最终产物；切换到哪一版，后续设计与发布就使用哪一版。';
     const allArtifactGroups = collectArtifactGroups();
     renderedArtifactGroups = allArtifactGroups.filter(artifactGroupMatchesFilter);
     syncArtifactFilterControls();
@@ -6036,7 +6138,7 @@ function renderArtifacts() {
     }
 
     for (const [groupIndex, group] of renderedArtifactGroups.entries()) {
-        const artifact = group.versions.at(-1);
+        const artifact = selectedArtifactForGroup(group);
         const details = document.createElement('details');
         details.className = 'acs-artifact';
         details.dataset.artifactGroup = String(groupIndex);
@@ -6084,7 +6186,9 @@ function renderArtifacts() {
         toolbar.className = 'acs-artifact-toolbar';
         const saveState = document.createElement('span');
         saveState.className = 'acs-artifact-save-state';
-        saveState.textContent = '当前版本 · 可编辑';
+        saveState.textContent = group.selectedIndex === group.versions.length - 1
+            ? '已选版本 · 可编辑'
+            : '已选版本 · 只读';
         const actions = document.createElement('span');
         actions.className = 'acs-artifact-toolbar-actions';
         const history = document.createElement('span');
@@ -6093,16 +6197,10 @@ function renderArtifacts() {
             <button class="acs-artifact-history-button" type="button" data-artifact-history="previous" title="查看上一版本">
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
             </button>
-            <span data-artifact-version-label>${group.versions.length} / ${group.versions.length}</span>
-            <button class="acs-artifact-history-button" type="button" data-artifact-history="next" title="查看下一版本" disabled>
+            <span data-artifact-version-label>${group.selectedIndex + 1} / ${group.versions.length}</span>
+            <button class="acs-artifact-history-button" type="button" data-artifact-history="next" title="查看下一版本">
                 <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
             </button>`;
-        const restore = document.createElement('button');
-        restore.type = 'button';
-        restore.className = 'acs-artifact-action acs-artifact-restore';
-        restore.dataset.restoreArtifact = '';
-        restore.hidden = true;
-        restore.innerHTML = '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>恢复此版</span>';
         const copy = document.createElement('button');
         copy.type = 'button';
         copy.className = 'acs-artifact-action';
@@ -6115,7 +6213,7 @@ function renderArtifacts() {
         remove.dataset.deleteArtifact = '';
         remove.title = '删除这个产物及其历史版本';
         remove.innerHTML = '<i class="fa-regular fa-trash-can" aria-hidden="true"></i><span>删除</span>';
-        actions.append(history, restore, copy, remove);
+        actions.append(history, copy, remove);
         toolbar.append(saveState, actions);
 
         const content = document.createElement('textarea');
@@ -6123,7 +6221,8 @@ function renderArtifacts() {
         content.value = artifact.content;
         content.spellcheck = false;
         content.dataset.artifactGroup = String(groupIndex);
-        content.dataset.artifactVersion = String(group.versions.length - 1);
+        content.readOnly = group.selectedIndex !== group.versions.length - 1;
+        content.dataset.artifactVersion = String(group.selectedIndex);
         content.dataset.artifactId = artifact.id;
         content.dataset.artifactStep = String(artifact.step);
         content.dataset.savedContent = artifact.content;
@@ -6131,6 +6230,8 @@ function renderArtifacts() {
         editor.append(toolbar, content);
         details.append(summary, editor);
         list.append(details);
+        details.querySelector('[data-artifact-history="previous"]').disabled = group.selectedIndex <= 0;
+        details.querySelector('[data-artifact-history="next"]').disabled = group.selectedIndex >= group.versions.length - 1;
         updateArtifactTokenMetric(details, artifact.content);
     }
 }
@@ -6202,36 +6303,10 @@ function moveArtifactHistory(button) {
     const details = button.closest('.acs-artifact');
     const content = details?.querySelector('.acs-artifact-content');
     if (!details || !content) return;
+    if (!content.readOnly && content.value !== content.dataset.savedContent) saveArtifactEdit(content);
     const current = Number(content.dataset.artifactVersion);
     const direction = button.dataset.artifactHistory === 'previous' ? -1 : 1;
     showArtifactVersion(details, current + direction);
-}
-
-function restoreArtifactVersion(button) {
-    const details = button.closest('.acs-artifact');
-    const group = renderedArtifactGroups[Number(details?.dataset.artifactGroup)];
-    const content = details?.querySelector('.acs-artifact-content');
-    const selectedIndex = Number(content?.dataset.artifactVersion);
-    const selected = group?.versions?.[selectedIndex];
-    const current = group?.versions?.at(-1);
-    if (!selected || !current || selected === current) return;
-
-    flushPendingProjectEdits();
-    const now = new Date().toISOString();
-    const vault = artifactVaultFor(project.id);
-    const storedCurrent = vault.versions.find(item => item.id === current.id);
-    if (!storedCurrent) {
-        notify('error', '无法定位当前产物，未执行版本恢复。');
-        return;
-    }
-    // 恢复只覆盖当前页，不额外创建历史页；已有历史版本数量保持不变。
-    storedCurrent.content = selected.content;
-    storedCurrent.updatedAt = now;
-    storedCurrent.source = 'restored-overwrite';
-    vault.updatedAt = now;
-    void persistArtifactVault(project.id);
-    renderAll();
-    notify('success', `${group.tag} 的当前版本已恢复为历史版本 ${selectedIndex + 1}，没有新增版本页。`);
 }
 
 function openLegacyConversationDatabase() {
@@ -6522,6 +6597,7 @@ async function deleteArtifact(button) {
     flushPendingProjectEdits();
     const vault = artifactVaultFor(project.id);
     vault.versions = vault.versions.filter(item => !(item.step === latest.step && item.identity === group.tag));
+    delete vault.selectedVersionIds[group.key];
     vault.updatedAt = new Date().toISOString();
     // 产物集合变化后，旧的世界书重组方案不再有效。
     project.autoReorg = null;
@@ -6874,7 +6950,7 @@ function installDeliveryUI() {
           <div class="acs-delivery-title">
             <p>DELIVERY MANIFEST</p>
             <h2 id="acs-delivery-title">选择本次交付产物</h2>
-            <small>清单依据 A.U.T.O 预设正则中的复制与粘贴说明生成；同一目标的多项产物会合并，并使用各自最新版。</small>
+            <small>清单依据 A.U.T.O 预设正则中的复制与粘贴说明生成；同一目标的多项产物会合并，并使用各自当前选中的版本。</small>
           </div>
           <button class="acs-delivery-close" type="button" data-delivery-close aria-label="关闭交付窗口">
             <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -7596,7 +7672,7 @@ function buildProjectContext(currentStep, preset, options = {}) {
 
     const currentArtifacts = effectiveStepArtifacts(currentStep.number, { forContext: true });
     if (currentArtifacts) {
-        sections.push(`\n# 当前阶段正式产物（各产物最新版）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
+        sections.push(`\n# 当前阶段正式产物（各产物当前选中版本）\n${responseForPrompt(currentArtifacts, preset).slice(0, 44000)}`);
     }
 
     if (Array.isArray(options.reorgArtifacts)) {
@@ -8406,6 +8482,80 @@ function saveTurnEdit(turnIndex) {
         : 'AI 回复已保存；独立产物库不会随对话修改。');
 }
 
+async function deleteConversationTurn(turnIndex) {
+    if (isGenerating) return;
+    const state = project.steps[project.currentStep];
+    const turn = state?.turns?.[turnIndex];
+    if (!turn) return;
+    const roleName = turn.role === 'user' ? '用户消息' : 'AI 回复';
+    if (!await showStudioConfirm({
+        title: `删除这条${roleName}？`,
+        message: turn.role === 'assistant'
+            ? '只删除这条对话；已经加入独立产物库的内容不会被删除。'
+            : '只删除这条对话，不会自动删除相邻的 AI 回复或独立产物。',
+        confirmLabel: '删除消息',
+        danger: true,
+    })) return;
+
+    state.turns.splice(turnIndex, 1);
+    state.status = state.turns.length ? 'draft' : 'idle';
+    state.updatedAt = new Date().toISOString();
+    saveProject();
+    renderAll();
+    notify('success', `已删除这条${roleName}，独立产物不受影响。`);
+}
+
+function addArtifactsFromAssistantTurn(turnIndex) {
+    if (isGenerating) return;
+    const stepNumber = Number(project.currentStep);
+    const state = project.steps[stepNumber];
+    const turn = state?.turns?.[turnIndex];
+    if (turn?.role !== 'assistant') return;
+    const blocks = extractArtifactBlocks(turn.content, stepNumber);
+    if (!blocks.length) {
+        notify('info', '这条 AI 回复中没有识别到符合当前步骤格式的产物块。');
+        return;
+    }
+
+    const vault = artifactVaultFor(project.id);
+    const now = new Date().toISOString();
+    let added = 0;
+    let selectedExisting = 0;
+    for (const block of blocks) {
+        const identity = resolveArtifactIdentity(stepNumber, block, blocks);
+        const existing = [...vault.versions].reverse().find(item => (
+            item.step === stepNumber
+            && item.identity === identity
+            && item.content === block.content
+        ));
+        if (existing) {
+            vault.selectedVersionIds[artifactContextKey(stepNumber, identity)] = existing.id;
+            selectedExisting += 1;
+            continue;
+        }
+        const version = {
+            id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            step: stepNumber,
+            identity,
+            content: block.content,
+            createdAt: now,
+            updatedAt: now,
+            source: 'manual-conversation',
+        };
+        vault.versions.push(version);
+        vault.selectedVersionIds[artifactContextKey(stepNumber, identity)] = version.id;
+        added += 1;
+    }
+    vault.updatedAt = now;
+    void persistArtifactVault(project.id);
+    renderArtifacts();
+    const summary = [
+        added ? `新增 ${added} 个版本` : '',
+        selectedExisting ? `选中 ${selectedExisting} 个已有版本` : '',
+    ].filter(Boolean).join('，');
+    notify('success', `已处理这条回复中的产物：${summary}。`);
+}
+
 async function retryLatestUserInput(turnIndex) {
     const prepared = prepareGeneration();
     if (!prepared) return;
@@ -8561,15 +8711,16 @@ function extractArtifactBlocks(text, stepNumber) {
 }
 
 function effectiveStepArtifacts(stepNumber, options = {}) {
-    // 后续上下文只读取独立产物库；每个身份发送最新版，不再回读 AI 对话。
-    const latestArtifacts = new Map();
-    for (const stored of artifactVaultFor(project.id).versions) {
-        if (stored.step !== Number(stepNumber)) continue;
+    // 后续上下文只读取独立产物库；每个身份发送用户当前选中的版本。
+    const selectedArtifacts = [];
+    for (const group of collectArtifactGroups()) {
+        const stored = selectedArtifactForGroup(group);
+        if (!stored || stored.step !== Number(stepNumber)) continue;
         // 隐藏状态按“步骤 + 产物身份”保存，因此同类唯一产物的新版本仍保持隐藏。
         if (options.forContext && isArtifactHiddenFromContext(stepNumber, stored.identity)) continue;
-        latestArtifacts.set(stored.identity, stored.content);
+        selectedArtifacts.push(stored.content);
     }
-    return [...latestArtifacts.values()].join('\n\n');
+    return selectedArtifacts.join('\n\n');
 }
 
 function deliveryTargetForArtifact(tag, stepNumber) {
@@ -8634,7 +8785,7 @@ function deliveryTargetForArtifact(tag, stepNumber) {
 
 function collectDeliveryArtifacts() {
     return collectArtifactGroups().flatMap(group => {
-        const artifact = group.versions.at(-1);
+        const artifact = selectedArtifactForGroup(group);
         const target = deliveryTargetForArtifact(group.tag, artifact.step);
         if (!target) return [];
         return [{
@@ -8642,6 +8793,7 @@ function collectDeliveryArtifacts() {
             tag: group.tag,
             step: artifact.step,
             accepted: artifact.accepted,
+            versionId: artifact.id,
             content: artifact.content,
             displayName: artifactDisplayName(group.tag, artifact.step),
             target,
@@ -10563,6 +10715,16 @@ function bindStudioEvents() {
             renderCurrentStep();
             return;
         }
+        const addArtifacts = event.target.closest('[data-add-turn-artifacts]');
+        if (addArtifacts) {
+            addArtifactsFromAssistantTurn(Number(addArtifacts.dataset.addTurnArtifacts));
+            return;
+        }
+        const remove = event.target.closest('[data-delete-turn]');
+        if (remove) {
+            void deleteConversationTurn(Number(remove.dataset.deleteTurn));
+            return;
+        }
         const retry = event.target.closest('[data-retry-turn]');
         if (retry) retryLatestUserInput(Number(retry.dataset.retryTurn));
     });
@@ -10727,11 +10889,6 @@ function bindStudioEvents() {
         const historyButton = event.target.closest('[data-artifact-history]');
         if (historyButton) {
             moveArtifactHistory(historyButton);
-            return;
-        }
-        const restoreButton = event.target.closest('[data-restore-artifact]');
-        if (restoreButton) {
-            restoreArtifactVersion(restoreButton);
             return;
         }
         const copyButton = event.target.closest('[data-copy-artifact]');
