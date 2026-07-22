@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.35 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.36 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -2035,7 +2035,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.35';
+const AUTO_CARD_STUDIO_VERSION = '0.6.36';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -2149,11 +2149,18 @@ const STEP_TUTORIAL_NOTES = Object.freeze([
 
 const STEP_HELP_CSS = `
 .acs-step-name { display:flex; align-items:center; gap:6px; min-width:0; }
-.acs-step-name-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.acs-core-step-badge { flex:0 0 auto; padding:2px 5px; border:1px solid rgba(211,173,114,.32); border-radius:999px; background:rgba(211,173,114,.08); color:#d6bd95; font-family:var(--acs-mono); font-size:7px; font-weight:700; letter-spacing:.04em; line-height:1.2; }
-.acs-step-button.is-core-step .acs-step-node { border-color:rgba(211,173,114,.62); }
-.acs-step-button.is-core-step.is-active .acs-step-node { border-color:var(--acs-cyan); }
+.acs-step-name-label { min-width:0; flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.acs-step-requirement { flex:0 0 auto; padding:2px 5px; border:1px solid transparent; border-radius:999px; font-family:var(--acs-mono); font-size:7px; font-weight:700; letter-spacing:.04em; line-height:1.2; white-space:nowrap; }
+.acs-step-requirement[data-level="required"] { border-color:rgba(217,119,87,.44); background:rgba(217,119,87,.12); color:#e3a087; }
+.acs-step-requirement[data-level="recommended"] { border-color:rgba(211,173,114,.36); background:rgba(211,173,114,.09); color:#d6bd95; }
+.acs-step-requirement[data-level="advanced"] { border-color:rgba(183,163,207,.34); background:rgba(183,163,207,.09); color:#cbb9dd; }
+.acs-step-button[data-requirement="required"] .acs-step-node { border-color:rgba(217,119,87,.68); }
+.acs-step-button[data-requirement="recommended"] .acs-step-node { border-color:rgba(211,173,114,.52); }
+.acs-step-button[data-requirement="advanced"] .acs-step-node { border-color:rgba(183,163,207,.46); }
+.acs-step-button.is-active .acs-step-node { border-color:var(--acs-cyan); }
 .acs-step-title-line { display:flex; align-items:center; gap:10px; min-width:0; }
+.acs-step-title-line h2 { min-width:0; }
+.acs-current-step-requirement { padding:4px 7px; font-size:8px; }
 .acs-step-help-button { display:grid; width:27px; height:27px; flex:0 0 auto; place-items:center; padding:0; border:1px solid rgba(211,173,114,.34); border-radius:999px; background:rgba(211,173,114,.08); color:var(--acs-gold); cursor:pointer; transition:transform 140ms ease, background 140ms ease, border-color 140ms ease; }
 .acs-step-help-button:hover { transform:translateY(-1px); border-color:rgba(211,173,114,.62); background:rgba(211,173,114,.15); }
 .acs-clear-step-button { display:inline-flex; align-items:center; gap:6px; min-height:30px; padding:5px 9px; border:1px solid var(--acs-line); border-radius:999px; background:transparent; color:var(--acs-muted); cursor:pointer; font:600 9px/1 var(--acs-body); }
@@ -2173,7 +2180,10 @@ const STEP_HELP_CSS = `
 .acs-step-help-section span { display:block; margin-bottom:7px; color:var(--acs-gold); font:700 9px/1 var(--acs-mono); letter-spacing:.12em; }
 .acs-step-help-section p { margin:0; color:var(--acs-text-soft); font-size:11px; line-height:1.72; }
 .acs-step-help-section.is-caution { border-left:2px solid var(--acs-cyan); }
-@media (max-width:560px) { .acs-step-help-overlay{padding:0}.acs-step-help-dialog{width:100%;max-height:100%;border-radius:0}.acs-step-help-head,.acs-step-help-body{padding-left:17px;padding-right:17px}.acs-step-title-line{gap:7px}.acs-step-help-button{width:25px;height:25px}.acs-clear-step-button span{display:none}.acs-clear-step-button{width:30px;padding:5px;justify-content:center} }
+.acs-step-help-requirement-line { display:flex; align-items:flex-start; gap:9px; }
+.acs-step-help-requirement-line .acs-step-requirement { margin-top:2px; font-size:8px; }
+.acs-step-help-requirement-line em { color:var(--acs-text-soft); font-style:normal; line-height:1.72; }
+@media (max-width:560px) { .acs-step-help-overlay{padding:0}.acs-step-help-dialog{width:100%;max-height:100%;border-radius:0}.acs-step-help-head,.acs-step-help-body{padding-left:17px;padding-right:17px}.acs-step-title-line{gap:7px}.acs-current-step-requirement{padding:3px 6px;font-size:7px}.acs-step-help-button{width:25px;height:25px}.acs-clear-step-button span{display:none}.acs-clear-step-button{width:30px;padding:5px;justify-content:center} }
 `;
 
 const RESOURCE_MANAGER_CSS = `
@@ -3516,7 +3526,7 @@ body.acs-no-scroll {
   box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.09);
 }
 
-.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-core-step-badge {
+.acs-shell.acs-mobile-layout.is-mobile-flow-open .acs-step-requirement {
   margin-left: 5px;
   padding: 1px 4px;
   font-size: 6px;
@@ -3732,10 +3742,10 @@ const TOUR_STEPS = Object.freeze([
         placement: 'right',
         scene: 'route',
         eyebrow: 'ROUTE 06',
-        title: '29 步分成六个阶段，不要求全部完成',
-        description: '左侧依次是核心与世界、叙事与体验、变量化系统、装配设计、AutoTask 配置、启动与交付。大类可以折叠，步骤可以随时返回。',
-        points: ['“核心”只标出最能代表流程的 1、4、7、8、24、29 步，不等于强制完成。', '当前选中的产物版本会进入后续上下文；是否跳过其他步骤取决于角色卡复杂度。'],
-        actionNote: '已展开第一阶段并定位核心 Step 1。',
+        title: '29 步按完成建议分成三类',
+        description: '左侧依次是核心与世界、叙事与体验、变量化系统、装配设计、AutoTask 配置、启动与交付。每一步都会标记“必做”“建议”或“复杂卡”。',
+        points: ['“必做”组成最小可玩闭环；“建议”适合大多数剧情卡；“复杂卡”用于状态机、变量、状态栏或副 AI。', '这些标记只帮助取舍，不会锁定步骤；当前选中的产物版本仍会进入后续上下文。'],
+        actionNote: '已展开第一阶段并定位必做的 Step 1。',
     },
     {
         selector: '.acs-stage-heading',
@@ -3870,8 +3880,33 @@ const STEPS = [
     phase: PHASES.find(phase => index + 1 >= phase.range[0] && index + 1 <= phase.range[1]).id,
 }));
 
-// 按 A.U.T.O 教程标出最能代表整套制卡逻辑的核心节点；“核心”不等于强制完成。
-const CORE_STEP_NUMBERS = new Set([1, 4, 7, 8, 24, 29]);
+// 面向初次制卡用户的完成建议。这里只帮助判断取舍，不限制跳步或发布。
+const STEP_REQUIREMENT_LEVELS = Object.freeze({
+    required: Object.freeze({
+        label: '必做',
+        description: '属于最小可玩闭环。即使制作简单聊天卡，也建议完成并确认这一阶段。',
+    }),
+    recommended: Object.freeze({
+        label: '建议',
+        description: '大多数剧情卡完成后会更稳定、更丰富；内容简单或前一步已经覆盖时可以跳过。',
+    }),
+    advanced: Object.freeze({
+        label: '复杂卡',
+        description: '用于长线状态机、MVU 变量、条件注入、状态栏或 AutoTask；没有对应系统时可以跳过。',
+    }),
+});
+
+const STEP_REQUIREMENTS = Object.freeze([
+    'required', 'recommended', 'advanced', 'required', 'required', 'recommended', 'recommended', 'recommended', 'recommended',
+    'advanced', 'advanced', 'advanced', 'required', 'advanced', 'recommended',
+    'advanced', 'advanced', 'advanced', 'advanced', 'advanced', 'advanced', 'advanced', 'advanced',
+    'required', 'advanced', 'advanced', 'advanced', 'advanced', 'required',
+]);
+
+function getStepRequirement(stepNumber) {
+    const level = STEP_REQUIREMENTS[stepNumber - 1] || 'recommended';
+    return { level, ...STEP_REQUIREMENT_LEVELS[level] };
+}
 
 // 每一站都给出不同的创作入口，避免初次使用者只看到抽象的阶段名称。
 const STEP_GUIDES = [
@@ -5455,14 +5490,14 @@ function renderStepRail() {
 
         for (const step of phaseSteps) {
             const state = project.steps[step.number] || { status: 'idle' };
-            const isCoreStep = CORE_STEP_NUMBERS.has(step.number);
+            const requirement = getStepRequirement(step.number);
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'acs-step-button';
             button.dataset.step = String(step.number);
-            button.title = `Step ${step.number} · ${step.name}${isCoreStep ? ' · 核心步骤（并非强制）' : ''}`;
+            button.dataset.requirement = requirement.level;
+            button.title = `Step ${step.number} · ${step.name} · ${requirement.label}`;
             button.setAttribute('aria-label', button.title);
-            button.classList.toggle('is-core-step', isCoreStep);
             if (step.number === project.currentStep) button.classList.add('is-active');
             if (state.status === 'accepted') button.classList.add('is-complete');
             if (state.status === 'draft') button.classList.add('is-draft');
@@ -5477,13 +5512,12 @@ function renderStepRail() {
             nameLabel.className = 'acs-step-name-label';
             nameLabel.textContent = step.name;
             name.append(nameLabel);
-            if (isCoreStep) {
-                const badge = document.createElement('span');
-                badge.className = 'acs-core-step-badge';
-                badge.textContent = '核心';
-                badge.setAttribute('aria-hidden', 'true');
-                name.append(badge);
-            }
+            const badge = document.createElement('span');
+            badge.className = 'acs-step-requirement';
+            badge.dataset.level = requirement.level;
+            badge.textContent = requirement.label;
+            badge.setAttribute('aria-hidden', 'true');
+            name.append(badge);
             const number = document.createElement('span');
             number.className = 'acs-step-number';
             number.textContent = String(step.number).padStart(2, '0');
@@ -5800,9 +5834,17 @@ function renderCurrentStep() {
     const step = STEPS[project.currentStep - 1];
     const guide = STEP_GUIDES[step.number - 1];
     const state = project.steps[step.number];
+    const requirement = getStepRequirement(step.number);
     shell.querySelector('#acs-step-kicker').textContent = `PHASE ${String(step.number).padStart(2, '0')} / ${STEPS.length}`;
     shell.querySelector('#acs-step-title').textContent = step.name;
     shell.querySelector('#acs-step-goal').textContent = step.goal;
+    const requirementBadge = shell.querySelector('#acs-current-step-requirement');
+    if (requirementBadge) {
+        requirementBadge.dataset.level = requirement.level;
+        requirementBadge.textContent = requirement.label;
+        requirementBadge.title = requirement.description;
+        requirementBadge.setAttribute('aria-label', `${requirement.label}：${requirement.description}`);
+    }
 
     // 空白状态也是创作向导：切换步骤时同步刷新，而不是沿用第一站文案。
     shell.querySelector('#acs-empty-kicker').textContent = `STATION ${String(step.number).padStart(2, '0')} · 创作航标`;
@@ -10606,6 +10648,11 @@ function installStepHelpUI() {
     title.parentNode.insertBefore(titleLine, title);
     titleLine.append(title);
 
+    const requirementBadge = document.createElement('span');
+    requirementBadge.id = 'acs-current-step-requirement';
+    requirementBadge.className = 'acs-step-requirement acs-current-step-requirement';
+    titleLine.append(requirementBadge);
+
     const button = document.createElement('button');
     button.id = 'acs-step-help';
     button.className = 'acs-step-help-button';
@@ -10642,6 +10689,7 @@ function installStepHelpUI() {
         </header>
         <div class="acs-step-help-body">
           <p id="acs-step-help-purpose" class="acs-step-help-lead"></p>
+          <section class="acs-step-help-section"><span>完成建议</span><p class="acs-step-help-requirement-line"><strong id="acs-step-help-requirement" class="acs-step-requirement"></strong><em id="acs-step-help-requirement-copy"></em></p></section>
           <section class="acs-step-help-section"><span>建议怎么做</span><p id="acs-step-help-workflow"></p></section>
           <section class="acs-step-help-section"><span>本步最终产物</span><p id="acs-step-help-deliverable"></p></section>
           <section class="acs-step-help-section is-caution"><span>教程提醒</span><p id="acs-step-help-caution"></p></section>
@@ -10653,6 +10701,7 @@ function installStepHelpUI() {
 function openStepHelp() {
     const step = STEPS[project.currentStep - 1];
     const note = STEP_TUTORIAL_NOTES[project.currentStep - 1];
+    const requirement = getStepRequirement(project.currentStep);
     const overlay = shell.querySelector('#acs-step-help-overlay');
     if (!step || !note || !overlay) return;
     // 说明窗口在手机端独占当前视图，先关闭步骤／产物抽屉。
@@ -10661,6 +10710,10 @@ function openStepHelp() {
     shell.querySelector('#acs-step-help-title').textContent = step.name;
     shell.querySelector('#acs-step-help-stage').textContent = `${note.stage} · ${step.goal}`;
     shell.querySelector('#acs-step-help-purpose').textContent = note.purpose;
+    const requirementBadge = shell.querySelector('#acs-step-help-requirement');
+    requirementBadge.dataset.level = requirement.level;
+    requirementBadge.textContent = requirement.label;
+    shell.querySelector('#acs-step-help-requirement-copy').textContent = requirement.description;
     shell.querySelector('#acs-step-help-workflow').textContent = note.workflow;
     shell.querySelector('#acs-step-help-deliverable').textContent = note.deliverable;
     shell.querySelector('#acs-step-help-caution').textContent = note.caution;
