@@ -1,0 +1,33 @@
+{
+  "name": "auto-card-studio-app",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "check": "tsc --noEmit && vite build",
+    "test": "node --test src/core.test.ts src/profile.test.ts src/model.test.ts src/workflow.test.ts src/delivery.test.ts",
+    "tauri": "tauri",
+    "android:init": "tauri android init",
+    "android:build": "tauri android build --apk --debug",
+    "profile:generate": "node scripts/extract-step-one-profile.mjs \"E:/SillyTavern/SillyTavern/data/default-user/OpenAI Settings/A.U.T.O.预设_v2.0.json\""
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.2",
+    "@tauri-apps/plugin-fs": "2.5.1",
+    "@tauri-apps/plugin-http": "2.5.9",
+    "@tauri-apps/plugin-sql": "2.4.0",
+    "@tauri-apps/plugin-stronghold": "2.3.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "typescript": "5.6.2",
+    "vite": "6.4.3"
+  }
+}

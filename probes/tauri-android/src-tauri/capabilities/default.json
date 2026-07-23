@@ -1,0 +1,28 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://httpbin.org/**"
+        }
+      ]
+    },
+    "sql:default",
+    "sql:allow-execute",
+    "stronghold:default",
+    "stronghold:allow-destroy",
+    "fs:default",
+    "fs:allow-app-read-recursive",
+    "fs:allow-app-write-recursive",
+    "dialog:default"
+  ]
+}
