@@ -607,9 +607,8 @@ function renderMobileProjectPanel(project = currentProject()): string {
   return `
     <section class="mobile-project-panel">
       <header>
-        <small>PROJECT LIBRARY</small>
         <h2>项目库</h2>
-        <p>项目、会话与产物均独立保存在本机。</p>
+        <p>${snapshot.projects.length} 个项目</p>
       </header>
       <div class="mobile-project-list">
         ${snapshot.projects.map((item) => {
@@ -627,20 +626,6 @@ function renderMobileProjectPanel(project = currentProject()): string {
         }).join("")}
       </div>
       <button class="mobile-new-project" data-action="create-project">＋ 新建项目</button>
-      <details class="mobile-project-editor">
-        <summary>编辑当前项目</summary>
-        <div>
-          <label>项目名称<input id="project-name" value="${escapeHtml(project.name)}"></label>
-          <label>角色卡名称<input id="character-name" value="${escapeHtml(project.output.characterName)}"></label>
-          <label>世界书名称<input id="worldbook-name" value="${escapeHtml(project.output.worldbookName)}"></label>
-          <label>创作母题<textarea id="project-brief" rows="4">${escapeHtml(project.brief)}</textarea></label>
-          <button class="primary-button" data-action="save-project">保存项目信息</button>
-        </div>
-      </details>
-      <footer>
-        <button data-action="export-project">导出备份</button>
-        <button data-action="import-project">导入项目</button>
-      </footer>
     </section>`;
 }
 
@@ -650,20 +635,22 @@ function renderMobileRail(project = currentProject()): string {
   return `
     <aside class="step-rail mobile-step-rail ${mobileFlowOpen ? "is-expanded" : ""} ${projectMenuOpen ? "is-project-menu" : ""}">
       <div class="mobile-rail-head">
-        <div><small>${projectMenuOpen ? "PROJECT" : "WORKFLOW"}</small><b>${projectMenuOpen ? "项目库" : "29 步创作路径"}</b></div>
+        <div><small>STATION MAP</small><b>创作流程 · 29 站</b></div>
         <button class="mobile-rail-toggle" data-action="toggle-flow" aria-expanded="${mobileFlowOpen}" aria-label="${mobileFlowOpen ? "收起流程" : "展开流程"}">
           <span>${mobileFlowOpen ? "‹" : "☷"}</span><em>${project.currentStep}</em>
         </button>
       </div>
+      <section class="rail-project">
+        <label for="rail-project-name">当前项目</label>
+        <div class="rail-project-control">
+          <button data-action="toggle-project-library" aria-label="${projectMenuOpen ? "收起项目库" : "打开项目库"}"><span>${projectMenuOpen ? "▣" : "▰"}</span></button>
+          <input id="rail-project-name" value="${escapeHtml(project.name)}" maxlength="80" aria-label="当前项目">
+          <span aria-hidden="true">✎</span>
+        </div>
+        <div class="rail-project-progress"><small>${accepted} / 29</small><small>${Math.round(accepted / 29 * 100)}%</small></div>
+        <progress max="29" value="${accepted}">${accepted}/29</progress>
+      </section>
       ${projectMenuOpen ? renderMobileProjectPanel(project) : `
-        <section class="rail-project">
-          <label>当前项目</label>
-          <button data-action="view" data-view="projects">
-            <span>▰</span><b>${escapeHtml(project.name)}</b><i>›</i>
-          </button>
-          <div><small>${accepted} / 29</small><small>${Math.round(accepted / 29 * 100)}%</small></div>
-          <progress max="29" value="${accepted}">${accepted}/29</progress>
-        </section>
         <nav class="phase-rail">${renderStepRail(project, true)}</nav>
         <button class="rail-new-project" data-action="create-project">＋ 新建项目</button>`}
     </aside>`;
@@ -848,6 +835,16 @@ app.addEventListener("change", (event) => {
     artifactSearch = target.value;
     render();
   }
+  if (target.id === "rail-project-name" && target.value.trim() && target.value.trim() !== currentProject().name) {
+    const project = currentProject();
+    void runAction(() => kernel.updateProject({
+      name: target.value.trim(),
+      brief: project.brief,
+      characterName: project.output.characterName,
+      worldbookName: project.output.worldbookName,
+      preferences: project.preferences,
+    }), "项目名称已保存。");
+  }
   if (action === "select-artifact") {
     void runAction(() => kernel.selectArtifact(target.value), "已切换正式版本。");
   }
@@ -905,6 +902,12 @@ app.addEventListener("click", (event) => {
   }
   if (action === "dismiss-notice") {
     notice = null;
+    render();
+    return;
+  }
+  if (action === "toggle-project-library") {
+    activeView = activeView === "projects" ? "studio" : "projects";
+    mobileFlowOpen = true;
     render();
     return;
   }
