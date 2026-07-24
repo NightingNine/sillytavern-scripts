@@ -41,6 +41,7 @@ import {
   artifactDisplayName,
   stepDefinition,
 } from "./workflow-config.ts";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type ViewName = "studio" | "artifacts" | "projects" | "settings" | "delivery";
 
@@ -183,10 +184,16 @@ function renderTopbar(project = currentProject()): string {
         <span style="--progress:${accepted / 29}"></span>
         <b>${accepted}</b><small>/29</small>
       </div>
-      <button class="icon-button mobile-only" data-action="export-project" aria-label="导出项目备份" title="导出项目备份">⇩</button>
-      <button class="icon-button mobile-only ${inspectorOpen ? "is-active" : ""}" data-action="toggle-inspector"
-        aria-label="打开项目检查器" aria-expanded="${inspectorOpen}" title="项目检查器">▥</button>
-      <button class="icon-button desktop-only" data-action="view" data-view="settings" aria-label="设置">⚙</button>
+      <nav class="topbar-actions" aria-label="创作台工具">
+        <button class="icon-button mobile-only tour-button" data-action="open-guide" aria-label="打开新手引导" title="打开新手引导">◉</button>
+        <button class="icon-button mobile-only" data-action="check-update" aria-label="检查更新" title="检查更新">↻</button>
+        <button class="icon-button mobile-only" data-action="export-project" aria-label="导出项目" title="导出项目">▰</button>
+        <button class="icon-button mobile-only" data-action="import-project" aria-label="导入项目" title="导入项目">⇥</button>
+        <button class="icon-button mobile-only ${inspectorOpen ? "is-active" : ""}" data-action="toggle-inspector"
+          aria-label="打开项目检查器" aria-expanded="${inspectorOpen}" title="项目检查器">▥</button>
+        <button class="icon-button mobile-only" data-action="close-app" aria-label="关闭创作台" title="关闭创作台">×</button>
+        <button class="icon-button desktop-only" data-action="view" data-view="settings" aria-label="设置">⚙</button>
+      </nav>
     </header>`;
 }
 
@@ -835,6 +842,26 @@ app.addEventListener("click", (event) => {
     button.setAttribute("aria-label", overviewCollapsed ? "展开创作概览" : "收起创作概览");
     button.setAttribute("title", overviewCollapsed ? "展开创作概览" : "收起创作概览");
     button.textContent = overviewCollapsed ? "⌄" : "⌃";
+    return;
+  }
+  if (action === "open-guide") {
+    const guide = document.querySelector<HTMLDetailsElement>(".stage-guide");
+    if (guide) {
+      guide.open = true;
+      guide.querySelector<HTMLElement>("summary")?.focus();
+    }
+    return;
+  }
+  if (action === "check-update") {
+    setNotice("Android 测试版通过安装新版 APK 更新；当前应用不执行脚本热更新。", "info");
+    render();
+    return;
+  }
+  if (action === "close-app") {
+    void getCurrentWindow().close().catch((error) => {
+      setNotice(`暂时无法关闭应用：${(error as Error).message}`, "error");
+      render();
+    });
     return;
   }
   if (action === "step") {

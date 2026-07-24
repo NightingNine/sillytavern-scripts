@@ -227,6 +227,13 @@ textarea {
   color: var(--text);
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .icon-button {
   display: grid;
   width: 34px;
@@ -1732,8 +1739,8 @@ textarea::placeholder {
 
   .topbar {
     grid-row: 1;
-    grid-template-columns: minmax(0, 1fr) 32px 32px;
-    gap: 2px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px;
     min-width: 0;
     padding: calc(24px + env(safe-area-inset-top, 0px)) 6px 0 9px;
     background: rgba(43, 41, 37, 0.98);
@@ -1758,22 +1765,27 @@ textarea::placeholder {
   }
 
   .brand b {
-    order: 2;
     overflow: hidden;
-    max-width: 54vw;
-    margin-top: 3px;
-    font: 500 14px/1.05 var(--display);
+    max-width: 27vw;
+    margin: 0;
+    font: 500 13px/1.15 var(--display);
     letter-spacing: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .brand small {
-    order: 1;
-    margin: 0;
-    color: var(--terracotta);
-    font-size: 6.5px;
-    letter-spacing: 0.13em;
+    display: none;
+  }
+
+  .topbar-actions {
+    gap: 1px;
+  }
+
+  .topbar-actions .tour-button {
+    position: absolute;
+    top: calc(33px + env(safe-area-inset-top, 0px));
+    left: 105px;
   }
 
   .mobile-only {
@@ -1781,11 +1793,12 @@ textarea::placeholder {
   }
 
   .icon-button.mobile-only {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     padding: 0;
     border-radius: 10px;
     color: var(--muted);
+    font-size: 13px;
     place-items: center;
   }
 
