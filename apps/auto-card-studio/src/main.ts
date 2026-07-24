@@ -78,6 +78,8 @@ let notice: { tone: "info" | "success" | "warning" | "error"; message: string } 
 let deliveryKeys = new Set<string>();
 let lastDeliveryProjectId = "";
 let deliverySelectionCustomized = false;
+let mobileFlowOpen = false;
+const mobileLayoutQuery = window.matchMedia("(max-width: 760px)");
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -115,31 +117,61 @@ function requirementLabel(value: string): string {
   return value === "required" ? "必做" : value === "advanced" ? "复杂卡" : "建议";
 }
 
-function phaseLabel(id: string): string {
-  return WORKFLOW_PHASES.find((phase) => phase.id === id)?.label ?? id;
+function phaseIcon(id: string): string {
+  return ({
+    concept: "◎",
+    entity: "◆",
+    "state-machine": "⌘",
+    writing: "✎",
+    variables: "≋",
+    summary: "≡",
+    output: "▣",
+    autotask: "⚙",
+    delivery: "↗",
+  } as Record<string, string>)[id] ?? "◇";
 }
 
-function renderStepRail(project = currentProject()): string {
-  return WORKFLOW_STEPS.map((step) => {
+function renderStepButtons(steps: typeof WORKFLOW_STEPS, project = currentProject()): string {
+  return steps.map((step) => {
     const state = stepState(project, step.number);
     const active = step.number === project.currentStep;
     return `
       <button class="step-link ${active ? "is-active" : ""} is-${state.status}"
         data-action="step" data-step="${step.number}" aria-current="${active ? "step" : "false"}">
-        <span>${String(step.number).padStart(2, "0")}</span>
+        <span class="step-node">${String(step.number).padStart(2, "0")}</span>
         <strong>${escapeHtml(step.name)}</strong>
         <i aria-hidden="true"></i>
       </button>`;
   }).join("");
 }
 
+function renderStepRail(project = currentProject(), grouped = false): string {
+  if (!grouped) return renderStepButtons(WORKFLOW_STEPS, project);
+  return WORKFLOW_PHASES.map((phase) => {
+    const [start, end] = phase.range;
+    const steps = WORKFLOW_STEPS.filter((step) => step.number >= start && step.number <= end);
+    const accepted = steps.filter((step) => stepState(project, step.number).status === "accepted").length;
+    const current = project.currentStep >= start && project.currentStep <= end;
+    return `
+      <section class="phase-group ${current ? "is-current" : ""}">
+        <div class="phase-heading">
+          <span class="phase-icon">${phaseIcon(phase.id)}</span>
+          <b>${escapeHtml(phase.label)}</b>
+          <small>${accepted}/${steps.length}</small>
+        </div>
+        <div class="phase-steps">${renderStepButtons(steps, project)}</div>
+      </section>`;
+  }).join("");
+}
+
 function renderTopbar(project = currentProject()): string {
   const accepted = WORKFLOW_STEPS.filter((step) => stepState(project, step.number).status === "accepted").length;
+  const inspectorOpen = activeView === "artifacts" || activeView === "settings" || activeView === "delivery";
   return `
     <header class="topbar">
       <button class="brand" data-action="view" data-view="studio" aria-label="返回创作台">
         <span class="brand-mark">A</span>
-        <span><b>A.U.T.O</b><small>独立创作台</small></span>
+        <span><small>L3 / CHARACTER FORGE</small><b>A.U.T.O 角色卡创作台</b></span>
       </button>
       <button class="project-chip" data-action="view" data-view="projects">
         <span class="status-dot"></span>
@@ -150,6 +182,9 @@ function renderTopbar(project = currentProject()): string {
         <span style="--progress:${accepted / 29}"></span>
         <b>${accepted}</b><small>/29</small>
       </div>
+      <button class="icon-button mobile-only" data-action="export-project" aria-label="导出项目备份" title="导出项目备份">⇩</button>
+      <button class="icon-button mobile-only ${inspectorOpen ? "is-active" : ""}" data-action="toggle-inspector"
+        aria-label="打开项目检查器" aria-expanded="${inspectorOpen}" title="项目检查器">▥</button>
       <button class="icon-button desktop-only" data-action="view" data-view="settings" aria-label="设置">⚙</button>
     </header>`;
 }
@@ -165,52 +200,46 @@ function renderNotice(): string {
 function renderStudio(project = currentProject()): string {
   const definition = stepDefinition(project.currentStep);
   const state = stepState(project);
-  const versions = project.artifacts.versions.filter((artifact) => artifact.step === project.currentStep);
   const selected = selectedArtifacts(project, project.currentStep);
   const hasAssistant = state.turns.some((turn) => turn.role === "assistant");
   const accepted = state.status === "accepted";
   return `
     <section class="studio-view">
-      <div class="step-hero">
-        <div class="step-kicker">
-          <span>STEP ${String(definition.number).padStart(2, "0")}</span>
-          <i></i>
-          <span>${escapeHtml(phaseLabel(definition.phase))}</span>
-          <em class="requirement is-${definition.requirement}">${requirementLabel(definition.requirement)}</em>
+      <header class="stage-heading">
+        <div class="stage-heading-copy">
+          <div class="step-kicker">
+            <span>PHASE ${String(WORKFLOW_PHASES.findIndex((phase) => phase.id === definition.phase) + 1).padStart(2, "0")}</span>
+            <i></i>
+            <span>STEP ${String(definition.number).padStart(2, "0")}</span>
+            <em class="requirement is-${definition.requirement}">${requirementLabel(definition.requirement)}</em>
+          </div>
+          <h1>${escapeHtml(definition.name)}</h1>
+          <p>${escapeHtml(definition.goal)}</p>
         </div>
-        <h1>${escapeHtml(definition.name)}</h1>
-        <p>${escapeHtml(definition.goal)}</p>
-        <div class="step-meta">
+        <div class="stage-heading-actions">
           <span class="state-pill is-${state.status}">${accepted ? "已确认" : state.status === "draft" ? "有草稿" : "待开始"}</span>
-          <span>${state.turns.length} 条消息</span>
-          <span>${versions.length} 个版本</span>
-          <span>更新于 ${formatTime(state.updatedAt)}</span>
+          <details class="stage-guide">
+            <summary aria-label="查看本步骤说明">?</summary>
+            <div>
+              <small>创作航标</small>
+              <h2>${escapeHtml(definition.guide.title)}</h2>
+              <p>${escapeHtml(definition.guide.description)}</p>
+              <ol>${definition.guide.prompts.map((prompt) => `<li>${escapeHtml(prompt)}</li>`).join("")}</ol>
+              <button class="text-button" data-action="use-placeholder">使用示例作为输入</button>
+            </div>
+          </details>
         </div>
-      </div>
+      </header>
 
-      <details class="guide-card" ${state.turns.length ? "" : "open"}>
-        <summary>
-          <span class="guide-symbol">✦</span>
-          <span><small>本步骤创作引导</small><b>${escapeHtml(definition.guide.title)}</b></span>
-          <i>⌄</i>
-        </summary>
-        <div class="guide-body">
-          <p>${escapeHtml(definition.guide.description)}</p>
-          <ol>${definition.guide.prompts.map((prompt) => `<li>${escapeHtml(prompt)}</li>`).join("")}</ol>
-          <button class="text-button" data-action="use-placeholder">使用示例作为输入 →</button>
+      <section class="brief-panel">
+        <div class="brief-panel-heading">
+          <span>创作母题</span>
+          <small>贯穿全部 29 个阶段</small>
         </div>
-      </details>
-
-      <details class="project-context-card" ${project.brief ? "" : "open"}>
-        <summary>
-          <span><small>PROJECT CONTEXT</small><b>${escapeHtml(project.name)}</b></span>
-          <i>⌄</i>
-        </summary>
-        <div class="project-context-body">
-          <label>创作母题<textarea id="quick-brief" rows="3" placeholder="用一两句话说明你想做怎样的角色卡">${escapeHtml(project.brief)}</textarea></label>
-          <button class="secondary-button" data-action="save-brief">保存母题</button>
-        </div>
-      </details>
+        <textarea id="quick-brief" rows="3" aria-label="创作母题"
+          placeholder="描述世界、主控角色、核心体验、边界与参考作品">${escapeHtml(project.brief)}</textarea>
+        <button class="brief-save" data-action="save-brief">保存概览</button>
+      </section>
 
       <section class="conversation" aria-label="当前步骤会话">
         ${state.turns.length ? state.turns.map((turn) => `
@@ -227,14 +256,20 @@ function renderStudio(project = currentProject()): string {
             <pre>${escapeHtml(turn.content)}</pre>
           </article>`).join("") : `
           <div class="empty-conversation">
-            <span>✦</span>
-            <h2>从一个不完整的想法开始</h2>
-            <p>先写下你的方向，A.U.T.O 会按当前步骤继续追问或给出正式产物。</p>
+            <span class="empty-glyph">◎</span>
+            <small>STATION ${String(definition.number).padStart(2, "0")} · 创作航标</small>
+            <h2>${escapeHtml(definition.guide.title)}</h2>
+            <p>${escapeHtml(definition.guide.description)}</p>
+            <div class="empty-guide">
+              <b>可以从这些问题开始</b>
+              <ol>${definition.guide.prompts.map((prompt) => `<li>${escapeHtml(prompt)}</li>`).join("")}</ol>
+            </div>
           </div>`}
         ${generating ? `<article class="message is-assistant is-streaming"><header><span>A.U.T.O · 正在生成</span><button data-action="cancel-generation">停止</button></header><pre id="stream-draft">${escapeHtml(streamDraft || "正在连接模型…")}</pre></article>` : ""}
       </section>
 
       <section class="composer">
+        <label for="composer-input">本轮补充 · ${escapeHtml(definition.name)}</label>
         <textarea id="composer-input" rows="3" placeholder="${escapeHtml(definition.guide.placeholder)}" ${generating ? "disabled" : ""}></textarea>
         <div class="composer-footer">
           <div>
@@ -245,13 +280,21 @@ function renderStudio(project = currentProject()): string {
             <span>${modelSettings.mode === "stub" ? "离线演示生成" : "发送给模型"}</span><i>↑</i>
           </button>
         </div>
+        <div class="mobile-composer-actions">
+          <button data-action="view" data-view="artifacts"><span>◇</span>产物<em>${selected.length}</em></button>
+          <button data-action="prompt-preview"><span>▤</span>提示词</button>
+          ${generating
+            ? `<button class="is-danger" data-action="cancel-generation"><span>■</span>停止</button>`
+            : `<button class="is-primary" data-action="generate" ${busy ? "disabled" : ""}><span>✦</span>生成</button>`}
+          <button class="is-confirm ${accepted ? "is-accepted" : ""}" data-action="accept-step"
+            ${!selected.length || busy ? "disabled" : ""}><span>${accepted ? "✓" : "→"}</span>下一站</button>
+        </div>
+        ${hasAssistant && !selected.length ? `<small class="composer-warning">回复中尚未识别到正式产物，可继续对话或在产物检查器手动添加。</small>` : ""}
       </section>
-
-      <section class="step-actions">
+      <section class="step-actions desktop-step-actions">
         <button class="secondary-button" data-action="view" data-view="artifacts">查看本步产物 <span>${selected.length}</span></button>
         <button class="confirm-button ${accepted ? "is-confirmed" : ""}" data-action="accept-step"
           ${!selected.length || busy ? "disabled" : ""}>${accepted ? "✓ 已确认本步骤" : "确认本步骤产物"}</button>
-        ${hasAssistant && !selected.length ? `<small>AI 回复里尚未识别到正式产物，可继续对话或手动添加。</small>` : ""}
       </section>
     </section>`;
 }
@@ -477,6 +520,91 @@ function renderDelivery(project = currentProject()): string {
     </section>`;
 }
 
+function renderMobileProjectPanel(project = currentProject()): string {
+  if (!snapshot) return "";
+  return `
+    <section class="mobile-project-panel">
+      <header>
+        <small>PROJECT LIBRARY</small>
+        <h2>项目库</h2>
+        <p>项目、会话与产物均独立保存在本机。</p>
+      </header>
+      <div class="mobile-project-list">
+        ${snapshot.projects.map((item) => {
+          const accepted = WORKFLOW_STEPS.filter((step) => stepState(item, step.number).status === "accepted").length;
+          return `
+            <article class="${item.id === project.id ? "is-active" : ""}">
+              <button data-action="switch-project" data-id="${item.id}" ${item.id === project.id ? "disabled" : ""}>
+                <span>${escapeHtml(item.name.slice(0, 1).toUpperCase())}</span>
+                <b>${escapeHtml(item.name)}</b>
+                <small>${accepted}/29 · Step ${item.currentStep}</small>
+              </button>
+              <button class="danger-text" data-action="delete-project" data-id="${item.id}"
+                ${snapshot!.projects.length <= 1 ? "disabled" : ""} aria-label="删除 ${escapeHtml(item.name)}">×</button>
+            </article>`;
+        }).join("")}
+      </div>
+      <button class="mobile-new-project" data-action="create-project">＋ 新建项目</button>
+      <details class="mobile-project-editor">
+        <summary>编辑当前项目</summary>
+        <div>
+          <label>项目名称<input id="project-name" value="${escapeHtml(project.name)}"></label>
+          <label>角色卡名称<input id="character-name" value="${escapeHtml(project.output.characterName)}"></label>
+          <label>世界书名称<input id="worldbook-name" value="${escapeHtml(project.output.worldbookName)}"></label>
+          <label>创作母题<textarea id="project-brief" rows="4">${escapeHtml(project.brief)}</textarea></label>
+          <button class="primary-button" data-action="save-project">保存项目信息</button>
+        </div>
+      </details>
+      <footer>
+        <button data-action="export-project">导出备份</button>
+        <button data-action="import-project">导入项目</button>
+      </footer>
+    </section>`;
+}
+
+function renderMobileRail(project = currentProject()): string {
+  const accepted = WORKFLOW_STEPS.filter((step) => stepState(project, step.number).status === "accepted").length;
+  const projectMenuOpen = activeView === "projects";
+  return `
+    <aside class="step-rail mobile-step-rail ${mobileFlowOpen ? "is-expanded" : ""} ${projectMenuOpen ? "is-project-menu" : ""}">
+      <div class="mobile-rail-head">
+        <div><small>${projectMenuOpen ? "PROJECT" : "WORKFLOW"}</small><b>${projectMenuOpen ? "项目库" : "29 步创作路径"}</b></div>
+        <button class="mobile-rail-toggle" data-action="toggle-flow" aria-expanded="${mobileFlowOpen}" aria-label="${mobileFlowOpen ? "收起流程" : "展开流程"}">
+          <span>${mobileFlowOpen ? "‹" : "☷"}</span><em>${project.currentStep}</em>
+        </button>
+      </div>
+      ${projectMenuOpen ? renderMobileProjectPanel(project) : `
+        <section class="rail-project">
+          <label>当前项目</label>
+          <button data-action="view" data-view="projects">
+            <span>▰</span><b>${escapeHtml(project.name)}</b><i>›</i>
+          </button>
+          <div><small>${accepted} / 29</small><small>${Math.round(accepted / 29 * 100)}%</small></div>
+          <progress max="29" value="${accepted}">${accepted}/29</progress>
+        </section>
+        <nav class="phase-rail">${renderStepRail(project, true)}</nav>
+        <button class="rail-new-project" data-action="create-project">＋ 新建项目</button>`}
+    </aside>`;
+}
+
+function renderMobileInspector(project = currentProject()): string {
+  const view = activeView === "settings" || activeView === "delivery" ? activeView : "artifacts";
+  const contents = view === "settings"
+    ? renderSettings(project)
+    : view === "delivery"
+      ? renderDelivery(project)
+      : renderArtifacts(project);
+  return `
+    <aside class="mobile-inspector" aria-label="项目检查器">
+      <nav class="inspector-tabs" aria-label="检查器标签">
+        <button class="${view === "artifacts" ? "is-active" : ""}" data-action="view" data-view="artifacts">产物</button>
+        <button class="${view === "settings" ? "is-active" : ""}" data-action="view" data-view="settings">设置</button>
+        <button class="${view === "delivery" ? "is-active" : ""}" data-action="view" data-view="delivery">发布</button>
+      </nav>
+      <div class="inspector-body">${contents}</div>
+    </aside>`;
+}
+
 function viewContent(): string {
   if (activeView === "artifacts") return renderArtifacts();
   if (activeView === "projects") return renderProjects();
@@ -488,31 +616,32 @@ function viewContent(): string {
 function render(): void {
   if (!snapshot) return;
   const project = currentProject();
+  const mobile = mobileLayoutQuery.matches;
+  const inspectorOpen = activeView === "artifacts" || activeView === "settings" || activeView === "delivery";
+  if (!mobile) mobileFlowOpen = false;
   app.innerHTML = `
-    <div class="app-shell">
+    <div class="app-shell ${mobileFlowOpen ? "is-mobile-flow-open" : ""} ${inspectorOpen ? "is-mobile-inspector-open" : ""}">
       ${renderTopbar(project)}
       ${renderNotice()}
-      <div class="workspace">
-        <aside class="step-rail">
-          <div class="rail-heading"><small>WORKFLOW</small><b>29 步创作路径</b></div>
-          <nav>${renderStepRail(project)}</nav>
-        </aside>
-        <main class="content-area">${viewContent()}</main>
-      </div>
-      <nav class="mobile-nav">
-        ${[
-          ["studio", "✦", "创作"],
-          ["artifacts", "◇", "产物"],
-          ["projects", "▦", "项目"],
-          ["settings", "⚙", "设置"],
-          ["delivery", "↗", "导出"],
-        ].map(([view, icon, label]) => `<button class="${activeView === view ? "is-active" : ""}" data-action="view" data-view="${view}"><span>${icon}</span><small>${label}</small></button>`).join("")}
-      </nav>
+      ${mobile ? `
+        <div class="workspace mobile-workspace">
+          ${renderMobileRail(project)}
+          <main class="content-area">${renderStudio(project)}</main>
+          ${inspectorOpen ? renderMobileInspector(project) : ""}
+          ${(mobileFlowOpen || inspectorOpen) ? `<button class="mobile-scrim" data-action="close-mobile-panel" aria-label="关闭面板"></button>` : ""}
+        </div>` : `
+        <div class="workspace">
+          <aside class="step-rail">
+            <div class="rail-heading"><small>WORKFLOW</small><b>29 步创作路径</b></div>
+            <nav>${renderStepRail(project)}</nav>
+          </aside>
+          <main class="content-area">${viewContent()}</main>
+        </div>`}
     </div>`;
-  // 重绘后把当前步骤带回可视区域，移动端不会总是跳回 Step 1。
+  // 重绘后把当前步骤带回可视区域，纵向流程轨道不会跳回 Step 1。
   requestAnimationFrame(() => {
     document.querySelector<HTMLElement>(".step-link.is-active")
-      ?.scrollIntoView({ block: "nearest", inline: "center" });
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
 }
 
@@ -660,6 +789,31 @@ app.addEventListener("click", (event) => {
 
   if (action === "view") {
     activeView = button.dataset.view as ViewName;
+    mobileFlowOpen = activeView === "projects";
+    render();
+    return;
+  }
+  if (action === "toggle-flow") {
+    if (mobileFlowOpen) {
+      mobileFlowOpen = false;
+      if (activeView === "projects") activeView = "studio";
+    } else {
+      activeView = "studio";
+      mobileFlowOpen = true;
+    }
+    render();
+    return;
+  }
+  if (action === "toggle-inspector") {
+    const inspectorOpen = activeView === "artifacts" || activeView === "settings" || activeView === "delivery";
+    activeView = inspectorOpen ? "studio" : "artifacts";
+    mobileFlowOpen = false;
+    render();
+    return;
+  }
+  if (action === "close-mobile-panel") {
+    activeView = "studio";
+    mobileFlowOpen = false;
     render();
     return;
   }
@@ -671,6 +825,7 @@ app.addEventListener("click", (event) => {
   if (action === "step") {
     const step = Number(button.dataset.step);
     activeView = "studio";
+    mobileFlowOpen = false;
     void runAction(() => kernel.navigateStep(step), `已切换到 Step ${step}。`);
     return;
   }
@@ -929,6 +1084,7 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap();
+mobileLayoutQuery.addEventListener("change", () => render());
 
 // 浏览器预览没有文件系统密钥仓；保留类型引用可帮助打包阶段发现错误适配器。
 void (filePort instanceof BrowserProjectFilePort);
