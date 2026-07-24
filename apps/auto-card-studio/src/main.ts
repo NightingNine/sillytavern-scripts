@@ -296,7 +296,12 @@ function renderStudio(project = currentProject()): string {
           </button>
         </div>
         <div class="mobile-composer-actions">
-          <button data-action="view" data-view="artifacts"><span>◇</span>产物<em>${selected.length}</em></button>
+          <button class="context-range-toggle ${project.context.includeFutureArtifacts ? "is-active" : ""}"
+            data-action="toggle-future-artifacts" aria-pressed="${project.context.includeFutureArtifacts}"
+            aria-label="${project.context.includeFutureArtifacts ? "已包含后序产物" : "未包含后序产物"}"
+            title="${project.context.includeFutureArtifacts ? "当前会发送本步骤之后的产物；点击关闭" : "当前不发送本步骤之后的产物；点击开启"}">
+            <span>⇥</span>后序
+          </button>
           <button data-action="prompt-preview"><span>▤</span>提示词</button>
           ${generating
             ? `<button class="is-danger" data-action="cancel-generation"><span>■</span>停止</button>`
@@ -914,6 +919,14 @@ app.addEventListener("click", (event) => {
   if (action === "artifact-scope") {
     artifactScope = button.dataset.scope as ArtifactScope;
     render();
+    return;
+  }
+  if (action === "toggle-future-artifacts") {
+    const includeFutureArtifacts = !currentProject().context.includeFutureArtifacts;
+    void runAction(
+      () => kernel.updateContext({ includeFutureArtifacts }),
+      includeFutureArtifacts ? "已包含后序产物。" : "已排除后序产物。",
+    );
     return;
   }
   if (action === "toggle-overview") {
