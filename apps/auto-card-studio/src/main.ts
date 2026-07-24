@@ -79,6 +79,7 @@ let deliveryKeys = new Set<string>();
 let lastDeliveryProjectId = "";
 let deliverySelectionCustomized = false;
 let mobileFlowOpen = false;
+let overviewCollapsed = true;
 const mobileLayoutQuery = window.matchMedia("(max-width: 760px)");
 
 function escapeHtml(value: unknown): string {
@@ -203,17 +204,16 @@ function renderStudio(project = currentProject()): string {
   const selected = selectedArtifacts(project, project.currentStep);
   const hasAssistant = state.turns.some((turn) => turn.role === "assistant");
   const accepted = state.status === "accepted";
+  const compactOverview = mobileLayoutQuery.matches && overviewCollapsed;
   return `
-    <section class="studio-view">
+    <section class="studio-view ${compactOverview ? "is-overview-collapsed" : ""}">
       <header class="stage-heading">
         <div class="stage-heading-copy">
-          <div class="step-kicker">
-            <span>PHASE ${String(WORKFLOW_PHASES.findIndex((phase) => phase.id === definition.phase) + 1).padStart(2, "0")}</span>
-            <i></i>
-            <span>STEP ${String(definition.number).padStart(2, "0")}</span>
+          <div class="stage-title-line">
+            <p class="step-kicker">PHASE ${String(definition.number).padStart(2, "0")} / 29</p>
+            <h1>${escapeHtml(definition.name)}</h1>
             <em class="requirement is-${definition.requirement}">${requirementLabel(definition.requirement)}</em>
           </div>
-          <h1>${escapeHtml(definition.name)}</h1>
           <p>${escapeHtml(definition.goal)}</p>
         </div>
         <div class="stage-heading-actions">
@@ -228,10 +228,15 @@ function renderStudio(project = currentProject()): string {
               <button class="text-button" data-action="use-placeholder">使用示例作为输入</button>
             </div>
           </details>
+          <button class="stage-icon-button" data-action="clear-conversation" aria-label="清空本步对话"
+            title="清空本步对话" ${state.turns.length ? "" : "disabled"}>■</button>
+          <button class="stage-icon-button overview-toggle" data-action="toggle-overview"
+            aria-expanded="${!compactOverview}" aria-controls="creative-brief" aria-label="${compactOverview ? "展开创作概览" : "收起创作概览"}"
+            title="${compactOverview ? "展开创作概览" : "收起创作概览"}">${compactOverview ? "⌄" : "⌃"}</button>
         </div>
       </header>
 
-      <section class="brief-panel">
+      <section class="brief-panel" id="creative-brief">
         <div class="brief-panel-heading">
           <span>创作母题</span>
           <small>贯穿全部 29 个阶段</small>
@@ -820,6 +825,16 @@ app.addEventListener("click", (event) => {
   if (action === "dismiss-notice") {
     notice = null;
     render();
+    return;
+  }
+  if (action === "toggle-overview") {
+    overviewCollapsed = !overviewCollapsed;
+    const studio = button.closest<HTMLElement>(".studio-view");
+    studio?.classList.toggle("is-overview-collapsed", overviewCollapsed);
+    button.setAttribute("aria-expanded", String(!overviewCollapsed));
+    button.setAttribute("aria-label", overviewCollapsed ? "展开创作概览" : "收起创作概览");
+    button.setAttribute("title", overviewCollapsed ? "展开创作概览" : "收起创作概览");
+    button.textContent = overviewCollapsed ? "⌄" : "⌃";
     return;
   }
   if (action === "step") {
