@@ -24,6 +24,7 @@ import {
   defaultDeliveryKeys,
 } from "./delivery.ts";
 import { DisclosureState } from "./disclosure.ts";
+import { AutoDismissTimer } from "./notice-timer.ts";
 import { ModelGatewayRouter, OpenAICompatibleGateway } from "./model.ts";
 import {
   AUTO_WORKFLOW_PROFILE,
@@ -83,12 +84,18 @@ let deliveryKeys = new Set<string>();
 let lastDeliveryProjectId = "";
 let deliverySelectionCustomized = false;
 let mobileFlowOpen = false;
+let mobileInspectorEntering = false;
 let overviewCollapsed = true;
 let artifactScope: ArtifactScope = "all";
 let artifactSearch = "";
 const phaseDisclosure = new DisclosureState(WORKFLOW_PHASES.map((phase) => phase.id));
 const settingsDisclosure = new DisclosureState(["model"]);
 const mobileLayoutQuery = window.matchMedia("(max-width: 760px)");
+const noticeAutoDismiss = new AutoDismissTimer(1000, () => {
+  if (!notice) return;
+  notice = null;
+  render();
+});
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -115,6 +122,7 @@ function formatTime(value: string | null | undefined): string {
 
 function setNotice(message: string, tone: typeof notice extends infer _T ? "info" | "success" | "warning" | "error" : never = "info"): void {
   notice = { tone, message };
+  noticeAutoDismiss.restart();
 }
 
 function currentProject() {
@@ -693,7 +701,7 @@ function renderMobileRail(project = currentProject()): string {
     </aside>`;
 }
 
-function renderMobileInspector(project = currentProject()): string {
+function renderMobileInspector(project = currentProject(), entering = false): string {
   const view = activeView === "settings" || activeView === "delivery" ? activeView : "artifacts";
   const contents = view === "settings"
     ? renderSettings(project)
@@ -701,7 +709,7 @@ function renderMobileInspector(project = currentProject()): string {
       ? renderDelivery(project)
       : renderArtifacts(project);
   return `
-    <aside class="mobile-inspector" aria-label="项目检查器">
+    <aside class="mobile-inspector ${entering ? "is-entering" : ""}" aria-label="项目检查器">
       <nav class="inspector-tabs" aria-label="检查器标签">
         <button class="${view === "artifacts" ? "is-active" : ""}" data-action="view" data-view="artifacts">产物</button>
         <button class="${view === "settings" ? "is-active" : ""}" data-action="view" data-view="settings">设置</button>
@@ -724,7 +732,10 @@ function render(): void {
   const project = currentProject();
   const mobile = mobileLayoutQuery.matches;
   const inspectorOpen = activeView === "artifacts" || activeView === "settings" || activeView === "delivery";
-  if (!mobile) mobileFlowOpen = false;
+  if (!mobile) {
+    mobileFlowOpen = false;
+    mobileInspectorEntering = false;
+  }
   app.innerHTML = `
     <div class="app-shell ${mobileFlowOpen ? "is-mobile-flow-open" : ""} ${inspectorOpen ? "is-mobile-inspector-open" : ""}">
       ${renderTopbar(project)}
@@ -733,7 +744,7 @@ function render(): void {
         <div class="workspace mobile-workspace">
           ${renderMobileRail(project)}
           <main class="content-area">${renderStudio(project)}</main>
-          ${inspectorOpen ? renderMobileInspector(project) : ""}
+          ${inspectorOpen ? renderMobileInspector(project, mobileInspectorEntering) : ""}
           ${(mobileFlowOpen || inspectorOpen) ? `<button class="mobile-scrim" data-action="close-mobile-panel" aria-label="关闭面板"></button>` : ""}
         </div>` : `
         <div class="workspace">
@@ -744,6 +755,7 @@ function render(): void {
           <main class="content-area">${viewContent()}</main>
         </div>`}
     </div>`;
+  mobileInspectorEntering = false;
   // 重绘后把当前步骤带回可视区域，纵向流程轨道不会跳回 Step 1。
   requestAnimationFrame(() => {
     document.querySelector<HTMLElement>(".step-link.is-active")
@@ -914,7 +926,11 @@ app.addEventListener("click", (event) => {
   const action = button.dataset.action;
 
   if (action === "view") {
-    activeView = button.dataset.view as ViewName;
+    const nextView = button.dataset.view as ViewName;
+    const inspectorWasOpen = activeView === "artifacts" || activeView === "settings" || activeView === "delivery";
+    const inspectorWillOpen = nextView === "artifacts" || nextView === "settings" || nextView === "delivery";
+    mobileInspectorEntering = mobileLayoutQuery.matches && !inspectorWasOpen && inspectorWillOpen;
+    activeView = nextView;
     mobileFlowOpen = activeView === "projects";
     render();
     return;
@@ -942,6 +958,7 @@ app.addEventListener("click", (event) => {
   }
   if (action === "toggle-inspector") {
     const inspectorOpen = activeView === "artifacts" || activeView === "settings" || activeView === "delivery";
+    mobileInspectorEntering = !inspectorOpen;
     activeView = inspectorOpen ? "studio" : "artifacts";
     mobileFlowOpen = false;
     render();
@@ -950,10 +967,12 @@ app.addEventListener("click", (event) => {
   if (action === "close-mobile-panel") {
     activeView = "studio";
     mobileFlowOpen = false;
+    mobileInspectorEntering = false;
     render();
     return;
   }
   if (action === "dismiss-notice") {
+    noticeAutoDismiss.cancel();
     notice = null;
     render();
     return;

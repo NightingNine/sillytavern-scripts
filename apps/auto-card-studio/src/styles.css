@@ -66,6 +66,12 @@ button {
   border: 0;
 }
 
+button,
+summary,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
@@ -3089,6 +3095,9 @@ textarea::placeholder {
     border-left: 1px solid rgba(214, 120, 88, 0.24);
     background: #292722;
     box-shadow: -18px 0 50px rgba(0, 0, 0, 0.4);
+  }
+
+  .mobile-inspector.is-entering {
     animation: inspector-in 0.2s ease both;
   }
 
