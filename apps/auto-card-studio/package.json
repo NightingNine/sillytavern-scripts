@@ -18,6 +18,8 @@
     "profile:generate": "node scripts/extract-step-one-profile.mjs \"E:/SillyTavern/SillyTavern/data/default-user/OpenAI Settings/A.U.T.O.预设_v2.0.json\""
   },
   "dependencies": {
+    "@fortawesome/free-regular-svg-icons": "6.7.2",
+    "@fortawesome/free-solid-svg-icons": "6.7.2",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-dialog": "2.7.2",
     "@tauri-apps/plugin-fs": "2.5.1",

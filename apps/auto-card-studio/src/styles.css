@@ -28,6 +28,15 @@
   box-sizing: border-box;
 }
 
+.ui-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  overflow: visible;
+  vertical-align: -0.125em;
+}
+
 html,
 body,
 #app {
@@ -608,6 +617,33 @@ textarea::placeholder {
 .empty-panel > span {
   color: var(--terracotta);
   font: 400 28px/1 var(--display);
+}
+
+.empty-conversation > .empty-glyph {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.empty-conversation > .empty-glyph > i {
+  position: absolute;
+  inset: 8px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.empty-conversation > .empty-glyph > b {
+  position: absolute;
+  top: -3px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--void);
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .empty-conversation h2,
@@ -1924,6 +1960,11 @@ textarea::placeholder {
     place-items: center;
   }
 
+  .icon-button.mobile-only .ui-icon {
+    width: 11px;
+    height: 11px;
+  }
+
   .icon-button.mobile-only.is-active {
     border-color: rgba(214, 120, 88, 0.52);
     background: var(--terracotta-soft);
@@ -2018,6 +2059,11 @@ textarea::placeholder {
 
   .mobile-rail-toggle > span {
     font-size: 14px;
+  }
+
+  .mobile-step-rail.is-expanded .mobile-rail-toggle .ui-icon {
+    width: 10px;
+    height: 10px;
   }
 
   .mobile-rail-toggle em {
@@ -2259,6 +2305,11 @@ textarea::placeholder {
   .rail-project-control > span {
     color: var(--terracotta);
     text-align: center;
+  }
+
+  .rail-project-control .ui-icon {
+    width: 11px;
+    height: 11px;
   }
 
   .rail-project-progress {
@@ -2774,7 +2825,8 @@ textarea::placeholder {
   }
 
   .empty-conversation .empty-glyph {
-    font: 200 44px/1 Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    width: 40px;
+    height: 40px;
     opacity: 0.7;
   }
 

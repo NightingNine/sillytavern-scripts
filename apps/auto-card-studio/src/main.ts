@@ -41,6 +41,7 @@ import {
   artifactDisplayName,
   stepDefinition,
 } from "./workflow-config.ts";
+import { renderIcon, studioIcons } from "./icons.ts";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type ViewName = "studio" | "artifacts" | "projects" | "settings" | "delivery";
@@ -122,18 +123,21 @@ function requirementLabel(value: string): string {
   return value === "required" ? "必做" : value === "advanced" ? "复杂卡" : "建议";
 }
 
+const PHASE_ICONS: Record<string, (typeof studioIcons)[keyof typeof studioIcons]> = {
+  concept: studioIcons.compass,
+  entity: studioIcons.cubesStacked,
+  "state-machine": studioIcons.diagramProject,
+  writing: studioIcons.penNib,
+  variables: studioIcons.sliders,
+  summary: studioIcons.layerGroup,
+  output: studioIcons.display,
+  autotask: studioIcons.gears,
+  delivery: studioIcons.rocket,
+};
+
 function phaseIcon(id: string): string {
-  return ({
-    concept: "◎",
-    entity: "◆",
-    "state-machine": "⌘",
-    writing: "✎",
-    variables: "≋",
-    summary: "≡",
-    output: "▣",
-    autotask: "⚙",
-    delivery: "↗",
-  } as Record<string, string>)[id] ?? "◇";
+  const definition = PHASE_ICONS[id] ?? studioIcons.compass;
+  return renderIcon(definition);
 }
 
 function renderStepButtons(steps: typeof WORKFLOW_STEPS, project = currentProject()): string {
@@ -181,21 +185,21 @@ function renderTopbar(project = currentProject()): string {
       <button class="project-chip" data-action="view" data-view="projects">
         <span class="status-dot"></span>
         <span class="project-chip-copy"><small>当前项目</small><b>${escapeHtml(project.name)}</b></span>
-        <span class="chevron">⌄</span>
+        <span class="chevron">${renderIcon(studioIcons.chevronDown)}</span>
       </button>
       <div class="top-progress" title="已确认步骤">
         <span style="--progress:${accepted / 29}"></span>
         <b>${accepted}</b><small>/29</small>
       </div>
       <nav class="topbar-actions" aria-label="创作台工具">
-        <button class="icon-button mobile-only tour-button" data-action="open-guide" aria-label="打开新手引导" title="打开新手引导">◉</button>
-        <button class="icon-button mobile-only" data-action="check-update" aria-label="检查更新" title="检查更新">↻</button>
-        <button class="icon-button mobile-only" data-action="export-project" aria-label="导出项目" title="导出项目">▰</button>
-        <button class="icon-button mobile-only" data-action="import-project" aria-label="导入项目" title="导入项目">⇥</button>
+        <button class="icon-button mobile-only tour-button" data-action="open-guide" aria-label="打开新手引导" title="打开新手引导">${renderIcon(studioIcons.compass)}</button>
+        <button class="icon-button mobile-only" data-action="check-update" aria-label="检查更新" title="检查更新">${renderIcon(studioIcons.rotate)}</button>
+        <button class="icon-button mobile-only" data-action="export-project" aria-label="导出项目" title="导出项目">${renderIcon(studioIcons.boxArchive)}</button>
+        <button class="icon-button mobile-only" data-action="import-project" aria-label="导入项目" title="导入项目">${renderIcon(studioIcons.fileImport)}</button>
         <button class="icon-button mobile-only ${inspectorOpen ? "is-active" : ""}" data-action="toggle-inspector"
-          aria-label="打开项目检查器" aria-expanded="${inspectorOpen}" title="项目检查器">▥</button>
-        <button class="icon-button mobile-only" data-action="close-app" aria-label="关闭创作台" title="关闭创作台">×</button>
-        <button class="icon-button desktop-only" data-action="view" data-view="settings" aria-label="设置">⚙</button>
+          aria-label="打开项目检查器" aria-expanded="${inspectorOpen}" title="项目检查器">${renderIcon(studioIcons.tableColumns)}</button>
+        <button class="icon-button mobile-only" data-action="close-app" aria-label="关闭创作台" title="关闭创作台">${renderIcon(studioIcons.xmark)}</button>
+        <button class="icon-button desktop-only" data-action="view" data-view="settings" aria-label="设置">${renderIcon(studioIcons.gears)}</button>
       </nav>
     </header>`;
 }
@@ -204,7 +208,7 @@ function renderNotice(): string {
   if (!notice) return "";
   return `<div class="notice is-${notice.tone}" role="status">
     <span>${escapeHtml(notice.message)}</span>
-    <button data-action="dismiss-notice" aria-label="关闭">×</button>
+    <button data-action="dismiss-notice" aria-label="关闭">${renderIcon(studioIcons.xmark)}</button>
   </div>`;
 }
 
@@ -229,7 +233,7 @@ function renderStudio(project = currentProject()): string {
         <div class="stage-heading-actions">
           <span class="state-pill is-${state.status}">${accepted ? "已确认" : state.status === "draft" ? "有草稿" : "待开始"}</span>
           <details class="stage-guide">
-            <summary aria-label="查看本步骤说明">?</summary>
+            <summary aria-label="查看本步骤说明">${renderIcon(studioIcons.circleInfo)}</summary>
             <div>
               <small>创作航标</small>
               <h2>${escapeHtml(definition.guide.title)}</h2>
@@ -239,10 +243,10 @@ function renderStudio(project = currentProject()): string {
             </div>
           </details>
           <button class="stage-icon-button" data-action="clear-conversation" aria-label="清空本步对话"
-            title="清空本步对话" ${state.turns.length ? "" : "disabled"}>■</button>
+            title="清空本步对话" ${state.turns.length ? "" : "disabled"}>${renderIcon(studioIcons.regularTrashCan)}</button>
           <button class="stage-icon-button overview-toggle" data-action="toggle-overview"
             aria-expanded="${!compactOverview}" aria-controls="creative-brief" aria-label="${compactOverview ? "展开创作概览" : "收起创作概览"}"
-            title="${compactOverview ? "展开创作概览" : "收起创作概览"}">${compactOverview ? "⌄" : "⌃"}</button>
+            title="${compactOverview ? "展开创作概览" : "收起创作概览"}">${renderIcon(compactOverview ? studioIcons.chevronDown : studioIcons.chevronUp)}</button>
         </div>
       </header>
 
@@ -271,7 +275,7 @@ function renderStudio(project = currentProject()): string {
             <pre>${escapeHtml(turn.content)}</pre>
           </article>`).join("") : `
           <div class="empty-conversation">
-            <span class="empty-glyph">◎</span>
+            <span class="empty-glyph" aria-hidden="true"><i></i><b></b></span>
             <small>STATION ${String(definition.number).padStart(2, "0")} · 创作航标</small>
             <h2>${escapeHtml(definition.guide.title)}</h2>
             <p>${escapeHtml(definition.guide.description)}</p>
@@ -292,7 +296,7 @@ function renderStudio(project = currentProject()): string {
             <button class="text-button" data-action="clear-conversation" ${state.turns.length ? "" : "disabled"}>清空本步对话</button>
           </div>
           <button class="primary-button send-button" data-action="generate" ${generating || busy ? "disabled" : ""}>
-            <span>${modelSettings.mode === "stub" ? "离线演示生成" : "发送给模型"}</span><i>↑</i>
+            <span>${modelSettings.mode === "stub" ? "离线演示生成" : "发送给模型"}</span><i>${renderIcon(studioIcons.arrowUp)}</i>
           </button>
         </div>
         <div class="mobile-composer-actions">
@@ -300,21 +304,21 @@ function renderStudio(project = currentProject()): string {
             data-action="toggle-future-artifacts" aria-pressed="${project.context.includeFutureArtifacts}"
             aria-label="${project.context.includeFutureArtifacts ? "已包含后序产物" : "未包含后序产物"}"
             title="${project.context.includeFutureArtifacts ? "当前会发送本步骤之后的产物；点击关闭" : "当前不发送本步骤之后的产物；点击开启"}">
-            <span>⇥</span>后序
+            <span>${renderIcon(studioIcons.forwardStep)}</span>后序
           </button>
-          <button data-action="prompt-preview"><span>▤</span>提示词</button>
+          <button data-action="prompt-preview"><span>${renderIcon(studioIcons.listCheck)}</span>提示词</button>
           ${generating
-            ? `<button class="is-danger" data-action="cancel-generation"><span>■</span>停止</button>`
-            : `<button class="is-primary" data-action="generate" ${busy ? "disabled" : ""}><span>✦</span>生成</button>`}
+            ? `<button class="is-danger" data-action="cancel-generation"><span>${renderIcon(studioIcons.stop)}</span>停止</button>`
+            : `<button class="is-primary" data-action="generate" ${busy ? "disabled" : ""}><span>${renderIcon(studioIcons.wandMagicSparkles)}</span>生成</button>`}
           <button class="is-confirm ${accepted ? "is-accepted" : ""}" data-action="accept-step"
-            ${!selected.length || busy ? "disabled" : ""}><span>${accepted ? "✓" : "→"}</span>下一站</button>
+            ${!selected.length || busy ? "disabled" : ""}><span>${renderIcon(accepted ? studioIcons.check : studioIcons.arrowRight)}</span>下一站</button>
         </div>
         ${hasAssistant && !selected.length ? `<small class="composer-warning">回复中尚未识别到正式产物，可继续对话或在产物检查器手动添加。</small>` : ""}
       </section>
       <section class="step-actions desktop-step-actions">
         <button class="secondary-button" data-action="view" data-view="artifacts">查看本步产物 <span>${selected.length}</span></button>
         <button class="confirm-button ${accepted ? "is-confirmed" : ""}" data-action="accept-step"
-          ${!selected.length || busy ? "disabled" : ""}>${accepted ? "✓ 已确认本步骤" : "确认本步骤产物"}</button>
+          ${!selected.length || busy ? "disabled" : ""}>${accepted ? `${renderIcon(studioIcons.check)} 已确认本步骤` : "确认本步骤产物"}</button>
       </section>
     </section>`;
 }
@@ -385,7 +389,7 @@ function renderArtifacts(project = currentProject()): string {
           ${scopeOptions.map(([value, label]) => `<button class="${artifactScope === value ? "is-active" : ""}"
             data-action="artifact-scope" data-scope="${value}" aria-pressed="${artifactScope === value}">${label}</button>`).join("")}
         </div>
-        <label class="artifact-search"><span>⌕</span><input id="artifact-search" value="${escapeHtml(artifactSearch)}"
+        <label class="artifact-search"><span>${renderIcon(studioIcons.magnifyingGlass)}</span><input id="artifact-search" value="${escapeHtml(artifactSearch)}"
           placeholder="搜索产物名称或步骤" aria-label="搜索产物名称或步骤"></label>
       </section>
       <div class="vault-summary">
@@ -394,7 +398,7 @@ function renderArtifacts(project = currentProject()): string {
         <span><b>${selectedArtifacts(project).filter((item) => item.accepted).length}</b><small>已确认</small></span>
       </div>
       <details class="manual-artifact">
-        <summary>＋ 手动添加当前步骤产物</summary>
+        <summary>${renderIcon(studioIcons.plus)} 手动添加当前步骤产物</summary>
         <div>
           <label>产物身份<input id="manual-identity" placeholder="例如 WORLD_example"></label>
           <label>产物正文<textarea id="manual-content" rows="6" placeholder="粘贴完整 XML 或代码内容"></textarea></label>
@@ -428,7 +432,7 @@ function renderArtifacts(project = currentProject()): string {
             </article>`;
         }).join("") : `
           <div class="mobile-artifact-empty">${groups.length ? "当前筛选范围内没有产物。" : "生成阶段草案后，A.U.T.O 规定的最终产物会在这里出现。"}</div>
-          <div class="empty-panel desktop-only"><span>◇</span><h2>${groups.length ? "没有匹配产物" : "产物库还是空的"}</h2>
+          <div class="empty-panel desktop-only"><span>${renderIcon(studioIcons.boxArchive)}</span><h2>${groups.length ? "没有匹配产物" : "产物库还是空的"}</h2>
             <p>${groups.length ? "调整筛选条件或搜索词后再试。" : "完成生成后，符合当前步骤规则的 XML 与代码围栏会自动成为新版本。"}</p></div>`}
       </div>
       ${currentOnly.length ? "" : `<p class="subtle-note">当前 Step ${project.currentStep} 还没有产物。</p>`}
@@ -441,7 +445,7 @@ function renderProjects(project = currentProject()): string {
     <section class="panel-view projects-view">
       <div class="panel-heading">
         <div><small>PROJECT LIBRARY</small><h1>项目库</h1><p>每个项目拥有独立的 29 步会话、产物版本与导出设置。</p></div>
-        <button class="primary-button" data-action="create-project">＋ 新建项目</button>
+        <button class="primary-button" data-action="create-project">${renderIcon(studioIcons.plus)} 新建项目</button>
       </div>
       <div class="project-grid">
         ${snapshot.projects.map((item) => {
@@ -582,8 +586,8 @@ function renderDelivery(project = currentProject()): string {
         <p>从项目产物中选择要交付的条目，生成可直接导入的角色卡与世界书。</p>
         <label>角色卡名称<input id="delivery-character-name" value="${escapeHtml(project.output.characterName)}" placeholder="例如：雾港来客"></label>
         <label>世界书名称<input id="delivery-worldbook-name" value="${escapeHtml(project.output.worldbookName)}" placeholder="自动跟随项目名称"></label>
-        <button class="handoff-primary" data-action="publish-card">✒ 创建角色卡与世界书</button>
-        <button class="handoff-secondary" data-action="export-project">▣ 下载创作档案</button>
+        <button class="handoff-primary" data-action="publish-card">${renderIcon(studioIcons.featherPointed)} 创建角色卡与世界书</button>
+        <button class="handoff-secondary" data-action="export-project">${renderIcon(studioIcons.fileArrowDown)} 下载创作档案</button>
         <p class="handoff-note">默认使用全部已确认产物；下方仍可调整交付范围。</p>
       </section>
       <div class="delivery-toolbar">
@@ -595,14 +599,14 @@ function renderDelivery(project = currentProject()): string {
         ${items.length ? items.map((item) => `
           <label class="delivery-item ${item.artifact.accepted ? "" : "is-draft"}">
             <input type="checkbox" data-action="delivery-toggle" data-key="${escapeHtml(item.key)}" ${deliveryKeys.has(item.key) ? "checked" : ""}>
-            <span class="delivery-check">✓</span>
+            <span class="delivery-check">${renderIcon(studioIcons.check)}</span>
             <span><b>${escapeHtml(artifactDisplayName(item.artifact.identity, item.artifact.step))}</b><small>Step ${item.artifact.step} · 写入 ${escapeHtml(item.target.name)}</small></span>
             <em>${item.artifact.accepted ? "已确认" : "草稿"}</em>
-          </label>`).join("") : `<div class="empty-panel"><span>◇</span><h2>还没有可交付产物</h2><p>完成任一步生成并确认产物后，它们会出现在这里。</p></div>`}
+          </label>`).join("") : `<div class="empty-panel"><span>${renderIcon(studioIcons.boxArchive)}</span><h2>还没有可交付产物</h2><p>完成任一步生成并确认产物后，它们会出现在这里。</p></div>`}
       </div>
       <section class="delivery-summary">
         <div><small>EXPORT FORMAT</small><b>SillyTavern Character Card V3 · JSON</b><p>API Key、密钥仓口令、模型端点和完整预设正文不会进入成品。</p></div>
-        <button class="primary-button export-button" data-action="export-card" ${selectedCount ? "" : "disabled"}>导出角色卡 JSON <span>↗</span></button>
+        <button class="primary-button export-button" data-action="export-card" ${selectedCount ? "" : "disabled"}>导出角色卡 JSON <span>${renderIcon(studioIcons.fileArrowDown)}</span></button>
       </section>
     </section>`;
 }
@@ -626,11 +630,11 @@ function renderMobileProjectPanel(project = currentProject()): string {
                 <small>${accepted}/29 · Step ${item.currentStep}</small>
               </button>
               <button class="danger-text" data-action="delete-project" data-id="${item.id}"
-                ${snapshot!.projects.length <= 1 ? "disabled" : ""} aria-label="删除 ${escapeHtml(item.name)}">×</button>
+                ${snapshot!.projects.length <= 1 ? "disabled" : ""} aria-label="删除 ${escapeHtml(item.name)}">${renderIcon(studioIcons.trashCan)}</button>
             </article>`;
         }).join("")}
       </div>
-      <button class="mobile-new-project" data-action="create-project">＋ 新建项目</button>
+      <button class="mobile-new-project" data-action="create-project">${renderIcon(studioIcons.plus)} 新建项目</button>
     </section>`;
 }
 
@@ -642,22 +646,22 @@ function renderMobileRail(project = currentProject()): string {
       <div class="mobile-rail-head">
         <div><small>STATION MAP</small><b>创作流程 · 29 站</b></div>
         <button class="mobile-rail-toggle" data-action="toggle-flow" aria-expanded="${mobileFlowOpen}" aria-label="${mobileFlowOpen ? "收起流程" : "展开流程"}">
-          <span>${mobileFlowOpen ? "‹" : "☷"}</span><em>${project.currentStep}</em>
+          <span>${renderIcon(mobileFlowOpen ? studioIcons.chevronLeft : studioIcons.listCheck)}</span><em>${project.currentStep}</em>
         </button>
       </div>
       <section class="rail-project">
         <label for="rail-project-name">当前项目</label>
         <div class="rail-project-control">
-          <button data-action="toggle-project-library" aria-label="${projectMenuOpen ? "收起项目库" : "打开项目库"}"><span>${projectMenuOpen ? "▣" : "▰"}</span></button>
+          <button data-action="toggle-project-library" aria-label="${projectMenuOpen ? "收起项目库" : "打开项目库"}"><span>${renderIcon(studioIcons.folder)}</span></button>
           <input id="rail-project-name" value="${escapeHtml(project.name)}" maxlength="80" aria-label="当前项目">
-          <span aria-hidden="true">✎</span>
+          <span aria-hidden="true">${renderIcon(studioIcons.pen)}</span>
         </div>
         <div class="rail-project-progress"><small>${accepted} / 29</small><small>${Math.round(accepted / 29 * 100)}%</small></div>
         <progress max="29" value="${accepted}">${accepted}/29</progress>
       </section>
       ${projectMenuOpen ? renderMobileProjectPanel(project) : `
         <nav class="phase-rail">${renderStepRail(project, true)}</nav>
-        <button class="rail-new-project" data-action="create-project">＋ 新建项目</button>`}
+        <button class="rail-new-project" data-action="create-project">${renderIcon(studioIcons.plus)} 新建项目</button>`}
     </aside>`;
 }
 
@@ -744,7 +748,7 @@ function openTextEditor(title: string, value: string, label = "正文"): Promise
     overlay.className = "modal-overlay";
     overlay.innerHTML = `
       <section class="modal-dialog">
-        <header><div><small>EDITOR</small><h2>${escapeHtml(title)}</h2></div><button data-close aria-label="关闭">×</button></header>
+        <header><div><small>EDITOR</small><h2>${escapeHtml(title)}</h2></div><button data-close aria-label="关闭">${renderIcon(studioIcons.xmark)}</button></header>
         <label>${escapeHtml(label)}<textarea rows="18">${escapeHtml(value)}</textarea></label>
         <footer><button class="secondary-button" data-close>取消</button><button class="primary-button" data-save>保存</button></footer>
       </section>`;
@@ -936,7 +940,7 @@ app.addEventListener("click", (event) => {
     button.setAttribute("aria-expanded", String(!overviewCollapsed));
     button.setAttribute("aria-label", overviewCollapsed ? "展开创作概览" : "收起创作概览");
     button.setAttribute("title", overviewCollapsed ? "展开创作概览" : "收起创作概览");
-    button.textContent = overviewCollapsed ? "⌄" : "⌃";
+    button.innerHTML = renderIcon(overviewCollapsed ? studioIcons.chevronDown : studioIcons.chevronUp);
     return;
   }
   if (action === "open-guide") {
