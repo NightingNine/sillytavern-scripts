@@ -44,6 +44,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type ViewName = "studio" | "artifacts" | "projects" | "settings" | "delivery";
+type ArtifactScope = "all" | "current" | "core" | "characters" | "world" | "narrative" | "variables" | "assembly";
 
 const appNode = document.querySelector<HTMLElement>("#app");
 if (!appNode) throw new Error("应用根节点不存在。");
@@ -81,6 +82,8 @@ let lastDeliveryProjectId = "";
 let deliverySelectionCustomized = false;
 let mobileFlowOpen = false;
 let overviewCollapsed = true;
+let artifactScope: ArtifactScope = "all";
+let artifactSearch = "";
 const mobileLayoutQuery = window.matchMedia("(max-width: 760px)");
 
 function escapeHtml(value: unknown): string {
@@ -334,15 +337,52 @@ function artifactGroups(project = currentProject()): Array<{
   })).sort((left, right) => left.step - right.step || left.identity.localeCompare(right.identity, "zh-CN"));
 }
 
+function artifactMatchesScope(step: number, scope: ArtifactScope, currentStep: number): boolean {
+  if (scope === "all") return true;
+  if (scope === "current") return step === currentStep;
+  if (scope === "core") return step >= 1 && step <= 3;
+  if (scope === "characters") return step >= 5 && step <= 8;
+  if (scope === "world") return step === 4 || (step >= 9 && step <= 12) || step === 22;
+  if (scope === "narrative") return step >= 13 && step <= 15;
+  if (scope === "variables") return step >= 16 && step <= 21;
+  return step >= 23;
+}
+
 function renderArtifacts(project = currentProject()): string {
   const groups = artifactGroups(project);
   const currentOnly = groups.filter((group) => group.step === project.currentStep);
+  const normalizedSearch = artifactSearch.trim().toLocaleLowerCase("zh-CN");
+  const visibleGroups = groups.filter((group) => (
+    artifactMatchesScope(group.step, artifactScope, project.currentStep)
+    && (!normalizedSearch || `${artifactDisplayName(group.identity, group.step)} ${group.identity} Step ${group.step}`
+      .toLocaleLowerCase("zh-CN").includes(normalizedSearch))
+  ));
+  const scopeOptions: Array<[ArtifactScope, string]> = [
+    ["all", "全部"],
+    ["current", "当前步骤"],
+    ["core", "故事核心"],
+    ["characters", "主要角色"],
+    ["world", "世界"],
+    ["narrative", "叙事"],
+    ["variables", "变量"],
+    ["assembly", "装配"],
+  ];
   return `
-    <section class="panel-view">
+    <section class="panel-view artifacts-view">
       <div class="panel-heading">
         <div><small>ARTIFACT VAULT</small><h1>独立产物库</h1><p>对话和产物彼此独立。编辑会创建新版本，不会改写历史消息。</p></div>
         <button class="secondary-button" data-action="go-current-artifacts">只看 Step ${project.currentStep}</button>
       </div>
+      <section class="mobile-artifact-intro">
+        <div><span>结构解析</span><strong>${groups.length} 个产物</strong></div>
+        <p>仅显示 A.U.T.O 预设规定的最终产物；切换到哪一版，后续设计与发布就使用哪一版。</p>
+        <div class="artifact-filter-strip" role="toolbar" aria-label="筛选产物范围">
+          ${scopeOptions.map(([value, label]) => `<button class="${artifactScope === value ? "is-active" : ""}"
+            data-action="artifact-scope" data-scope="${value}" aria-pressed="${artifactScope === value}">${label}</button>`).join("")}
+        </div>
+        <label class="artifact-search"><span>⌕</span><input id="artifact-search" value="${escapeHtml(artifactSearch)}"
+          placeholder="搜索产物名称或步骤" aria-label="搜索产物名称或步骤"></label>
+      </section>
       <div class="vault-summary">
         <span><b>${groups.length}</b><small>产物身份</small></span>
         <span><b>${project.artifacts.versions.length}</b><small>全部版本</small></span>
@@ -357,7 +397,7 @@ function renderArtifacts(project = currentProject()): string {
         </div>
       </details>
       <div class="artifact-list" id="artifact-list">
-        ${groups.length ? groups.map((group) => {
+        ${visibleGroups.length ? visibleGroups.map((group) => {
           const selected = group.versions.find((version) => version.id === group.selectedId) ?? group.versions.at(-1)!;
           const hidden = project.context.hiddenArtifactKeys.includes(group.key);
           return `
@@ -382,7 +422,9 @@ function renderArtifacts(project = currentProject()): string {
               </footer>
             </article>`;
         }).join("") : `
-          <div class="empty-panel"><span>◇</span><h2>产物库还是空的</h2><p>完成生成后，符合当前步骤规则的 XML 与代码围栏会自动成为新版本。</p></div>`}
+          <div class="mobile-artifact-empty">${groups.length ? "当前筛选范围内没有产物。" : "生成阶段草案后，A.U.T.O 规定的最终产物会在这里出现。"}</div>
+          <div class="empty-panel desktop-only"><span>◇</span><h2>${groups.length ? "没有匹配产物" : "产物库还是空的"}</h2>
+            <p>${groups.length ? "调整筛选条件或搜索词后再试。" : "完成生成后，符合当前步骤规则的 XML 与代码围栏会自动成为新版本。"}</p></div>`}
       </div>
       ${currentOnly.length ? "" : `<p class="subtle-note">当前 Step ${project.currentStep} 还没有产物。</p>`}
     </section>`;
@@ -391,7 +433,7 @@ function renderArtifacts(project = currentProject()): string {
 function renderProjects(project = currentProject()): string {
   if (!snapshot) return "";
   return `
-    <section class="panel-view">
+    <section class="panel-view projects-view">
       <div class="panel-heading">
         <div><small>PROJECT LIBRARY</small><h1>项目库</h1><p>每个项目拥有独立的 29 步会话、产物版本与导出设置。</p></div>
         <button class="primary-button" data-action="create-project">＋ 新建项目</button>
@@ -433,57 +475,75 @@ function renderSettings(project = currentProject()): string {
   const preset = snapshot!.resources.preset;
   const status = secretStatus;
   return `
-    <section class="panel-view">
+    <section class="panel-view settings-view">
       <div class="panel-heading">
         <div><small>SETTINGS & RESOURCES</small><h1>模型与资源</h1><p>真实模型密钥只进入加密密钥仓，不进入项目、日志或导出文件。</p></div>
       </div>
       <section class="settings-section">
-        <header><div><small>MODEL GATEWAY</small><h2>生成模型</h2></div><span class="resource-state">${modelSettings.mode === "stub" ? "离线演示" : "OpenAI-compatible"}</span></header>
-        <div class="form-grid">
-          <label>运行模式<select id="model-mode"><option value="stub" ${modelSettings.mode === "stub" ? "selected" : ""}>离线演示模型</option><option value="openai-compatible" ${modelSettings.mode === "openai-compatible" ? "selected" : ""}>OpenAI-compatible API</option></select></label>
-          <label>模型名称<input id="model-name" value="${escapeHtml(modelSettings.model)}" placeholder="例如 gpt-5-mini"></label>
-          <label class="span-two">API Base URL<input id="model-base-url" value="${escapeHtml(modelSettings.baseUrl)}" placeholder="https://api.openai.com/v1"></label>
-          <label>请求超时（秒）<input id="model-timeout" type="number" min="5" max="600" value="${Math.round(modelSettings.timeoutMs / 1000)}"></label>
+        <header><div><small>MODEL GATEWAY</small><h2>模型与生成</h2></div><span class="resource-state">${modelSettings.mode === "stub" ? "离线演示" : "OpenAI-compatible"}</span></header>
+        <div class="model-mode-options" role="radiogroup" aria-label="模型连接方式">
+          <label class="model-choice">
+            <input type="radio" name="model-mode" value="stub" ${modelSettings.mode === "stub" ? "checked" : ""}>
+            <span><strong>离线演示</strong><small>使用本机演示模型，不连接外部接口</small></span>
+          </label>
+          <label class="model-choice">
+            <input type="radio" name="model-mode" value="openai-compatible" ${modelSettings.mode === "openai-compatible" ? "checked" : ""}>
+            <span><strong>单独配置</strong><small>使用 OpenAI-compatible 接口和加密密钥仓</small></span>
+          </label>
         </div>
+        <details class="model-parameters">
+          <summary><span>模型参数</span><small>独立设置 ›</small></summary>
+          <div class="form-grid">
+            <label>模型名称<input id="model-name" value="${escapeHtml(modelSettings.model)}" placeholder="例如 gpt-5-mini"></label>
+            <label class="span-two">API Base URL<input id="model-base-url" value="${escapeHtml(modelSettings.baseUrl)}" placeholder="https://api.openai.com/v1"></label>
+            <label>请求超时（秒）<input id="model-timeout" type="number" min="5" max="600" value="${Math.round(modelSettings.timeoutMs / 1000)}"></label>
+          </div>
+        </details>
         <div class="button-row"><button class="primary-button" data-action="save-model">保存模型设置</button><button class="secondary-button" data-action="test-model" ${status.unlocked && status.hasApiKey ? "" : "disabled"}>测试连接</button></div>
       </section>
-      <section class="settings-section">
-        <header><div><small>ENCRYPTED SECRET</small><h2>API Key 密钥仓</h2></div><span class="resource-state is-${status.unlocked ? "ok" : "muted"}">${!status.supported ? "浏览器预览不可用" : status.unlocked ? (status.hasApiKey ? "已解锁 · 已保存" : "已解锁") : "已锁定"}</span></header>
-        <div class="form-grid">
-          <label>本机密钥仓口令<input id="vault-passphrase" type="password" autocomplete="current-password" placeholder="至少 8 个字符"></label>
-          <label>API Key<input id="api-key" type="password" autocomplete="off" placeholder="${status.hasApiKey ? "已保存；留空不会覆盖" : "sk-…"}"></label>
+      <details class="settings-section settings-collapsible">
+        <summary><div><small>ENCRYPTED SECRET</small><h2>安全密钥</h2></div><span class="resource-state is-${status.unlocked ? "ok" : "muted"}">${!status.supported ? "浏览器预览不可用" : status.unlocked ? (status.hasApiKey ? "已解锁 · 已保存" : "已解锁") : "已锁定"}</span></summary>
+        <div class="settings-collapsible-body">
+          <div class="form-grid">
+            <label>本机密钥仓口令<input id="vault-passphrase" type="password" autocomplete="current-password" placeholder="至少 8 个字符"></label>
+            <label>API Key<input id="api-key" type="password" autocomplete="off" placeholder="${status.hasApiKey ? "已保存；留空不会覆盖" : "sk-…"}"></label>
+          </div>
+          <div class="button-row">
+            <button class="secondary-button" data-action="unlock-vault" ${!status.supported ? "disabled" : ""}>解锁</button>
+            <button class="primary-button" data-action="save-api-key" ${status.unlocked ? "" : "disabled"}>保存 Key</button>
+            <button class="secondary-button" data-action="lock-vault" ${status.unlocked ? "" : "disabled"}>锁定</button>
+            <button class="danger-button" data-action="delete-api-key" ${status.hasApiKey ? "" : "disabled"}>删除 Key</button>
+          </div>
         </div>
-        <div class="button-row">
-          <button class="secondary-button" data-action="unlock-vault" ${!status.supported ? "disabled" : ""}>解锁</button>
-          <button class="primary-button" data-action="save-api-key" ${status.unlocked ? "" : "disabled"}>保存 Key</button>
-          <button class="secondary-button" data-action="lock-vault" ${status.unlocked ? "" : "disabled"}>锁定</button>
-          <button class="danger-button" data-action="delete-api-key" ${status.hasApiKey ? "" : "disabled"}>删除 Key</button>
+      </details>
+      <details class="settings-section settings-collapsible">
+        <summary><div><small>A.U.T.O RESOURCE</small><h2>创作资源</h2></div><span class="resource-state is-ok">${preset.regexCount} 条正则</span></summary>
+        <div class="settings-collapsible-body">
+          <div class="resource-card">
+            <div><b>${escapeHtml(preset.name)}</b><small>${escapeHtml(preset.sourceFileName)} · ${preset.promptCount} prompts</small><code>SHA-256 ${escapeHtml(preset.sourceSha256)}</code></div>
+            <span>${preset.raw ? "用户导入" : "应用内置"}</span>
+          </div>
+          ${snapshot!.resources.compatibilityNotes.map((item) => `<p class="compat-note">${escapeHtml(item)}</p>`).join("")}
+          <div class="button-row">
+            <button class="secondary-button" data-action="import-preset">导入 A.U.T.O 预设</button>
+            <button class="secondary-button" data-action="restore-preset" ${preset.raw ? "" : "disabled"}>恢复内置预设</button>
+          </div>
+          <p class="subtle-note">导入仅解析数据，不执行预设中的脚本或未知表达式；未知字段会随资源原样保留。</p>
         </div>
-      </section>
-      <section class="settings-section">
-        <header><div><small>A.U.T.O RESOURCE</small><h2>工作流预设与独立正则</h2></div><span class="resource-state is-ok">${preset.regexCount} 条正则</span></header>
-        <div class="resource-card">
-          <div><b>${escapeHtml(preset.name)}</b><small>${escapeHtml(preset.sourceFileName)} · ${preset.promptCount} prompts</small><code>SHA-256 ${escapeHtml(preset.sourceSha256)}</code></div>
-          <span>${preset.raw ? "用户导入" : "应用内置"}</span>
+      </details>
+      <details class="settings-section settings-collapsible">
+        <summary><div><small>PROMPT PREFERENCES</small><h2>创作偏好</h2></div><span class="resource-state">项目独立</span></summary>
+        <div class="settings-collapsible-body">
+          <div class="form-grid">
+            <label>AI 称呼<input id="pref-ai-role" value="${escapeHtml(project.preferences.aiRole)}"></label>
+            <label>创作者称呼<input id="pref-creator-role" value="${escapeHtml(project.preferences.creatorRole)}"></label>
+            <label>目标字数<input id="pref-word-count" value="${escapeHtml(project.preferences.wordCount)}"></label>
+            <label>语言<input id="pref-language" value="${escapeHtml(project.preferences.language)}"></label>
+            <label>叙事人称<input id="pref-person" value="${escapeHtml(project.preferences.person)}"></label>
+          </div>
+          <div class="button-row"><button class="primary-button" data-action="save-preferences">保存提示偏好</button></div>
         </div>
-        ${snapshot!.resources.compatibilityNotes.map((item) => `<p class="compat-note">${escapeHtml(item)}</p>`).join("")}
-        <div class="button-row">
-          <button class="secondary-button" data-action="import-preset">导入 A.U.T.O 预设</button>
-          <button class="secondary-button" data-action="restore-preset" ${preset.raw ? "" : "disabled"}>恢复内置预设</button>
-        </div>
-        <p class="subtle-note">导入仅解析数据，不执行预设中的脚本或未知表达式；未知字段会随资源原样保留。</p>
-      </section>
-      <section class="settings-section">
-        <header><div><small>PROMPT PREFERENCES</small><h2>当前项目提示偏好</h2></div></header>
-        <div class="form-grid">
-          <label>AI 称呼<input id="pref-ai-role" value="${escapeHtml(project.preferences.aiRole)}"></label>
-          <label>创作者称呼<input id="pref-creator-role" value="${escapeHtml(project.preferences.creatorRole)}"></label>
-          <label>目标字数<input id="pref-word-count" value="${escapeHtml(project.preferences.wordCount)}"></label>
-          <label>语言<input id="pref-language" value="${escapeHtml(project.preferences.language)}"></label>
-          <label>叙事人称<input id="pref-person" value="${escapeHtml(project.preferences.person)}"></label>
-        </div>
-        <div class="button-row"><button class="primary-button" data-action="save-preferences">保存提示偏好</button></div>
-      </section>
+      </details>
       <section class="diagnostic-strip">
         <span><b>Schema</b> v${snapshot!.schemaVersion}</span>
         <span><b>Workspace revision</b> ${snapshot!.revision}</span>
@@ -506,11 +566,21 @@ function renderDelivery(project = currentProject()): string {
   const items = collectDeliveryArtifacts(project);
   const selectedCount = items.filter((item) => deliveryKeys.has(item.key)).length;
   return `
-    <section class="panel-view">
+    <section class="panel-view delivery-view">
       <div class="panel-heading">
         <div><small>ST-COMPATIBLE DELIVERY</small><h1>创建角色卡成品</h1><p>导出 SillyTavern Character Card V3 JSON，内含世界书、开场白、状态栏与输出正则。</p></div>
         <span class="delivery-count">${selectedCount} / ${items.length}</span>
       </div>
+      <section class="mobile-handoff">
+        <small>HANDOFF</small>
+        <h2>交付到 SillyTavern</h2>
+        <p>从项目产物中选择要交付的条目，生成可直接导入的角色卡与世界书。</p>
+        <label>角色卡名称<input id="delivery-character-name" value="${escapeHtml(project.output.characterName)}" placeholder="例如：雾港来客"></label>
+        <label>世界书名称<input id="delivery-worldbook-name" value="${escapeHtml(project.output.worldbookName)}" placeholder="自动跟随项目名称"></label>
+        <button class="handoff-primary" data-action="publish-card">✒ 创建角色卡与世界书</button>
+        <button class="handoff-secondary" data-action="export-project">▣ 下载创作档案</button>
+        <p class="handoff-note">默认使用全部已确认产物；下方仍可调整交付范围。</p>
+      </section>
       <div class="delivery-toolbar">
         <button data-action="delivery-select-accepted">只选已确认</button>
         <button data-action="delivery-select-all">全选</button>
@@ -774,6 +844,10 @@ async function exportCard(): Promise<void> {
 app.addEventListener("change", (event) => {
   const target = event.target as HTMLInputElement | HTMLSelectElement;
   const action = target.dataset.action;
+  if (target.id === "artifact-search") {
+    artifactSearch = target.value;
+    render();
+  }
   if (action === "select-artifact") {
     void runAction(() => kernel.selectArtifact(target.value), "已切换正式版本。");
   }
@@ -831,6 +905,11 @@ app.addEventListener("click", (event) => {
   }
   if (action === "dismiss-notice") {
     notice = null;
+    render();
+    return;
+  }
+  if (action === "artifact-scope") {
+    artifactScope = button.dataset.scope as ArtifactScope;
     render();
     return;
   }
@@ -1013,8 +1092,9 @@ app.addEventListener("click", (event) => {
   if (action === "save-model") {
     void runAction(async () => {
       const timeoutSeconds = Number(elementValue("model-timeout"));
+      const selectedMode = document.querySelector<HTMLInputElement>('input[name="model-mode"]:checked')?.value;
       modelSettings = await settingsRepository.saveModelSettings({
-        mode: elementValue("model-mode") === "openai-compatible" ? "openai-compatible" : "stub",
+        mode: selectedMode === "openai-compatible" ? "openai-compatible" : "stub",
         baseUrl: elementValue("model-base-url"),
         model: elementValue("model-name"),
         timeoutMs: Math.max(5_000, timeoutSeconds * 1000),
@@ -1093,6 +1173,21 @@ app.addEventListener("click", (event) => {
   }
   if (action === "export-card") {
     void runAction(exportCard);
+    return;
+  }
+  if (action === "publish-card") {
+    const project = currentProject();
+    void runAction(async () => {
+      await kernel.updateProject({
+        name: project.name,
+        brief: project.brief,
+        characterName: elementValue("delivery-character-name"),
+        worldbookName: elementValue("delivery-worldbook-name"),
+        preferences: project.preferences,
+      });
+      snapshot = kernel.snapshot();
+      await exportCard();
+    });
   }
 });
 
