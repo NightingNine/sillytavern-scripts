@@ -85,3 +85,34 @@ test("检查器仅首次打开时滑入，页签切换不重复动画", async ()
     /\.mobile-inspector\.is-entering\s*\{[^}]*animation:\s*inspector-in/,
   );
 });
+
+test("移动端阶段计数使用紧凑的 01/29 格式", async () => {
+  const source = await readFile(new URL("./main.ts", import.meta.url), "utf8");
+
+  assert.match(
+    source,
+    /padStart\(2,\s*"0"\)\}\/29/,
+  );
+});
+
+test("步骤说明按钮跟随标题，不占用右侧操作按钮区域", async () => {
+  const source = await readFile(new URL("./main.ts", import.meta.url), "utf8");
+
+  assert.match(
+    source,
+    /<div class="stage-title-line">[\s\S]*?<details class="stage-guide">[\s\S]*?<\/details>\s*<\/div>\s*<p>/,
+  );
+});
+
+test("移动端长标题保持正常字距并在剩余空间内省略", async () => {
+  const stylesheet = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.doesNotMatch(
+    stylesheet,
+    /\.stage-title-line h1\s*\{[^}]*letter-spacing:\s*-/,
+  );
+  assert.match(
+    stylesheet,
+    /\.studio-view\.is-overview-collapsed \.stage-title-line h1\s*\{[^}]*min-width:\s*0;[^}]*flex:\s*1;[^}]*overflow:\s*hidden;[^}]*letter-spacing:\s*normal;[^}]*text-overflow:\s*ellipsis;/,
+  );
+});

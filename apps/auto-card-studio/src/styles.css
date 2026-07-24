@@ -1738,25 +1738,20 @@ textarea::placeholder {
 }
 
 .stage-title-line {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-}
-
-.stage-title-line .step-kicker {
-  grid-column: 1 / -1;
-  margin: 0;
+  display: flex;
+  min-width: 0;
+  gap: 10px;
+  align-items: center;
 }
 
 .stage-title-line .requirement {
-  grid-column: 2;
-  grid-row: 2;
-  align-self: center;
+  flex: 0 0 auto;
+  margin-left: 0;
 }
 
 .stage-heading h1 {
-  grid-column: 1;
-  grid-row: 2;
+  min-width: 0;
+  flex: 1;
   margin: 14px 0 0;
   font: 500 clamp(30px, 5vw, 48px)/1.12 var(--display);
   letter-spacing: 0.01em;
@@ -1778,6 +1773,7 @@ textarea::placeholder {
 
 .stage-guide {
   position: relative;
+  flex: 0 0 auto;
 }
 
 .stage-guide > summary {
@@ -2654,32 +2650,60 @@ textarea::placeholder {
     background: #2b2925;
   }
 
-  .stage-heading h1 {
+  .stage-heading-copy {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 3px 7px;
+    align-items: center;
     overflow: hidden;
-    margin: 4px 0 0;
-    font-size: clamp(18px, 5.3vw, 22px);
-    line-height: 1.14;
+  }
+
+  .stage-heading-copy > .step-kicker {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+  }
+
+  .stage-title-line {
+    display: flex;
+    min-width: 0;
+    grid-column: 2;
+    grid-row: 1;
+    gap: 7px;
+    align-items: center;
+  }
+
+  .stage-heading h1 {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    margin: 0;
+    font: 700 11px/1.2 Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+    letter-spacing: normal;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .stage-title-line .step-kicker {
-    margin: 0;
-  }
-
   .stage-heading-copy > p {
+    min-width: 0;
+    grid-column: 1 / -1;
+    grid-row: 2;
     overflow: hidden;
-    margin-top: 4px;
+    margin: 0;
     color: var(--muted);
-    font-size: 8.5px;
-    line-height: 1.4;
+    font-size: 8px;
+    line-height: 1.3;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .step-kicker {
-    gap: 6px;
-    font-size: 7px;
+    display: block;
+    color: var(--terracotta);
+    font: 700 7px/1.4 var(--mono);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
   }
 
   .step-kicker i {
@@ -2687,9 +2711,10 @@ textarea::placeholder {
   }
 
   .requirement {
-    margin-left: 3px;
-    padding: 2px 5px;
-    font-size: 6.5px;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 3px 6px;
+    font-size: 7px;
   }
 
   .stage-heading-actions {
@@ -2702,8 +2727,8 @@ textarea::placeholder {
 
   .stage-guide > summary,
   .stage-icon-button {
-    width: 30px;
-    height: 30px;
+    width: 27px;
+    height: 27px;
   }
 
   .stage-guide > div {
@@ -2756,47 +2781,45 @@ textarea::placeholder {
   }
 
   .studio-view.is-overview-collapsed .stage-heading-copy {
+    display: grid;
     min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 3px 7px;
+    align-items: center;
     overflow: hidden;
   }
 
   .studio-view.is-overview-collapsed .stage-title-line {
-    display: grid;
+    display: flex;
     min-height: 27px;
-    grid-template-columns: auto auto auto;
+    min-width: 0;
     gap: 7px;
     align-items: center;
-    justify-content: start;
   }
 
-  .studio-view.is-overview-collapsed .stage-title-line .step-kicker,
-  .studio-view.is-overview-collapsed .stage-title-line h1,
-  .studio-view.is-overview-collapsed .stage-title-line .requirement {
-    grid-row: 1;
-  }
-
-  .studio-view.is-overview-collapsed .stage-title-line .step-kicker {
+  .studio-view.is-overview-collapsed .stage-heading-copy > .step-kicker {
     grid-column: 1;
+    grid-row: 1;
     display: block;
-    overflow: visible;
     color: var(--terracotta);
     font: 700 7px/1.4 var(--mono);
-    letter-spacing: 0.12em;
+    letter-spacing: 0.04em;
     white-space: nowrap;
   }
 
   .studio-view.is-overview-collapsed .stage-title-line h1 {
-    grid-column: 2;
-    overflow: visible;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
     margin: 0;
     font: 700 11px/1.2 Inter, "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
-    letter-spacing: -0.15em;
-    text-overflow: clip;
+    letter-spacing: normal;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .studio-view.is-overview-collapsed .stage-title-line .requirement {
-    grid-column: 3;
+    flex: 0 0 auto;
     margin: 0;
     padding: 3px 6px;
     border-color: rgba(217, 119, 87, 0.44);
@@ -2807,7 +2830,9 @@ textarea::placeholder {
   }
 
   .studio-view.is-overview-collapsed .stage-heading-copy > p {
-    margin-top: 3px;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
     font-size: 8px;
     line-height: 1.3;
   }
@@ -2818,9 +2843,8 @@ textarea::placeholder {
   }
 
   .studio-view.is-overview-collapsed .stage-guide {
-    position: absolute;
-    top: 6px;
-    right: 69px;
+    position: relative;
+    flex: 0 0 auto;
   }
 
   .studio-view.is-overview-collapsed .stage-guide > summary {
@@ -2830,7 +2854,7 @@ textarea::placeholder {
 
   .studio-view.is-overview-collapsed .stage-icon-button {
     width: 27px;
-    height: 30px;
+    height: 27px;
   }
 
   .studio-view.is-overview-collapsed .brief-panel {

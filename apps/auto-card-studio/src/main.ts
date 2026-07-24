@@ -237,25 +237,25 @@ function renderStudio(project = currentProject()): string {
     <section class="studio-view ${compactOverview ? "is-overview-collapsed" : ""}">
       <header class="stage-heading">
         <div class="stage-heading-copy">
+          <p class="step-kicker">PHASE ${String(definition.number).padStart(2, "0")}/29</p>
           <div class="stage-title-line">
-            <p class="step-kicker">PHASE ${String(definition.number).padStart(2, "0")} / 29</p>
             <h1>${escapeHtml(definition.name)}</h1>
             <em class="requirement is-${definition.requirement}">${requirementLabel(definition.requirement)}</em>
+            <details class="stage-guide">
+              <summary aria-label="查看本步骤说明">${renderIcon(studioIcons.circleInfo)}</summary>
+              <div>
+                <small>创作航标</small>
+                <h2>${escapeHtml(definition.guide.title)}</h2>
+                <p>${escapeHtml(definition.guide.description)}</p>
+                <ol>${definition.guide.prompts.map((prompt) => `<li>${escapeHtml(prompt)}</li>`).join("")}</ol>
+                <button class="text-button" data-action="use-placeholder">使用示例作为输入</button>
+              </div>
+            </details>
           </div>
           <p>${escapeHtml(definition.goal)}</p>
         </div>
         <div class="stage-heading-actions">
           <span class="state-pill is-${state.status}">${accepted ? "已确认" : state.status === "draft" ? "有草稿" : "待开始"}</span>
-          <details class="stage-guide">
-            <summary aria-label="查看本步骤说明">${renderIcon(studioIcons.circleInfo)}</summary>
-            <div>
-              <small>创作航标</small>
-              <h2>${escapeHtml(definition.guide.title)}</h2>
-              <p>${escapeHtml(definition.guide.description)}</p>
-              <ol>${definition.guide.prompts.map((prompt) => `<li>${escapeHtml(prompt)}</li>`).join("")}</ol>
-              <button class="text-button" data-action="use-placeholder">使用示例作为输入</button>
-            </div>
-          </details>
           <button class="stage-icon-button" data-action="clear-conversation" aria-label="清空本步对话"
             title="清空本步对话" ${state.turns.length ? "" : "disabled"}>${renderIcon(studioIcons.regularTrashCan)}</button>
           <button class="stage-icon-button overview-toggle" data-action="toggle-overview"
