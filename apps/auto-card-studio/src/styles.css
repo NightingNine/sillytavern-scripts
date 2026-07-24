@@ -2666,7 +2666,7 @@ textarea::placeholder {
     min-width: 0;
     grid-column: 1;
     grid-row: 1;
-    min-height: 23px;
+    min-height: 19px;
     gap: 7px;
     align-items: center;
   }
@@ -2709,11 +2709,11 @@ textarea::placeholder {
 
   .requirement {
     display: grid;
-    height: 23px;
+    height: 19px;
     flex: 0 0 auto;
     margin: 0;
-    padding: 0 6px;
-    font-size: 7px;
+    padding: 0 5px;
+    font: 600 6px/1 var(--mono);
     place-items: center;
   }
 
@@ -2728,10 +2728,10 @@ textarea::placeholder {
 
   .stage-guide > summary,
   .stage-icon-button {
-    width: 23px;
-    height: 23px;
-    border-radius: 7px;
-    font-size: 7px;
+    width: 19px;
+    height: 19px;
+    border-radius: 6px;
+    font-size: 6px;
   }
 
   .stage-guide > div {
@@ -2805,7 +2805,7 @@ textarea::placeholder {
     display: flex;
     grid-column: 1;
     grid-row: 1;
-    min-height: 23px;
+    min-height: 19px;
     min-width: 0;
     gap: 7px;
     align-items: center;
@@ -2825,12 +2825,10 @@ textarea::placeholder {
   .studio-view.is-overview-collapsed .stage-title-line .requirement {
     flex: 0 0 auto;
     margin: 0;
-    padding: 0 6px;
+    padding: 0 5px;
     border-color: rgba(217, 119, 87, 0.44);
     background: rgba(217, 119, 87, 0.12);
     color: #e3a087;
-    font: 700 7px/1.2 var(--mono);
-    letter-spacing: 0.04em;
   }
 
   .studio-view.is-overview-collapsed .stage-heading-copy > p {
@@ -3596,7 +3594,7 @@ textarea::placeholder {
   }
 
   .requirement {
-    padding: 3px 5px;
+    padding: 0 5px;
   }
 
   .vault-summary b {
