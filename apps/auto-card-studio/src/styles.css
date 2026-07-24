@@ -2645,8 +2645,9 @@ textarea::placeholder {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 5px;
-    min-height: 72px;
-    padding: 8px 10px 7px;
+    min-height: 54px;
+    height: 54px;
+    padding: 6px 7px 6px 9px;
     background: #2b2925;
   }
 
@@ -2656,6 +2657,7 @@ textarea::placeholder {
     grid-template-columns: minmax(0, 1fr);
     gap: 3px;
     align-items: center;
+    align-content: start;
     overflow: hidden;
   }
 
@@ -2664,6 +2666,7 @@ textarea::placeholder {
     min-width: 0;
     grid-column: 1;
     grid-row: 1;
+    min-height: 23px;
     gap: 7px;
     align-items: center;
   }
@@ -2705,14 +2708,18 @@ textarea::placeholder {
   }
 
   .requirement {
+    display: grid;
+    height: 23px;
     flex: 0 0 auto;
     margin: 0;
-    padding: 3px 6px;
+    padding: 0 6px;
     font-size: 7px;
+    place-items: center;
   }
 
   .stage-heading-actions {
-    gap: 4px;
+    align-self: start;
+    gap: 3px;
   }
 
   .stage-heading .state-pill {
@@ -2721,9 +2728,10 @@ textarea::placeholder {
 
   .stage-guide > summary,
   .stage-icon-button {
-    width: 27px;
-    height: 27px;
-    font-size: 8px;
+    width: 23px;
+    height: 23px;
+    border-radius: 7px;
+    font-size: 7px;
   }
 
   .stage-guide > div {
@@ -2784,11 +2792,6 @@ textarea::placeholder {
     grid-template-rows: 54px auto minmax(0, 1fr) auto;
   }
 
-  .studio-view.is-overview-collapsed .stage-heading {
-    min-height: 54px;
-    padding: 6px 7px 6px 9px;
-  }
-
   .studio-view.is-overview-collapsed .stage-heading-copy {
     display: grid;
     min-width: 0;
@@ -2802,7 +2805,7 @@ textarea::placeholder {
     display: flex;
     grid-column: 1;
     grid-row: 1;
-    min-height: 27px;
+    min-height: 23px;
     min-width: 0;
     gap: 7px;
     align-items: center;
@@ -2822,7 +2825,7 @@ textarea::placeholder {
   .studio-view.is-overview-collapsed .stage-title-line .requirement {
     flex: 0 0 auto;
     margin: 0;
-    padding: 3px 6px;
+    padding: 0 6px;
     border-color: rgba(217, 119, 87, 0.44);
     background: rgba(217, 119, 87, 0.12);
     color: #e3a087;
@@ -2838,24 +2841,9 @@ textarea::placeholder {
     line-height: 1.3;
   }
 
-  .studio-view.is-overview-collapsed .stage-heading-actions {
-    align-self: center;
-    gap: 3px;
-  }
-
   .studio-view.is-overview-collapsed .stage-guide {
     position: relative;
     flex: 0 0 auto;
-  }
-
-  .studio-view.is-overview-collapsed .stage-guide > summary {
-    width: 27px;
-    height: 27px;
-  }
-
-  .studio-view.is-overview-collapsed .stage-icon-button {
-    width: 27px;
-    height: 27px;
   }
 
   .studio-view.is-overview-collapsed .brief-panel {

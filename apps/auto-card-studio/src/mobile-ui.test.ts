@@ -117,12 +117,46 @@ test("移动端长标题保持正常字距并在剩余空间内省略", async ()
   );
 });
 
-test("移动端步骤标题栏缩小图标但保留按钮尺寸", async () => {
+test("移动端步骤标题栏控件外框统一缩小到 23px", async () => {
   const stylesheet = await readFile(new URL("./styles.css", import.meta.url), "utf8");
 
   assert.match(
     stylesheet,
-    /\.stage-guide > summary,\s*\.stage-icon-button\s*\{[^}]*width:\s*27px;[^}]*height:\s*27px;[^}]*font-size:\s*8px;/,
+    /\.stage-guide > summary,\s*\.stage-icon-button\s*\{[^}]*width:\s*23px;[^}]*height:\s*23px;[^}]*font-size:\s*7px;/,
+  );
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.requirement\s*\{[^}]*height:\s*23px;[^}]*place-items:\s*center;/,
+  );
+});
+
+test("移动端标题和操作控件沿同一条顶部基线对齐", async () => {
+  const stylesheet = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.stage-heading-copy\s*\{[^}]*align-content:\s*start;/,
+  );
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.stage-title-line\s*\{[^}]*min-height:\s*23px;/,
+  );
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.stage-heading-actions\s*\{[^}]*align-self:\s*start;/,
+  );
+});
+
+test("移动端创作母题展开时标题栏保持 54px 高度", async () => {
+  const stylesheet = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.stage-heading\s*\{[^}]*min-height:\s*54px;[^}]*height:\s*54px;[^}]*padding:\s*6px 7px 6px 9px;/,
+  );
+  assert.doesNotMatch(
+    stylesheet,
+    /\.studio-view\.is-overview-collapsed \.stage-heading\s*\{/,
   );
 });
 
