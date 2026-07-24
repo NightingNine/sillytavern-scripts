@@ -237,7 +237,6 @@ function renderStudio(project = currentProject()): string {
     <section class="studio-view ${compactOverview ? "is-overview-collapsed" : ""}">
       <header class="stage-heading">
         <div class="stage-heading-copy">
-          <p class="step-kicker">PHASE ${String(definition.number).padStart(2, "0")}/29</p>
           <div class="stage-title-line">
             <h1>${escapeHtml(definition.name)}</h1>
             <em class="requirement is-${definition.requirement}">${requirementLabel(definition.requirement)}</em>

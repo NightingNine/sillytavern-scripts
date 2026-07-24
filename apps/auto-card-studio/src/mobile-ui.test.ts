@@ -86,12 +86,12 @@ test("检查器仅首次打开时滑入，页签切换不重复动画", async ()
   );
 });
 
-test("移动端阶段计数使用紧凑的 01/29 格式", async () => {
+test("移动端步骤标题栏不再显示阶段计数", async () => {
   const source = await readFile(new URL("./main.ts", import.meta.url), "utf8");
 
-  assert.match(
+  assert.doesNotMatch(
     source,
-    /padStart\(2,\s*"0"\)\}\/29/,
+    /<p class="step-kicker">PHASE/,
   );
 });
 
@@ -114,5 +114,40 @@ test("移动端长标题保持正常字距并在剩余空间内省略", async ()
   assert.match(
     stylesheet,
     /\.studio-view\.is-overview-collapsed \.stage-title-line h1\s*\{[^}]*min-width:\s*0;[^}]*flex:\s*1;[^}]*overflow:\s*hidden;[^}]*letter-spacing:\s*normal;[^}]*text-overflow:\s*ellipsis;/,
+  );
+});
+
+test("移动端步骤标题栏缩小图标但保留按钮尺寸", async () => {
+  const stylesheet = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(
+    stylesheet,
+    /\.stage-guide > summary,\s*\.stage-icon-button\s*\{[^}]*width:\s*27px;[^}]*height:\s*27px;[^}]*font-size:\s*8px;/,
+  );
+});
+
+test("移动端创作母题外框占满内容区宽度", async () => {
+  const stylesheet = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.brief-panel\s*\{[^}]*width:\s*100%;[^}]*margin:\s*0 0 7px;[^}]*border-radius:\s*0;/,
+  );
+});
+
+test("移动端创作母题通过高度和位移过渡滑出", async () => {
+  const stylesheet = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.brief-panel\s*\{[^}]*max-height:\s*180px;[^}]*transition:[^;]*max-height[^;]*transform/,
+  );
+  assert.match(
+    stylesheet,
+    /\.studio-view\.is-overview-collapsed \.brief-panel\s*\{[^}]*max-height:\s*2px;[^}]*transform:\s*translateY\(-7px\);/,
+  );
+  assert.doesNotMatch(
+    stylesheet,
+    /\.studio-view\.is-overview-collapsed \.brief-panel > \*\s*\{[^}]*display:\s*none/,
   );
 });
