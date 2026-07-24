@@ -44,6 +44,7 @@ import {
   stepDefinition,
 } from "./workflow-config.ts";
 import { renderIcon, studioIcons } from "./icons.ts";
+import { STEP_TUTORIAL_NOTES } from "./step-tutorial-notes.ts";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type ViewName = "studio" | "artifacts" | "projects" | "settings" | "delivery";
@@ -133,6 +134,12 @@ function currentProject() {
 function requirementLabel(value: string): string {
   return value === "required" ? "必做" : value === "advanced" ? "复杂卡" : "建议";
 }
+
+const STEP_REQUIREMENT_COPY: Readonly<Record<string, string>> = Object.freeze({
+  required: "属于最小可玩闭环。即使制作简单聊天卡，也建议完成并确认这一阶段。",
+  recommended: "大多数剧情卡完成后会更稳定、更丰富；内容简单或前一步已经覆盖时可以跳过。",
+  advanced: "用于长线状态机、MVU 变量、条件注入、状态栏或 AutoTask；没有对应系统时可以跳过。",
+});
 
 const PHASE_ICONS: Record<string, (typeof studioIcons)[keyof typeof studioIcons]> = {
   concept: studioIcons.compass,
@@ -240,16 +247,8 @@ function renderStudio(project = currentProject()): string {
           <div class="stage-title-line">
             <h1>${escapeHtml(definition.name)}</h1>
             <em class="requirement is-${definition.requirement}">${requirementLabel(definition.requirement)}</em>
-            <details class="stage-guide">
-              <summary aria-label="查看本步骤说明">${renderIcon(studioIcons.circleInfo)}</summary>
-              <div>
-                <small>创作航标</small>
-                <h2>${escapeHtml(definition.guide.title)}</h2>
-                <p>${escapeHtml(definition.guide.description)}</p>
-                <ol>${definition.guide.prompts.map((prompt) => `<li>${escapeHtml(prompt)}</li>`).join("")}</ol>
-                <button class="text-button" data-action="use-placeholder">使用示例作为输入</button>
-              </div>
-            </details>
+            <button class="stage-guide-button" type="button" data-action="open-step-guide"
+              aria-label="查看本步骤说明" title="查看本步骤说明">${renderIcon(studioIcons.circleInfo)}</button>
           </div>
           <p>${escapeHtml(definition.goal)}</p>
         </div>
@@ -781,6 +780,85 @@ function elementValue(id: string): string {
   return (document.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(`#${id}`)?.value ?? "").trim();
 }
 
+function openStepGuide(): void {
+  const existing = document.querySelector<HTMLElement>(".step-guide-overlay");
+  if (existing) {
+    existing.querySelector<HTMLElement>("[data-step-guide-close]")?.focus();
+    return;
+  }
+
+  const project = currentProject();
+  const definition = stepDefinition(project.currentStep);
+  const note = STEP_TUTORIAL_NOTES[project.currentStep - 1];
+  if (!note) return;
+
+  const trigger = document.querySelector<HTMLElement>("[data-action=\"open-step-guide\"]");
+  const template = document.createElement("template");
+  template.innerHTML = `
+    <div class="step-guide-overlay">
+      <section class="step-guide-dialog" role="dialog" aria-modal="true" aria-labelledby="step-guide-title">
+        <header class="step-guide-head">
+          <div>
+            <p class="step-guide-kicker">STEP ${String(definition.number).padStart(2, "0")} / ${WORKFLOW_STEPS.length}</p>
+            <h2 id="step-guide-title">${escapeHtml(definition.name)}</h2>
+            <small>${escapeHtml(note.stage)} · ${escapeHtml(definition.goal)}</small>
+          </div>
+          <button class="step-guide-close" type="button" data-step-guide-close
+            title="关闭说明" aria-label="关闭说明">${renderIcon(studioIcons.xmark)}</button>
+        </header>
+        <div class="step-guide-body">
+          <p class="step-guide-lead">${escapeHtml(note.purpose)}</p>
+          <section class="step-guide-section">
+            <span>完成建议</span>
+            <p class="step-guide-requirement-line">
+              <strong class="step-guide-requirement" data-level="${definition.requirement}">${requirementLabel(definition.requirement)}</strong>
+              <em>${escapeHtml(STEP_REQUIREMENT_COPY[definition.requirement])}</em>
+            </p>
+          </section>
+          <section class="step-guide-section"><span>建议怎么做</span><p>${escapeHtml(note.workflow)}</p></section>
+          <section class="step-guide-section"><span>本步最终产物</span><p>${escapeHtml(note.deliverable)}</p></section>
+          <section class="step-guide-section is-caution"><span>教程提醒</span><p>${escapeHtml(note.caution)}</p></section>
+        </div>
+      </section>
+    </div>`;
+  const overlay = template.content.firstElementChild;
+  if (!(overlay instanceof HTMLElement)) return;
+
+  let closed = false;
+  let historyEntryActive = false;
+  const onPopState = () => {
+    historyEntryActive = false;
+    closeStepGuide(true);
+  };
+  const closeStepGuide = (fromHistory = false) => {
+    if (closed) return;
+    closed = true;
+    overlay.remove();
+    window.removeEventListener("popstate", onPopState);
+    if (!fromHistory && historyEntryActive) {
+      historyEntryActive = false;
+      window.history.back();
+    }
+    trigger?.focus({ preventScroll: true });
+  };
+
+  overlay.querySelectorAll("[data-step-guide-close]").forEach((button) => {
+    button.addEventListener("click", () => closeStepGuide());
+  });
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeStepGuide();
+  });
+  overlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeStepGuide();
+  });
+
+  document.body.append(overlay);
+  window.history.pushState({ ...window.history.state, autoCardStudioStepGuide: true }, "");
+  historyEntryActive = true;
+  window.addEventListener("popstate", onPopState);
+  overlay.querySelector<HTMLElement>("[data-step-guide-close]")?.focus({ preventScroll: true });
+}
+
 function openTextEditor(title: string, value: string, label = "正文"): Promise<string | null> {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -1005,12 +1083,12 @@ app.addEventListener("click", (event) => {
     button.innerHTML = renderIcon(overviewCollapsed ? studioIcons.chevronDown : studioIcons.chevronUp);
     return;
   }
+  if (action === "open-step-guide") {
+    openStepGuide();
+    return;
+  }
   if (action === "open-guide") {
-    const guide = document.querySelector<HTMLDetailsElement>(".stage-guide");
-    if (guide) {
-      guide.open = true;
-      guide.querySelector<HTMLElement>("summary")?.focus();
-    }
+    openStepGuide();
     return;
   }
   if (action === "check-update") {

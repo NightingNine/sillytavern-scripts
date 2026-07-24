@@ -100,8 +100,9 @@ test("步骤说明按钮跟随标题，不占用右侧操作按钮区域", async
 
   assert.match(
     source,
-    /<div class="stage-title-line">[\s\S]*?<details class="stage-guide">[\s\S]*?<\/details>\s*<\/div>\s*<p>/,
+    /<div class="stage-title-line">[\s\S]*?<button class="stage-guide-button"[^>]*data-action="open-step-guide"[\s\S]*?<\/button>\s*<\/div>\s*<p>/,
   );
+  assert.doesNotMatch(source, /<details class="stage-guide">/);
 });
 
 test("移动端长标题保持正常字距并在剩余空间内省略", async () => {
@@ -122,7 +123,7 @@ test("移动端步骤标题栏图框明显缩小到 19px", async () => {
 
   assert.match(
     stylesheet,
-    /\.stage-guide > summary,\s*\.stage-icon-button\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;[^}]*font-size:\s*6px;/,
+    /\.stage-guide-button,\s*\.stage-icon-button\s*\{[^}]*width:\s*19px;[^}]*height:\s*19px;[^}]*font-size:\s*6px;/,
   );
   assert.match(
     stylesheet,
@@ -200,5 +201,60 @@ test("移动端创作母题通过高度和位移过渡滑出", async () => {
   assert.doesNotMatch(
     stylesheet,
     /\.studio-view\.is-overview-collapsed \.brief-panel > \*\s*\{[^}]*display:\s*none/,
+  );
+});
+
+test("步骤说明使用原脚本的模态标题和四张说明卡片", async () => {
+  const source = await readFile(new URL("./main.ts", import.meta.url), "utf8");
+
+  assert.match(source, /class="step-guide-overlay"/);
+  assert.match(source, /class="step-guide-dialog" role="dialog" aria-modal="true"/);
+  assert.match(source, /data-step-guide-close/);
+  for (const heading of ["完成建议", "建议怎么做", "本步最终产物", "教程提醒"]) {
+    assert.match(source, new RegExp(`<span>${heading}</span>`));
+  }
+});
+
+test("步骤说明可通过关闭按钮、遮罩、Escape 和 Android 返回关闭", async () => {
+  const source = await readFile(new URL("./main.ts", import.meta.url), "utf8");
+
+  assert.match(source, /querySelectorAll\("\[data-step-guide-close\]"\)/);
+  assert.match(source, /event\.target === overlay/);
+  assert.match(source, /event\.key === "Escape"/);
+  assert.match(source, /window\.history\.pushState/);
+  assert.match(source, /window\.addEventListener\("popstate"/);
+});
+
+test("步骤说明完整复用原脚本的 29 步教程数据", async () => {
+  const source = await readFile(new URL("./step-tutorial-notes.ts", import.meta.url), "utf8").catch(() => "");
+
+  assert.match(source, /export const STEP_TUTORIAL_NOTES/);
+  assert.equal(source.match(/^\s{2}\["/gm)?.length, 29);
+  assert.match(source, /"体验锚定"/);
+  assert.match(source, /"启动场景"/);
+});
+
+test("步骤说明复用原脚本弹层样式并在移动端保持关闭按钮可见", async () => {
+  const stylesheet = await readFile(new URL("./styles.css", import.meta.url), "utf8");
+
+  assert.match(
+    stylesheet,
+    /\.step-guide-overlay\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;[^}]*display:\s*grid;[^}]*background:\s*rgba\(18,\s*16,\s*14,\s*0\.76\);[^}]*backdrop-filter:\s*blur\(10px\);/,
+  );
+  assert.match(
+    stylesheet,
+    /\.step-guide-dialog\s*\{[^}]*width:\s*min\(720px,\s*94vw\);[^}]*max-height:\s*min\(780px,\s*90vh\);[^}]*overflow:\s*auto;[^}]*border-radius:\s*18px;/,
+  );
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.step-guide-overlay\s*\{[^}]*display:\s*block;[^}]*padding:\s*0;/,
+  );
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.step-guide-dialog\s*\{[^}]*width:\s*100%;[^}]*height:\s*100dvh;[^}]*max-height:\s*none;[^}]*border:\s*0;[^}]*border-radius:\s*0;/,
+  );
+  assert.match(
+    stylesheet,
+    /@media \(max-width: 760px\)[\s\S]*?\.step-guide-head\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/,
   );
 });

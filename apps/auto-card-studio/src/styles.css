@@ -1771,26 +1771,18 @@ textarea::placeholder {
   align-items: center;
 }
 
-.stage-guide {
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.stage-guide > summary {
+.stage-guide-button {
   display: grid;
   width: 30px;
   height: 30px;
+  flex: 0 0 auto;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  list-style: none;
   place-items: center;
-}
-
-.stage-guide > summary::-webkit-details-marker {
-  display: none;
 }
 
 .stage-icon-button {
@@ -1808,39 +1800,149 @@ textarea::placeholder {
   place-items: center;
 }
 
-.stage-guide > div {
-  position: absolute;
-  top: 38px;
-  right: 0;
-  z-index: 30;
-  width: min(420px, 80vw);
-  padding: 16px;
-  border: 1px solid rgba(214, 120, 88, 0.32);
-  border-radius: 12px;
-  background: #302d28;
-  box-shadow: var(--shadow);
+.step-guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  padding: clamp(14px, 4vh, 42px);
+  place-items: center;
+  background: rgba(18, 16, 14, 0.76);
+  backdrop-filter: blur(10px);
 }
 
-.stage-guide small {
+.step-guide-dialog {
+  width: min(720px, 94vw);
+  max-height: min(780px, 90vh);
+  overflow: auto;
+  border: 1px solid rgba(211, 173, 114, 0.34);
+  border-radius: 18px;
+  background: #2b2925;
+  box-shadow: 0 30px 90px rgba(10, 9, 8, 0.58);
+  scrollbar-color: var(--line) transparent;
+  scrollbar-width: thin;
+}
+
+.step-guide-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(211, 173, 114, 0.06), transparent);
+}
+
+.step-guide-kicker {
+  margin: 0 0 7px;
   color: var(--terracotta);
-  font: 700 8px/1 var(--mono);
-  letter-spacing: 0.14em;
+  font: 700 9px/1 var(--mono);
+  letter-spacing: 0.16em;
 }
 
-.stage-guide h2 {
-  margin: 8px 0;
-  font: 500 19px/1.25 var(--display);
+.step-guide-head h2 {
+  margin: 0;
+  font: 500 27px/1.2 var(--display);
 }
 
-.stage-guide p,
-.stage-guide ol {
-  color: var(--text-soft);
+.step-guide-head small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
   font-size: 10px;
-  line-height: 1.65;
+  line-height: 1.55;
 }
 
-.stage-guide ol {
-  padding-left: 18px;
+.step-guide-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  place-items: center;
+}
+
+.step-guide-body {
+  display: grid;
+  gap: 12px;
+  padding: 20px 24px 24px;
+}
+
+.step-guide-lead {
+  margin: 0;
+  color: var(--text);
+  font: 500 14px/1.75 var(--body);
+}
+
+.step-guide-section {
+  padding: 14px 15px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: #34312c;
+}
+
+.step-guide-section span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--gold);
+  font: 700 9px/1 var(--mono);
+  letter-spacing: 0.12em;
+}
+
+.step-guide-section p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.72;
+}
+
+.step-guide-section.is-caution {
+  border-left: 2px solid var(--terracotta);
+}
+
+.step-guide-requirement-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.step-guide-requirement {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  padding: 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: 600 8px/1.2 var(--mono);
+  white-space: nowrap;
+}
+
+.step-guide-requirement[data-level="required"] {
+  border-color: rgba(214, 120, 88, 0.44);
+  background: rgba(214, 120, 88, 0.12);
+  color: var(--terracotta);
+}
+
+.step-guide-requirement[data-level="recommended"] {
+  border-color: rgba(211, 173, 114, 0.4);
+  background: rgba(211, 173, 114, 0.1);
+  color: var(--gold);
+}
+
+.step-guide-requirement[data-level="advanced"] {
+  border-color: rgba(150, 128, 176, 0.4);
+  background: rgba(150, 128, 176, 0.1);
+  color: #bba9d0;
+}
+
+.step-guide-requirement-line em {
+  color: var(--text-soft);
+  font-style: normal;
+  line-height: 1.72;
 }
 
 .brief-panel {
@@ -2726,7 +2828,7 @@ textarea::placeholder {
     display: none;
   }
 
-  .stage-guide > summary,
+  .stage-guide-button,
   .stage-icon-button {
     width: 19px;
     height: 19px;
@@ -2734,14 +2836,32 @@ textarea::placeholder {
     font-size: 6px;
   }
 
-  .stage-guide > div {
-    position: fixed;
-    top: calc(82px + env(safe-area-inset-top, 0px));
-    right: 10px;
-    left: 66px;
-    width: auto;
-    max-height: 62vh;
-    overflow-y: auto;
+  .step-guide-overlay {
+    display: block;
+    padding: 0;
+  }
+
+  .step-guide-dialog {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    overscroll-behavior: contain;
+  }
+
+  .step-guide-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding-top: max(18px, env(safe-area-inset-top, 0px));
+    background: #2b2925;
+  }
+
+  .step-guide-body {
+    padding-right: 17px;
+    padding-bottom: max(28px, calc(18px + env(safe-area-inset-bottom, 0px)));
+    padding-left: 17px;
   }
 
   .brief-panel {
@@ -2837,11 +2957,6 @@ textarea::placeholder {
     margin: 0;
     font-size: 8px;
     line-height: 1.3;
-  }
-
-  .studio-view.is-overview-collapsed .stage-guide {
-    position: relative;
-    flex: 0 0 auto;
   }
 
   .studio-view.is-overview-collapsed .brief-panel {
