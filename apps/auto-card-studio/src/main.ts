@@ -809,11 +809,11 @@ function openStepGuide(): void {
         <div class="step-guide-body">
           <p class="step-guide-lead">${escapeHtml(note.purpose)}</p>
           <section class="step-guide-section">
-            <span>完成建议</span>
-            <p class="step-guide-requirement-line">
+            <header class="step-guide-section-head">
+              <span>完成建议</span>
               <strong class="step-guide-requirement" data-level="${definition.requirement}">${requirementLabel(definition.requirement)}</strong>
-              <em>${escapeHtml(STEP_REQUIREMENT_COPY[definition.requirement])}</em>
-            </p>
+            </header>
+            <p>${escapeHtml(STEP_REQUIREMENT_COPY[definition.requirement])}</p>
           </section>
           <section class="step-guide-section"><span>建议怎么做</span><p>${escapeHtml(note.workflow)}</p></section>
           <section class="step-guide-section"><span>本步最终产物</span><p>${escapeHtml(note.deliverable)}</p></section>
@@ -857,6 +857,126 @@ function openStepGuide(): void {
   historyEntryActive = true;
   window.addEventListener("popstate", onPopState);
   overlay.querySelector<HTMLElement>("[data-step-guide-close]")?.focus({ preventScroll: true });
+}
+
+function openPromptPreview(preview: ReturnType<StudioKernel["previewPrompt"]>): void {
+  const existing = document.querySelector<HTMLElement>(".prompt-preview-overlay");
+  if (existing) {
+    existing.querySelector<HTMLElement>("[data-prompt-preview-close]")?.focus();
+    return;
+  }
+
+  const project = currentProject();
+  const trigger = Array.from(document.querySelectorAll<HTMLElement>("[data-action=\"prompt-preview\"]"))
+    .find((item) => item.offsetParent !== null);
+  const connectionName = modelSettings.mode === "stub"
+    ? "离线演示模型"
+    : `OpenAI-compatible · ${modelSettings.model || "未选择模型"}`;
+  const copyText = preview.messages.map((message, index) => (
+    `===== ${String(index + 1).padStart(2, "0")} · ${message.role.toUpperCase()} · ${message.name || `预设消息 ${index + 1}`} =====\n${message.content}`
+  )).join("\n\n");
+  const template = document.createElement("template");
+  template.innerHTML = `
+    <div class="prompt-preview-overlay">
+      <div class="prompt-preview-backdrop" data-prompt-preview-close></div>
+      <section class="prompt-preview-panel" role="dialog" aria-modal="true" aria-labelledby="prompt-preview-title">
+        <header class="prompt-preview-head">
+          <div class="prompt-preview-title">
+            <p class="prompt-preview-eyebrow">REQUEST MANIFEST</p>
+            <h2 id="prompt-preview-title">本轮发送内容</h2>
+            <p>Step ${project.currentStep} · ${preview.messages.length} 条消息 · ${preview.trace.characters.toLocaleString()} 字符 · ${escapeHtml(connectionName)}</p>
+          </div>
+          <div class="prompt-preview-actions">
+            <button class="prompt-preview-copy" type="button" data-prompt-preview-copy>
+              ${renderIcon(studioIcons.copy)}<span>复制全部</span>
+            </button>
+            <button class="prompt-preview-close" type="button" data-prompt-preview-close
+              title="关闭提示词预览" aria-label="关闭提示词预览">${renderIcon(studioIcons.xmark)}</button>
+          </div>
+        </header>
+        <p class="prompt-preview-note">这里按照实际发送顺序展示；独立 Android 版按消息正文统计字符。点击任一消息即可展开完整内容。</p>
+        <div class="prompt-message-list">
+          ${preview.messages.map((message, index) => `
+            <article class="prompt-message" data-role="${escapeHtml(message.role)}">
+              <button class="prompt-message-toggle" type="button" data-prompt-message-toggle aria-expanded="false">
+                <span class="prompt-message-index">${String(index + 1).padStart(2, "0")}</span>
+                <span class="prompt-message-role">${escapeHtml(message.role.toUpperCase())}</span>
+                <span class="prompt-message-name">${escapeHtml(message.name || `预设消息 ${index + 1}`)}</span>
+                <span class="prompt-message-size">${message.content.length.toLocaleString()} 字符</span>
+                ${renderIcon(studioIcons.chevronDown)}
+              </button>
+              <div class="prompt-message-body" hidden><pre>${escapeHtml(message.content)}</pre></div>
+            </article>`).join("")}
+        </div>
+      </section>
+    </div>`;
+  const overlay = template.content.firstElementChild;
+  if (!(overlay instanceof HTMLElement)) return;
+
+  let closed = false;
+  let historyEntryActive = false;
+  const onPopState = () => {
+    historyEntryActive = false;
+    closePromptPreview(true);
+  };
+  const closePromptPreview = (fromHistory = false) => {
+    if (closed) return;
+    closed = true;
+    overlay.remove();
+    window.removeEventListener("popstate", onPopState);
+    if (!fromHistory && historyEntryActive) {
+      historyEntryActive = false;
+      window.history.back();
+    }
+    trigger?.focus({ preventScroll: true });
+  };
+  const setMessageOpen = (item: HTMLElement, open: boolean) => {
+    item.classList.toggle("is-open", open);
+    const toggle = item.querySelector<HTMLElement>("[data-prompt-message-toggle]");
+    const body = item.querySelector<HTMLElement>(".prompt-message-body");
+    toggle?.setAttribute("aria-expanded", String(open));
+    if (body) body.hidden = !open;
+  };
+
+  overlay.querySelectorAll("[data-prompt-preview-close]").forEach((button) => {
+    button.addEventListener("click", () => closePromptPreview());
+  });
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closePromptPreview();
+  });
+  overlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closePromptPreview();
+  });
+  overlay.querySelectorAll<HTMLElement>("[data-prompt-message-toggle]").forEach((toggle) => {
+    toggle.addEventListener("click", () => {
+      const item = toggle.closest<HTMLElement>(".prompt-message");
+      if (!item) return;
+      const open = !item.classList.contains("is-open");
+      overlay.querySelectorAll<HTMLElement>(".prompt-message.is-open").forEach((other) => {
+        if (other !== item) setMessageOpen(other, false);
+      });
+      setMessageOpen(item, open);
+    });
+  });
+  overlay.querySelector<HTMLElement>("[data-prompt-preview-copy]")?.addEventListener("click", async (event) => {
+    const copyButton = event.currentTarget as HTMLElement;
+    const label = copyButton.querySelector("span");
+    try {
+      await navigator.clipboard.writeText(copyText);
+      if (label) label.textContent = "已复制";
+    } catch {
+      if (label) label.textContent = "复制失败";
+    }
+    window.setTimeout(() => {
+      if (label) label.textContent = "复制全部";
+    }, 1000);
+  });
+
+  document.body.append(overlay);
+  window.history.pushState({ ...window.history.state, autoCardStudioPromptPreview: true }, "");
+  historyEntryActive = true;
+  window.addEventListener("popstate", onPopState);
+  overlay.querySelector<HTMLElement>("[data-prompt-preview-close]")?.focus({ preventScroll: true });
 }
 
 function openTextEditor(title: string, value: string, label = "正文"): Promise<string | null> {
@@ -1149,15 +1269,7 @@ app.addEventListener("click", (event) => {
   if (action === "prompt-preview") {
     try {
       const preview = kernel.previewPrompt(elementValue("composer-input"));
-      const summary = [
-        `总计约 ${preview.trace.characters.toLocaleString()} 字符 · ${preview.messages.length} 条消息`,
-        preview.trace.omitted.length ? `已按完整块移除：${preview.trace.omitted.join("、")}` : "没有裁剪上下文块",
-        "",
-        ...preview.messages.map((message, index) => (
-          `${index + 1}. [${message.role}] ${message.name || "未命名"} · ${message.content.length.toLocaleString()} 字符`
-        )),
-      ].join("\n");
-      void openTextEditor("本轮上下文清单", summary, "只读摘要");
+      openPromptPreview(preview);
     } catch (error) {
       setNotice((error as Error).message, "error");
       render();
