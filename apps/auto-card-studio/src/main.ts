@@ -23,6 +23,7 @@ import {
   createCharacterCardExport,
   defaultDeliveryKeys,
 } from "./delivery.ts";
+import { DisclosureState } from "./disclosure.ts";
 import { ModelGatewayRouter, OpenAICompatibleGateway } from "./model.ts";
 import {
   AUTO_WORKFLOW_PROFILE,
@@ -85,6 +86,8 @@ let mobileFlowOpen = false;
 let overviewCollapsed = true;
 let artifactScope: ArtifactScope = "all";
 let artifactSearch = "";
+const phaseDisclosure = new DisclosureState(WORKFLOW_PHASES.map((phase) => phase.id));
+const settingsDisclosure = new DisclosureState(["model"]);
 const mobileLayoutQuery = window.matchMedia("(max-width: 760px)");
 
 function escapeHtml(value: unknown): string {
@@ -161,14 +164,17 @@ function renderStepRail(project = currentProject(), grouped = false): string {
     const steps = WORKFLOW_STEPS.filter((step) => step.number >= start && step.number <= end);
     const accepted = steps.filter((step) => stepState(project, step.number).status === "accepted").length;
     const current = project.currentStep >= start && project.currentStep <= end;
+    const open = phaseDisclosure.isOpen(phase.id);
     return `
-      <section class="phase-group ${current ? "is-current" : ""}">
-        <div class="phase-heading">
+      <section class="phase-group ${current ? "is-current" : ""} ${open ? "" : "is-collapsed"}">
+        <button class="phase-heading" data-action="toggle-phase" data-phase="${phase.id}"
+          aria-expanded="${open}" aria-controls="phase-steps-${phase.id}">
           <span class="phase-icon">${phaseIcon(phase.id)}</span>
           <b>${escapeHtml(phase.label)}</b>
           <small>${accepted}/${steps.length}</small>
-        </div>
-        <div class="phase-steps">${renderStepButtons(steps, project)}</div>
+          <span class="phase-chevron">${renderIcon(studioIcons.chevronDown)}</span>
+        </button>
+        <div class="phase-steps" id="phase-steps-${phase.id}" ${open ? "" : "hidden"}>${renderStepButtons(steps, project)}</div>
       </section>`;
   }).join("");
 }
@@ -488,30 +494,38 @@ function renderSettings(project = currentProject()): string {
       <div class="panel-heading">
         <div><small>SETTINGS & RESOURCES</small><h1>模型与资源</h1><p>真实模型密钥只进入加密密钥仓，不进入项目、日志或导出文件。</p></div>
       </div>
-      <section class="settings-section">
-        <header><div><small>MODEL GATEWAY</small><h2>模型与生成</h2></div><span class="resource-state">${modelSettings.mode === "stub" ? "离线演示" : "OpenAI-compatible"}</span></header>
-        <div class="model-mode-options" role="radiogroup" aria-label="模型连接方式">
-          <label class="model-choice">
-            <input type="radio" name="model-mode" value="stub" ${modelSettings.mode === "stub" ? "checked" : ""}>
-            <span><strong>离线演示</strong><small>使用本机演示模型，不连接外部接口</small></span>
-          </label>
-          <label class="model-choice">
-            <input type="radio" name="model-mode" value="openai-compatible" ${modelSettings.mode === "openai-compatible" ? "checked" : ""}>
-            <span><strong>单独配置</strong><small>使用 OpenAI-compatible 接口和加密密钥仓</small></span>
-          </label>
-        </div>
-        <details class="model-parameters">
-          <summary><span>模型参数</span><small>独立设置 ›</small></summary>
-          <div class="form-grid">
-            <label>模型名称<input id="model-name" value="${escapeHtml(modelSettings.model)}" placeholder="例如 gpt-5-mini"></label>
-            <label class="span-two">API Base URL<input id="model-base-url" value="${escapeHtml(modelSettings.baseUrl)}" placeholder="https://api.openai.com/v1"></label>
-            <label>请求超时（秒）<input id="model-timeout" type="number" min="5" max="600" value="${Math.round(modelSettings.timeoutMs / 1000)}"></label>
+      <details class="settings-section settings-collapsible" data-settings-fold="model" ${settingsDisclosure.isOpen("model") ? "open" : ""}>
+        <summary>
+          <div><small>MODEL GATEWAY</small><h2>模型与生成</h2><p class="settings-fold-description">连接来源、输出方式与生成参数</p></div>
+          <span class="settings-fold-meta"><span class="resource-state">${modelSettings.mode === "stub" ? "离线演示" : "OpenAI-compatible"}</span>${renderIcon(studioIcons.chevronDown, "settings-fold-chevron")}</span>
+        </summary>
+        <div class="settings-collapsible-body">
+          <div class="model-mode-options" role="radiogroup" aria-label="模型连接方式">
+            <label class="model-choice">
+              <input type="radio" name="model-mode" value="stub" ${modelSettings.mode === "stub" ? "checked" : ""}>
+              <span><strong>离线演示</strong><small>使用本机演示模型，不连接外部接口</small></span>
+            </label>
+            <label class="model-choice">
+              <input type="radio" name="model-mode" value="openai-compatible" ${modelSettings.mode === "openai-compatible" ? "checked" : ""}>
+              <span><strong>单独配置</strong><small>使用 OpenAI-compatible 接口和加密密钥仓</small></span>
+            </label>
           </div>
-        </details>
-        <div class="button-row"><button class="primary-button" data-action="save-model">保存模型设置</button><button class="secondary-button" data-action="test-model" ${status.unlocked && status.hasApiKey ? "" : "disabled"}>测试连接</button></div>
-      </section>
-      <details class="settings-section settings-collapsible">
-        <summary><div><small>ENCRYPTED SECRET</small><h2>安全密钥</h2></div><span class="resource-state is-${status.unlocked ? "ok" : "muted"}">${!status.supported ? "浏览器预览不可用" : status.unlocked ? (status.hasApiKey ? "已解锁 · 已保存" : "已解锁") : "已锁定"}</span></summary>
+          <details class="model-parameters">
+            <summary><span>模型参数</span><small>独立设置 ${renderIcon(studioIcons.chevronDown)}</small></summary>
+            <div class="form-grid">
+              <label>模型名称<input id="model-name" value="${escapeHtml(modelSettings.model)}" placeholder="例如 gpt-5-mini"></label>
+              <label class="span-two">API Base URL<input id="model-base-url" value="${escapeHtml(modelSettings.baseUrl)}" placeholder="https://api.openai.com/v1"></label>
+              <label>请求超时（秒）<input id="model-timeout" type="number" min="5" max="600" value="${Math.round(modelSettings.timeoutMs / 1000)}"></label>
+            </div>
+          </details>
+          <div class="button-row"><button class="primary-button" data-action="save-model">保存模型设置</button><button class="secondary-button" data-action="test-model" ${status.unlocked && status.hasApiKey ? "" : "disabled"}>测试连接</button></div>
+        </div>
+      </details>
+      <details class="settings-section settings-collapsible" data-settings-fold="secret" ${settingsDisclosure.isOpen("secret") ? "open" : ""}>
+        <summary>
+          <div><small>ENCRYPTED SECRET</small><h2>安全密钥</h2><p class="settings-fold-description">在当前设备加密保存 API Key</p></div>
+          <span class="settings-fold-meta"><span class="resource-state is-${status.unlocked ? "ok" : "muted"}">${!status.supported ? "浏览器预览不可用" : status.unlocked ? (status.hasApiKey ? "已解锁 · 已保存" : "已解锁") : "已锁定"}</span>${renderIcon(studioIcons.chevronDown, "settings-fold-chevron")}</span>
+        </summary>
         <div class="settings-collapsible-body">
           <div class="form-grid">
             <label>本机密钥仓口令<input id="vault-passphrase" type="password" autocomplete="current-password" placeholder="至少 8 个字符"></label>
@@ -525,8 +539,11 @@ function renderSettings(project = currentProject()): string {
           </div>
         </div>
       </details>
-      <details class="settings-section settings-collapsible">
-        <summary><div><small>A.U.T.O RESOURCE</small><h2>创作资源</h2></div><span class="resource-state is-ok">${preset.regexCount} 条正则</span></summary>
+      <details class="settings-section settings-collapsible" data-settings-fold="resources" ${settingsDisclosure.isOpen("resources") ? "open" : ""}>
+        <summary>
+          <div><small>A.U.T.O RESOURCE</small><h2>创作资源</h2><p class="settings-fold-description">导入和管理独立预设、正则</p></div>
+          <span class="settings-fold-meta"><span class="resource-state is-ok">${preset.regexCount} 条正则</span>${renderIcon(studioIcons.chevronDown, "settings-fold-chevron")}</span>
+        </summary>
         <div class="settings-collapsible-body">
           <div class="resource-card">
             <div><b>${escapeHtml(preset.name)}</b><small>${escapeHtml(preset.sourceFileName)} · ${preset.promptCount} prompts</small><code>SHA-256 ${escapeHtml(preset.sourceSha256)}</code></div>
@@ -540,8 +557,11 @@ function renderSettings(project = currentProject()): string {
           <p class="subtle-note">导入仅解析数据，不执行预设中的脚本或未知表达式；未知字段会随资源原样保留。</p>
         </div>
       </details>
-      <details class="settings-section settings-collapsible">
-        <summary><div><small>PROMPT PREFERENCES</small><h2>创作偏好</h2></div><span class="resource-state">项目独立</span></summary>
+      <details class="settings-section settings-collapsible" data-settings-fold="preferences" ${settingsDisclosure.isOpen("preferences") ? "open" : ""}>
+        <summary>
+          <div><small>PROMPT PREFERENCES</small><h2>创作偏好</h2><p class="settings-fold-description">称呼、篇幅、语言与叙事人称</p></div>
+          <span class="settings-fold-meta"><span class="resource-state">项目独立</span>${renderIcon(studioIcons.chevronDown, "settings-fold-chevron")}</span>
+        </summary>
         <div class="settings-collapsible-body">
           <div class="form-grid">
             <label>AI 称呼<input id="pref-ai-role" value="${escapeHtml(project.preferences.aiRole)}"></label>
@@ -553,12 +573,20 @@ function renderSettings(project = currentProject()): string {
           <div class="button-row"><button class="primary-button" data-action="save-preferences">保存提示偏好</button></div>
         </div>
       </details>
-      <section class="diagnostic-strip">
-        <span><b>Schema</b> v${snapshot!.schemaVersion}</span>
-        <span><b>Workspace revision</b> ${snapshot!.revision}</span>
-        <span><b>Profile</b> ${escapeHtml(preset.profileVersion)}</span>
-        <span><b>Storage</b> ${escapeHtml(repository.label)}</span>
-      </section>
+      <details class="settings-section settings-collapsible" data-settings-fold="diagnostics" ${settingsDisclosure.isOpen("diagnostics") ? "open" : ""}>
+        <summary>
+          <div><small>DATA & DIAGNOSTICS</small><h2>数据与诊断</h2><p class="settings-fold-description">检查运行数据与本机存储状态</p></div>
+          <span class="settings-fold-meta">${renderIcon(studioIcons.chevronDown, "settings-fold-chevron")}</span>
+        </summary>
+        <div class="settings-collapsible-body">
+          <section class="diagnostic-strip">
+            <span><b>Schema</b> v${snapshot!.schemaVersion}</span>
+            <span><b>Workspace revision</b> ${snapshot!.revision}</span>
+            <span><b>Profile</b> ${escapeHtml(preset.profileVersion)}</span>
+            <span><b>Storage</b> ${escapeHtml(repository.label)}</span>
+          </section>
+        </div>
+      </details>
     </section>`;
 }
 
@@ -874,6 +902,12 @@ app.addEventListener("change", (event) => {
   }
 });
 
+app.addEventListener("toggle", (event) => {
+  const details = event.target as HTMLDetailsElement;
+  const foldId = details.dataset.settingsFold;
+  if (foldId) settingsDisclosure.setOpen(foldId, details.open);
+}, true);
+
 app.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLElement>("[data-action]");
   if (!button) return;
@@ -883,6 +917,16 @@ app.addEventListener("click", (event) => {
     activeView = button.dataset.view as ViewName;
     mobileFlowOpen = activeView === "projects";
     render();
+    return;
+  }
+  if (action === "toggle-phase") {
+    const phaseId = button.dataset.phase;
+    if (!phaseId) return;
+    phaseDisclosure.toggle(phaseId);
+    render();
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-action="toggle-phase"][data-phase="${phaseId}"]`)?.focus();
+    });
     return;
   }
   if (action === "toggle-flow") {

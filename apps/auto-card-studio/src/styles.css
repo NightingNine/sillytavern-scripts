@@ -1252,16 +1252,31 @@ textarea::placeholder {
   display: none;
 }
 
-.settings-collapsible > summary::after {
+.settings-fold-meta {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.settings-fold-chevron {
   align-self: center;
+  width: 9px;
+  height: 9px;
   color: var(--terracotta);
-  content: "›";
-  font-size: 16px;
   transition: transform 0.18s ease;
 }
 
-.settings-collapsible[open] > summary::after {
-  transform: rotate(90deg);
+.settings-collapsible:not([open]) > summary .settings-fold-chevron {
+  transform: rotate(-90deg);
+}
+
+.settings-fold-description {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
 }
 
 .settings-collapsible-body {
@@ -2116,7 +2131,12 @@ textarea::placeholder {
     min-height: 30px;
     margin: 0 auto;
     padding: 2px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
     place-items: center;
+    text-align: left;
   }
 
   .phase-heading b,
@@ -2284,6 +2304,16 @@ textarea::placeholder {
     place-items: center;
   }
 
+  .phase-chevron {
+    display: none;
+    color: var(--muted);
+    transition: transform 0.18s ease;
+  }
+
+  .phase-group.is-collapsed .phase-chevron {
+    transform: rotate(-90deg);
+  }
+
   .rail-project-control > input {
     width: 100%;
     min-width: 0;
@@ -2344,7 +2374,7 @@ textarea::placeholder {
   }
 
   .mobile-step-rail.is-expanded .phase-heading {
-    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-columns: 24px minmax(0, 1fr) auto 10px;
     gap: 7px;
     width: 100%;
     min-height: 34px;
@@ -2370,6 +2400,14 @@ textarea::placeholder {
   .mobile-step-rail.is-expanded .phase-heading small {
     color: var(--muted);
     font: 700 7px/1 var(--mono);
+  }
+
+  .mobile-step-rail.is-expanded .phase-chevron {
+    display: block;
+    width: 7px;
+    height: 7px;
+    align-self: center;
+    justify-self: center;
   }
 
   .mobile-step-rail.is-expanded .phase-icon {
