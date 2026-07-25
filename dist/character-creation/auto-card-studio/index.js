@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.39 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.39 · 酒馆助手脚本测试包（内置测试更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -2366,11 +2366,11 @@ const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
 const TOUR_COMPLETED_KEY = 'auto-card-studio:tour-completed:v1';
 // 测试分支不参与正式版版本号比较；手动更新直接重新拉取本分支的最新脚本。
-const TEST_BRANCH_UPDATE_MODE = false;
+const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.23-57';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.26-58';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -2515,6 +2515,50 @@ const STEP_HELP_CSS = `
 .acs-step-help-requirement-line .acs-step-requirement { margin-top:2px; font-size:8px; }
 .acs-step-help-requirement-line em { color:var(--acs-text-soft); font-style:normal; line-height:1.72; }
 @media (max-width:560px) { .acs-step-help-overlay{padding:0}.acs-step-help-dialog{width:100%;max-height:100%;border-radius:0}.acs-step-help-head,.acs-step-help-body{padding-left:17px;padding-right:17px}.acs-step-title-line{gap:7px}.acs-current-step-requirement{padding:3px 6px;font-size:7px}.acs-step-help-button{width:25px;height:25px}.acs-clear-step-button span{display:none}.acs-clear-step-button{width:30px;padding:5px;justify-content:center} }
+`;
+
+const MULTI_CONVERSATION_CSS = `
+.acs-conversation-manager { position:relative; }
+.acs-conversation-manager-toggle { display:inline-flex; max-width:190px; min-height:30px; align-items:center; gap:6px; padding:5px 9px; border:1px solid var(--acs-line); border-radius:999px; background:#38352f; color:var(--acs-text-soft); cursor:pointer; font:600 9px/1 var(--acs-body); }
+.acs-conversation-manager-toggle:hover,.acs-conversation-manager-toggle[aria-expanded="true"] { border-color:rgba(217,119,87,.5); background:#413d36; color:var(--acs-cyan); }
+.acs-conversation-manager-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.acs-conversation-manager-count { display:grid; min-width:17px; height:17px; place-items:center; padding:0 4px; border-radius:999px; background:rgba(217,119,87,.14); color:var(--acs-cyan); font:700 7px/1 var(--acs-mono); }
+.acs-conversation-manager-toggle .fa-chevron-down { font-size:7px; transition:transform 150ms ease; }
+.acs-conversation-manager-toggle[aria-expanded="true"] .fa-chevron-down { transform:rotate(180deg); }
+.acs-conversation-menu { position:absolute; top:calc(100% + 8px); right:0; z-index:28; width:min(340px,calc(100vw - 40px)); overflow:hidden; border:1px solid rgba(217,119,87,.34); border-radius:13px; background:#2b2925; box-shadow:0 18px 48px rgba(10,9,8,.48); cursor:default; }
+.acs-conversation-menu-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 13px 10px; border-bottom:1px solid var(--acs-line-soft); }
+.acs-conversation-menu-head strong { color:var(--acs-text); font-size:11px; }
+.acs-conversation-menu-head span { color:var(--acs-muted); font:700 8px/1 var(--acs-mono); }
+.acs-conversation-menu-list { display:grid; gap:5px; max-height:min(330px,48vh); overflow:auto; padding:8px; scrollbar-width:thin; scrollbar-color:var(--acs-line) transparent; }
+.acs-conversation-row { display:grid; grid-template-columns:minmax(0,1fr) 28px 28px; gap:4px; align-items:center; min-height:47px; padding:4px; border:1px solid transparent; border-radius:9px; }
+.acs-conversation-row:hover { background:#34312c; }
+.acs-conversation-row.is-active { border-color:rgba(217,119,87,.32); background:rgba(217,119,87,.09); }
+.acs-conversation-switch { min-width:0; padding:5px 7px; border:0; background:transparent; color:var(--acs-text-soft); cursor:pointer; text-align:left; }
+.acs-conversation-switch:disabled { cursor:default; }
+.acs-conversation-switch strong,.acs-conversation-switch small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.acs-conversation-switch strong { font-size:10px; font-weight:650; }
+.acs-conversation-switch small { margin-top:4px; color:var(--acs-muted); font-size:8px; }
+.acs-conversation-row.is-active .acs-conversation-switch strong { color:var(--acs-cyan); }
+.acs-conversation-row-action { display:grid; width:28px; height:28px; place-items:center; padding:0; border:1px solid transparent; border-radius:7px; background:transparent; color:var(--acs-muted); cursor:pointer; font-size:9px; }
+.acs-conversation-row-action:hover:not(:disabled) { border-color:var(--acs-line); background:#3b3832; color:var(--acs-text); }
+.acs-conversation-row-action.is-delete:hover:not(:disabled) { border-color:rgba(217,132,127,.4); color:var(--acs-red); }
+.acs-conversation-row-action:disabled { cursor:default; opacity:.28; }
+.acs-conversation-rename-form { grid-column:1/-1; display:grid; grid-template-columns:minmax(0,1fr) 30px 30px; gap:5px; align-items:center; padding:2px; }
+.acs-conversation-rename-form input,.acs-conversation-create-form input { width:100%; min-width:0; height:31px; padding:6px 8px; border:1px solid var(--acs-line); border-radius:7px; outline:0; background:#292722; color:var(--acs-text); font:500 10px/1 var(--acs-body); }
+.acs-conversation-menu-foot { display:grid; gap:7px; padding:9px; border-top:1px solid var(--acs-line-soft); background:#302e29; }
+.acs-conversation-create-toggle { display:flex; width:100%; min-height:32px; align-items:center; justify-content:center; gap:7px; border:1px dashed var(--acs-line); border-radius:8px; background:transparent; color:var(--acs-text-soft); cursor:pointer; font:650 9px/1 var(--acs-body); }
+.acs-conversation-create-toggle:hover:not(:disabled) { border-color:rgba(217,119,87,.52); color:var(--acs-cyan); }
+.acs-conversation-create-toggle:disabled { cursor:default; opacity:.34; }
+.acs-conversation-create-form { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:5px; }
+.acs-conversation-form-action { min-width:31px; height:31px; padding:0 8px; border:1px solid var(--acs-line); border-radius:7px; background:#3b3832; color:var(--acs-text-soft); cursor:pointer; font:650 9px/1 var(--acs-body); }
+.acs-conversation-form-action.is-primary { border-color:rgba(217,119,87,.46); background:rgba(217,119,87,.13); color:var(--acs-cyan); }
+.acs-conversation-menu-note { margin:0; color:var(--acs-muted); font-size:8px; line-height:1.45; text-align:center; }
+@media(max-width:640px){
+  .acs-conversation-manager-toggle{width:30px;min-width:30px;height:30px;padding:0;justify-content:center}
+  .acs-conversation-manager-name,.acs-conversation-manager-toggle .fa-chevron-down{display:none}
+  .acs-conversation-manager-count{position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;border:1px solid #302e29;background:var(--acs-cyan);color:#241f1b;font-size:6px}
+  .acs-conversation-menu{position:fixed;top:58px;right:10px;left:78px;width:auto;max-width:360px;margin-left:auto}
+}
 `;
 
 const RESOURCE_MANAGER_CSS = `
@@ -4716,6 +4760,8 @@ let confirmDialogResolver = null;
 let updateDialogResolver = null;
 let resourceEditorPrompt = null;
 let resourceDockDragged = false;
+let conversationRenameId = '';
+let conversationCreateFormOpen = false;
 let automaticUpdateChecked = false;
 let backgroundUpdatePromise = null;
 let pendingAutomaticUpdate = null;
@@ -4865,12 +4911,14 @@ function migrateConversationArtifacts(projectData, vault) {
     for (const step of STEPS) {
         const state = projectData.steps?.[step.number];
         for (const collectionName of ['artifactHistory', 'turns']) {
-            for (const turn of state?.[collectionName] || []) {
-                if (turn?.role !== 'assistant') continue;
-                migrated += appendArtifactsToVault(vault, turn.content, step.number, {
-                    createdAt: turn.createdAt || state.updatedAt,
-                    source: 'conversation-migration',
-                });
+            for (const collection of stepConversationCollections(state, step.number, collectionName)) {
+                for (const turn of collection) {
+                    if (turn?.role !== 'assistant') continue;
+                    migrated += appendArtifactsToVault(vault, turn.content, step.number, {
+                        createdAt: turn.createdAt || state.updatedAt,
+                        source: 'conversation-migration',
+                    });
+                }
             }
         }
     }
@@ -4887,35 +4935,36 @@ function recoverRestoreOverwriteArtifacts(projectData, vault) {
 
     let recovered = 0;
     for (const step of STEPS) {
-        const turns = projectData.steps?.[step.number]?.turns || [];
-        for (const turn of turns) {
-            if (turn?.role !== 'assistant') continue;
-            const blocks = extractArtifactBlocks(turn.content, step.number);
-            for (const block of blocks) {
-                const identity = resolveArtifactIdentity(step.number, block, blocks);
-                const key = artifactContextKey(step.number, identity);
-                if (!affectedKeys.has(key)) continue;
-                let version = vault.versions.find(item => (
-                    item.step === step.number
-                    && item.identity === identity
-                    && item.content === block.content
-                ));
-                if (!version) {
-                    const createdAt = String(turn.createdAt || new Date().toISOString());
-                    version = {
-                        id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                        step: step.number,
-                        identity,
-                        content: block.content,
-                        createdAt,
-                        updatedAt: createdAt,
-                        source: 'restore-overwrite-recovery',
-                    };
-                    vault.versions.push(version);
-                    recovered += 1;
+        for (const turns of stepConversationCollections(projectData.steps?.[step.number], step.number)) {
+            for (const turn of turns) {
+                if (turn?.role !== 'assistant') continue;
+                const blocks = extractArtifactBlocks(turn.content, step.number);
+                for (const block of blocks) {
+                    const identity = resolveArtifactIdentity(step.number, block, blocks);
+                    const key = artifactContextKey(step.number, identity);
+                    if (!affectedKeys.has(key)) continue;
+                    let version = vault.versions.find(item => (
+                        item.step === step.number
+                        && item.identity === identity
+                        && item.content === block.content
+                    ));
+                    if (!version) {
+                        const createdAt = String(turn.createdAt || new Date().toISOString());
+                        version = {
+                            id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                            step: step.number,
+                            identity,
+                            content: block.content,
+                            createdAt,
+                            updatedAt: createdAt,
+                            source: 'restore-overwrite-recovery',
+                        };
+                        vault.versions.push(version);
+                        recovered += 1;
+                    }
+                    // 对话按时间顺序扫描，最后一次对应回复最终成为所选版本。
+                    vault.selectedVersionIds[key] = version.id;
                 }
-                // 对话按时间顺序扫描，最后一次对应回复最终成为所选版本。
-                vault.selectedVersionIds[key] = version.id;
             }
         }
     }
@@ -4930,33 +4979,34 @@ function recoverMalformedFencedArtifacts(projectData, vault) {
     if (vault.malformedFenceRepairAt) return { attempted: false, recovered: 0 };
     let recovered = 0;
     const stepNumber = 5;
-    const turns = projectData.steps?.[stepNumber]?.turns || [];
-    for (const turn of turns) {
-        if (turn?.role !== 'assistant') continue;
-        const blocks = extractArtifactBlocks(turn.content, stepNumber).filter(block => block.recoveredFromFence);
-        for (const block of blocks) {
-            const identity = resolveArtifactIdentity(stepNumber, block, blocks);
-            const key = artifactContextKey(stepNumber, identity);
-            let version = vault.versions.find(item => (
-                item.step === stepNumber
-                && item.identity === identity
-                && item.content === block.content
-            ));
-            if (!version) {
-                const createdAt = String(turn.createdAt || new Date().toISOString());
-                version = {
-                    id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-                    step: stepNumber,
-                    identity,
-                    content: block.content,
-                    createdAt,
-                    updatedAt: createdAt,
-                    source: 'malformed-fence-recovery',
-                };
-                vault.versions.push(version);
-                recovered += 1;
+    for (const turns of stepConversationCollections(projectData.steps?.[stepNumber], stepNumber)) {
+        for (const turn of turns) {
+            if (turn?.role !== 'assistant') continue;
+            const blocks = extractArtifactBlocks(turn.content, stepNumber).filter(block => block.recoveredFromFence);
+            for (const block of blocks) {
+                const identity = resolveArtifactIdentity(stepNumber, block, blocks);
+                const key = artifactContextKey(stepNumber, identity);
+                let version = vault.versions.find(item => (
+                    item.step === stepNumber
+                    && item.identity === identity
+                    && item.content === block.content
+                ));
+                if (!version) {
+                    const createdAt = String(turn.createdAt || new Date().toISOString());
+                    version = {
+                        id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                        step: stepNumber,
+                        identity,
+                        content: block.content,
+                        createdAt,
+                        updatedAt: createdAt,
+                        source: 'malformed-fence-recovery',
+                    };
+                    vault.versions.push(version);
+                    recovered += 1;
+                }
+                vault.selectedVersionIds[key] = version.id;
             }
-            vault.selectedVersionIds[key] = version.id;
         }
     }
     vault.malformedFenceRepairAt = new Date().toISOString();
@@ -5164,10 +5214,100 @@ function normalizeImportedRegexes(raw) {
     });
 }
 
+function createStepConversation(name = '默认对话', source = {}) {
+    const now = new Date().toISOString();
+    return {
+        id: String(source.id || globalThis.crypto?.randomUUID?.() || `conversation-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+        name: String(source.name || name || '默认对话').trim() || '默认对话',
+        turns: cloneConversationData(Array.isArray(source.turns) ? source.turns : []),
+        artifactHistory: cloneConversationData(Array.isArray(source.artifactHistory) ? source.artifactHistory : []),
+        createdAt: String(source.createdAt || now),
+        updatedAt: String(source.updatedAt || source.createdAt || now),
+    };
+}
+
+function normalizeStepState(source = {}, stepNumber) {
+    const rawConversations = Array.isArray(source.conversations) ? source.conversations.filter(Boolean) : [];
+    const conversations = rawConversations.length
+        ? rawConversations.map((item, index) => createStepConversation(`对话 ${index + 1}`, item))
+        : [createStepConversation('默认对话', {
+            turns: source.turns,
+            artifactHistory: source.artifactHistory,
+            createdAt: source.updatedAt,
+            updatedAt: source.updatedAt,
+        })];
+    const requestedActiveId = String(source.activeConversationId || '');
+    const active = conversations.find(item => item.id === requestedActiveId) || conversations[0];
+    const hasTurns = conversations.some(item => item.turns.length);
+    return {
+        ...source,
+        status: ['idle', 'draft', 'accepted'].includes(source.status)
+            ? source.status
+            : (hasTurns ? 'draft' : 'idle'),
+        conversations,
+        activeConversationId: active.id,
+        // 保留这两个字段作为当前对话的运行时别名，现有生成与编辑链路无需分叉。
+        turns: active.turns,
+        artifactHistory: active.artifactHistory,
+        updatedAt: source.updatedAt ? String(source.updatedAt) : null,
+        step: Number(stepNumber),
+    };
+}
+
+function ensureStepConversationState(state, stepNumber) {
+    if (!state || !Array.isArray(state.conversations) || !state.conversations.length) {
+        return normalizeStepState(state || {}, stepNumber);
+    }
+    let active = state.conversations.find(item => item.id === String(state.activeConversationId || ''));
+    if (!active) {
+        active = state.conversations[0];
+        state.activeConversationId = active.id;
+        state.turns = active.turns;
+        state.artifactHistory = active.artifactHistory;
+    }
+    if (!Array.isArray(state.turns)) state.turns = active.turns;
+    if (!Array.isArray(state.artifactHistory)) state.artifactHistory = active.artifactHistory;
+    return state;
+}
+
+function activeStepConversation(state, stepNumber) {
+    const normalized = ensureStepConversationState(state, stepNumber);
+    return normalized.conversations.find(item => item.id === normalized.activeConversationId)
+        || normalized.conversations[0];
+}
+
+function syncActiveStepConversation(state, stepNumber) {
+    const active = activeStepConversation(state, stepNumber);
+    active.turns = Array.isArray(state.turns) ? state.turns : [];
+    active.artifactHistory = Array.isArray(state.artifactHistory) ? state.artifactHistory : [];
+    if (state.updatedAt && String(state.updatedAt) > String(active.updatedAt || '')) {
+        active.updatedAt = String(state.updatedAt);
+    }
+    return active;
+}
+
+function activateStepConversation(state, conversationId, stepNumber) {
+    syncActiveStepConversation(state, stepNumber);
+    const target = state.conversations.find(item => item.id === String(conversationId || ''));
+    if (!target) return null;
+    state.activeConversationId = target.id;
+    state.turns = target.turns;
+    state.artifactHistory = target.artifactHistory;
+    return target;
+}
+
+function stepConversationCollections(state, stepNumber, collectionName = 'turns') {
+    const normalized = ensureStepConversationState(state, stepNumber);
+    syncActiveStepConversation(normalized, stepNumber);
+    return normalized.conversations.map(item => (
+        Array.isArray(item[collectionName]) ? item[collectionName] : []
+    ));
+}
+
 function createDefaultProject() {
     const steps = {};
     for (const step of STEPS) {
-        steps[step.number] = { status: 'idle', turns: [], updatedAt: null };
+        steps[step.number] = normalizeStepState({ status: 'idle', turns: [], updatedAt: null }, step.number);
     }
 
     return {
@@ -5251,6 +5391,9 @@ function normalizeProject(saved) {
     // v0.6.x 的 Step30 是开场白；新版隐藏重组步骤后迁移为 Step29。
     if (saved.steps?.[30]) normalized.steps[29] = saved.steps[30];
     delete normalized.steps[30];
+    for (const step of STEPS) {
+        normalized.steps[step.number] = normalizeStepState(normalized.steps[step.number], step.number);
+    }
     // 产物正文只进入独立 IndexedDB；导入包里的 artifactVault 不回写项目 localStorage。
     delete normalized.artifactVault;
     normalized.currentStep = Math.min(Number(normalized.currentStep) || 1, STEPS.length);
@@ -5265,14 +5408,14 @@ function projectMetadataRecordFor(projectData) {
 
 function applyStoredStepRecord(projectData, record) {
     const stepNumber = Number(record?.step);
-    const state = projectData.steps?.[stepNumber];
-    if (!state) return false;
-    state.turns = cloneConversationData(Array.isArray(record.turns) ? record.turns : []);
-    state.artifactHistory = cloneConversationData(Array.isArray(record.artifactHistory) ? record.artifactHistory : []);
-    state.status = ['idle', 'draft', 'accepted'].includes(record.status)
-        ? record.status
-        : (state.status === 'idle' && state.turns.length ? 'draft' : state.status);
-    state.updatedAt = record.updatedAt ? String(record.updatedAt) : state.updatedAt;
+    if (!projectData.steps?.[stepNumber]) return false;
+    projectData.steps[stepNumber] = normalizeStepState({
+        ...projectData.steps[stepNumber],
+        ...record,
+        conversations: cloneConversationData(Array.isArray(record.conversations) ? record.conversations : []),
+        turns: cloneConversationData(Array.isArray(record.turns) ? record.turns : []),
+        artifactHistory: cloneConversationData(Array.isArray(record.artifactHistory) ? record.artifactHistory : []),
+    }, stepNumber);
     return true;
 }
 
@@ -5443,6 +5586,10 @@ function saveProjectLibrary() {
 }
 
 function saveProject() {
+    for (const step of STEPS) {
+        const state = project.steps?.[step.number];
+        if (state) syncActiveStepConversation(state, step.number);
+    }
     const repairedTurns = repairCrossStepTurnOwnership(project);
     if (repairedTurns) {
         console.warn(`[A.U.T.O Card Studio] 已阻止并纠正 ${repairedTurns} 条跨步骤对话写入。`);
@@ -6377,10 +6524,208 @@ function renderAssistantResponse(element, rawResponse, preset) {
     decorateResponseCodeBlocks(element);
 }
 
+function nextConversationName(state) {
+    const numbers = state.conversations
+        .map(item => /^对话\s*(\d+)$/.exec(String(item.name || '').trim()))
+        .filter(Boolean)
+        .map(match => Number(match[1]))
+        .filter(Number.isFinite);
+    return `对话 ${Math.max(1, ...numbers) + 1}`;
+}
+
+function setConversationMenuOpen(open) {
+    const menu = shell?.querySelector('#acs-conversation-menu');
+    const toggle = shell?.querySelector('#acs-conversation-manager-toggle');
+    if (!menu || !toggle) return;
+    menu.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if (!open) {
+        conversationRenameId = '';
+        conversationCreateFormOpen = false;
+    }
+}
+
+function renderConversationManager() {
+    const manager = shell?.querySelector('#acs-conversation-manager');
+    if (!manager) return;
+    const state = ensureStepConversationState(project.steps[project.currentStep], project.currentStep);
+    const active = syncActiveStepConversation(state, project.currentStep);
+    const toggle = manager.querySelector('#acs-conversation-manager-toggle');
+    const menu = manager.querySelector('#acs-conversation-menu');
+    toggle.querySelector('.acs-conversation-manager-name').textContent = active.name;
+    toggle.querySelector('.acs-conversation-manager-count').textContent = String(state.conversations.length);
+    toggle.title = `本步骤对话：${active.name}（共 ${state.conversations.length} 个）`;
+    toggle.setAttribute('aria-label', toggle.title);
+    menu.querySelector('.acs-conversation-menu-count').textContent = `${state.conversations.length} 个`;
+
+    const list = menu.querySelector('.acs-conversation-menu-list');
+    list.replaceChildren();
+    for (const conversation of state.conversations) {
+        const row = document.createElement('div');
+        row.className = `acs-conversation-row${conversation.id === active.id ? ' is-active' : ''}`;
+        row.dataset.conversationId = conversation.id;
+        if (conversationRenameId === conversation.id) {
+            row.innerHTML = `
+              <div class="acs-conversation-rename-form">
+                <input class="acs-conversation-rename-input" maxlength="60" aria-label="对话名称">
+                <button class="acs-conversation-form-action is-primary" type="button" data-conversation-rename-save title="保存名称" aria-label="保存名称"><i class="fa-solid fa-check" aria-hidden="true"></i></button>
+                <button class="acs-conversation-form-action" type="button" data-conversation-rename-cancel title="取消重命名" aria-label="取消重命名"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+              </div>`;
+            row.querySelector('input').value = conversation.name;
+        } else {
+            const switchButton = document.createElement('button');
+            switchButton.className = 'acs-conversation-switch';
+            switchButton.type = 'button';
+            switchButton.dataset.conversationSwitch = conversation.id;
+            switchButton.disabled = isGenerating || conversation.id === active.id;
+            const name = document.createElement('strong');
+            name.textContent = conversation.name;
+            const meta = document.createElement('small');
+            meta.textContent = `${conversation.turns.length} 条消息 · ${formatProjectTime(conversation.updatedAt)}`;
+            switchButton.append(name, meta);
+
+            const rename = document.createElement('button');
+            rename.className = 'acs-conversation-row-action';
+            rename.type = 'button';
+            rename.dataset.conversationRename = conversation.id;
+            rename.title = '重命名';
+            rename.setAttribute('aria-label', `重命名“${conversation.name}”`);
+            rename.innerHTML = '<i class="fa-solid fa-pencil" aria-hidden="true"></i>';
+
+            const remove = document.createElement('button');
+            remove.className = 'acs-conversation-row-action is-delete';
+            remove.type = 'button';
+            remove.dataset.conversationDelete = conversation.id;
+            remove.disabled = isGenerating || state.conversations.length <= 1;
+            remove.title = state.conversations.length <= 1 ? '最后一个对话不能删除' : '删除对话';
+            remove.setAttribute('aria-label', `删除“${conversation.name}”`);
+            remove.innerHTML = '<i class="fa-regular fa-trash-can" aria-hidden="true"></i>';
+            row.append(switchButton, rename, remove);
+        }
+        list.append(row);
+    }
+
+    const foot = menu.querySelector('.acs-conversation-menu-foot');
+    foot.replaceChildren();
+    if (conversationCreateFormOpen) {
+        const form = document.createElement('div');
+        form.className = 'acs-conversation-create-form';
+        form.innerHTML = `
+          <input class="acs-conversation-create-input" maxlength="60" placeholder="${nextConversationName(state)}" aria-label="新对话名称">
+          <button class="acs-conversation-form-action is-primary" type="button" data-conversation-create-save>创建</button>
+          <button class="acs-conversation-form-action" type="button" data-conversation-create-cancel>取消</button>`;
+        foot.append(form);
+    } else {
+        const create = document.createElement('button');
+        create.className = 'acs-conversation-create-toggle';
+        create.type = 'button';
+        create.dataset.conversationCreate = '';
+        create.disabled = isGenerating;
+        create.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i><span>新建对话</span>';
+        foot.append(create);
+    }
+    const note = document.createElement('p');
+    note.className = 'acs-conversation-menu-note';
+    note.textContent = isGenerating ? '生成期间可重命名，但不能新建、切换或删除。' : '对话彼此独立，正式产物仍由整个项目共享。';
+    foot.append(note);
+}
+
+function switchStepConversation(conversationId) {
+    if (isGenerating) {
+        notify('warning', '生成期间不能切换对话。');
+        return;
+    }
+    const state = project.steps[project.currentStep];
+    const target = activateStepConversation(state, conversationId, project.currentStep);
+    if (!target) return;
+    state.updatedAt = new Date().toISOString();
+    conversationRenameId = '';
+    conversationCreateFormOpen = false;
+    saveProject();
+    setConversationMenuOpen(false);
+    renderCurrentStep();
+    notify('success', `已切换到“${target.name}”。`);
+}
+
+function createCurrentStepConversation() {
+    if (isGenerating) return;
+    const state = ensureStepConversationState(project.steps[project.currentStep], project.currentStep);
+    const input = shell.querySelector('.acs-conversation-create-input');
+    const name = String(input?.value || '').trim() || nextConversationName(state);
+    syncActiveStepConversation(state, project.currentStep);
+    const conversation = createStepConversation(name);
+    state.conversations.push(conversation);
+    state.activeConversationId = conversation.id;
+    state.turns = conversation.turns;
+    state.artifactHistory = conversation.artifactHistory;
+    state.updatedAt = conversation.updatedAt;
+    conversationCreateFormOpen = false;
+    conversationRenameId = '';
+    saveProject();
+    renderCurrentStep();
+    shell.querySelector('#acs-user-input')?.focus();
+    notify('success', `已创建并切换到“${conversation.name}”。`);
+}
+
+function renameCurrentStepConversation(conversationId) {
+    const state = ensureStepConversationState(project.steps[project.currentStep], project.currentStep);
+    const conversation = state.conversations.find(item => item.id === conversationId);
+    const input = shell.querySelector('.acs-conversation-rename-input');
+    const name = String(input?.value || '').trim();
+    if (!conversation || !name) {
+        notify('warning', '对话名称不能为空。');
+        input?.focus();
+        return;
+    }
+    conversation.name = name;
+    conversation.updatedAt = new Date().toISOString();
+    state.updatedAt = conversation.updatedAt;
+    conversationRenameId = '';
+    saveProject();
+    renderConversationManager();
+    notify('success', `对话已命名为“${name}”。`);
+}
+
+async function deleteCurrentStepConversation(conversationId) {
+    if (isGenerating) return;
+    const state = ensureStepConversationState(project.steps[project.currentStep], project.currentStep);
+    if (state.conversations.length <= 1) {
+        notify('info', '每个步骤至少保留一个对话，可以改用“清空对话”。');
+        return;
+    }
+    const index = state.conversations.findIndex(item => item.id === conversationId);
+    const target = state.conversations[index];
+    if (!target) return;
+    if (!await showStudioConfirm({
+        title: `删除“${target.name}”？`,
+        message: `将删除其中 ${target.turns.length} 条消息。已生成的正式产物仍会保留。`,
+        confirmLabel: '删除对话',
+        danger: true,
+    })) return;
+    syncActiveStepConversation(state, project.currentStep);
+    state.conversations.splice(index, 1);
+    if (state.activeConversationId === conversationId) {
+        const next = state.conversations[Math.min(index, state.conversations.length - 1)];
+        // 删除当前对话后直接重绑运行时别名，不能再同步已经被移除的旧数组。
+        state.activeConversationId = next.id;
+        state.turns = next.turns;
+        state.artifactHistory = next.artifactHistory;
+    }
+    if (!state.conversations.some(item => item.turns.length)) state.status = 'idle';
+    state.updatedAt = new Date().toISOString();
+    conversationRenameId = '';
+    conversationCreateFormOpen = false;
+    pruneConversationShieldsForStep(project.currentStep);
+    saveProject();
+    renderAll();
+    notify('success', `“${target.name}”已删除，正式产物仍保留。`);
+}
+
 function renderCurrentStep() {
     const step = STEPS[project.currentStep - 1];
     const guide = STEP_GUIDES[step.number - 1];
     const state = project.steps[step.number];
+    ensureStepConversationState(state, step.number);
     const requirement = getStepRequirement(step.number);
     shell.querySelector('#acs-step-kicker').textContent = `PHASE ${String(step.number).padStart(2, '0')} / ${STEPS.length}`;
     shell.querySelector('#acs-step-title').textContent = step.name;
@@ -6406,6 +6751,7 @@ function renderCurrentStep() {
     }
     shell.querySelector('#acs-user-input-label').textContent = `本轮补充 · ${step.name}`;
     shell.querySelector('#acs-user-input').placeholder = guide.placeholder;
+    renderConversationManager();
 
     const stateChip = shell.querySelector('#acs-step-state');
     stateChip.classList.remove('is-draft', 'is-complete');
@@ -6424,8 +6770,9 @@ function renderCurrentStep() {
     delete shell.querySelector('.acs-conversation').dataset.previousTurnIndex;
     const hasTurns = Array.isArray(state.turns) && state.turns.length > 0;
     const clearStepButton = shell.querySelector('#acs-clear-step');
+    const activeConversation = activeStepConversation(state, step.number);
     clearStepButton.disabled = !hasTurns || isGenerating;
-    clearStepButton.title = hasTurns ? '清空当前步骤的对话记录' : '当前步骤没有对话记录';
+    clearStepButton.title = hasTurns ? `清空“${activeConversation.name}”的对话记录` : '当前对话没有消息';
     shell.querySelector('#acs-conversation-nav').hidden = !hasTurns;
     const responsePreset = hasTurns ? getAutoPresetSafe() : null;
     let latestUserIndex = -1;
@@ -6549,9 +6896,10 @@ async function clearCurrentStepConversation() {
     const step = STEPS[project.currentStep - 1];
     const state = project.steps[step.number];
     if (!state?.turns?.length) return;
+    const active = activeStepConversation(state, step.number);
     if (!await showStudioConfirm({
-        title: '清空本步骤对话？',
-        message: '对话将清空，已生成的产物仍会保留。',
+        title: `清空“${active.name}”？`,
+        message: '只会清空当前对话；本步骤的其他对话和已生成的正式产物都会保留。',
         confirmLabel: '清空对话',
         danger: true,
     })) return;
@@ -6559,13 +6907,14 @@ async function clearCurrentStepConversation() {
     // 产物已经保存在独立数据库中，清空对话不会再搬运或改写任何产物。
     state.turns = [];
     state.artifactHistory = [];
-    state.status = 'idle';
     state.updatedAt = new Date().toISOString();
-    // 新会话不应继承旧会话的“屏蔽会话”选择，重新按内容自动判断。
-    clearConversationShieldsForStep(step.number);
+    syncActiveStepConversation(state, step.number);
+    if (!state.conversations.some(item => item.turns.length)) state.status = 'idle';
+    // 仅移除已经不在任一对话中的屏蔽项，避免影响同一步骤的其他会话。
+    pruneConversationShieldsForStep(step.number);
     saveProject();
     renderAll();
-    notify('success', `Step ${step.number} 的对话已清空，产物仍保留。`);
+    notify('success', `“${active.name}”已清空，其他对话和正式产物仍保留。`);
 }
 
 function renderProgress() {
@@ -6593,8 +6942,16 @@ function selectedArtifactVersionForIdentity(stepNumber, identity, projectData = 
 
 function conversationContainsArtifactVersion(stepNumber, version, projectData = project) {
     if (!version?.content) return false;
-    const turns = projectData.steps?.[Number(stepNumber)]?.turns || [];
+    const state = projectData.steps?.[Number(stepNumber)];
+    const turns = activeStepConversation(state, stepNumber).turns;
     return turns.some(turn => String(turn?.content || '').includes(version.content));
+}
+
+function anyStepConversationContainsArtifactVersion(stepNumber, version, projectData = project) {
+    if (!version?.content) return false;
+    const state = projectData.steps?.[Number(stepNumber)];
+    return stepConversationCollections(state, stepNumber)
+        .some(turns => turns.some(turn => String(turn?.content || '').includes(version.content)));
 }
 
 function isArtifactHiddenFromContext(stepNumber, identity) {
@@ -6641,7 +6998,7 @@ function pruneConversationShieldsForStep(stepNumber) {
     project.conversationShieldVersionIds = (project.conversationShieldVersionIds || []).filter(id => {
         const version = versionById.get(id);
         // 其他步骤的状态保留；本步骤仅保留仍能在会话中找到对应产物的屏蔽项。
-        return !version || conversationContainsArtifactVersion(stepNumber, version);
+        return !version || anyStepConversationContainsArtifactVersion(stepNumber, version);
     });
 }
 
@@ -7147,17 +7504,26 @@ function conversationVaultKey(projectId, stepNumber) {
 }
 
 function conversationRecordFor(projectData, stepNumber) {
-    const state = projectData.steps?.[stepNumber] || {};
-    const turns = (Array.isArray(state.turns) ? state.turns : []).filter(turn => (
-        turn?.step === undefined || Number(turn.step) === Number(stepNumber)
-    ));
+    const state = ensureStepConversationState(projectData.steps?.[stepNumber] || {}, stepNumber);
+    syncActiveStepConversation(state, stepNumber);
+    const conversations = state.conversations.map(item => ({
+        ...item,
+        turns: (Array.isArray(item.turns) ? item.turns : []).filter(turn => (
+            turn?.step === undefined || Number(turn.step) === Number(stepNumber)
+        )),
+        artifactHistory: Array.isArray(item.artifactHistory) ? item.artifactHistory : [],
+    }));
+    const active = conversations.find(item => item.id === state.activeConversationId) || conversations[0];
     return {
         key: conversationVaultKey(projectData.id, stepNumber),
         projectId: String(projectData.id),
         step: Number(stepNumber),
         status: ['idle', 'draft', 'accepted'].includes(state.status) ? state.status : 'idle',
-        turns: cloneConversationData(turns),
-        artifactHistory: cloneConversationData(Array.isArray(state.artifactHistory) ? state.artifactHistory : []),
+        conversations: cloneConversationData(conversations),
+        activeConversationId: active.id,
+        // 旧版读取器仍能获得当前对话；新版以 conversations 为准。
+        turns: cloneConversationData(active.turns),
+        artifactHistory: cloneConversationData(active.artifactHistory),
         updatedAt: state.updatedAt ? String(state.updatedAt) : null,
     };
 }
@@ -7165,6 +7531,8 @@ function conversationRecordFor(projectData, stepNumber) {
 function conversationRecordSignature(record) {
     return JSON.stringify([
         record?.status || 'idle',
+        record?.activeConversationId || '',
+        record?.conversations || [],
         record?.turns || [],
         record?.artifactHistory || [],
         record?.updatedAt || null,
@@ -7175,19 +7543,24 @@ function repairCrossStepTurnOwnership(projectData) {
     const misplaced = [];
     const changedSteps = new Set();
     for (const step of STEPS) {
-        const state = projectData.steps?.[step.number];
-        if (!Array.isArray(state?.turns)) continue;
-        state.turns = state.turns.filter(turn => {
-            if (turn?.step === undefined || Number(turn.step) === step.number) return true;
-            misplaced.push(turn);
-            changedSteps.add(step.number);
-            return false;
-        });
+        const state = ensureStepConversationState(projectData.steps?.[step.number] || {}, step.number);
+        syncActiveStepConversation(state, step.number);
+        for (const conversation of state.conversations) {
+            conversation.turns = conversation.turns.filter(turn => {
+                if (turn?.step === undefined || Number(turn.step) === step.number) return true;
+                misplaced.push(turn);
+                changedSteps.add(step.number);
+                return false;
+            });
+        }
+        activateStepConversation(state, state.activeConversationId, step.number);
     }
     for (const turn of misplaced) {
         const targetStep = Number(turn.step);
         const target = projectData.steps?.[targetStep];
-        if (!target || !Array.isArray(target.turns)) continue;
+        if (!target) continue;
+        const targetConversation = activeStepConversation(target, targetStep);
+        target.turns = targetConversation.turns;
         const duplicate = target.turns.some(existing => (
             (turn.id && existing.id === turn.id)
             || (!turn.id && existing.role === turn.role && existing.createdAt === turn.createdAt && existing.content === turn.content)
@@ -7203,7 +7576,7 @@ function repairCrossStepTurnOwnership(projectData) {
             const state = projectData.steps?.[stepNumber];
             if (!state) continue;
             state.updatedAt = now;
-            if (state.status === 'idle' && state.turns.length) state.status = 'draft';
+            if (state.status === 'idle' && state.conversations.some(item => item.turns.length)) state.status = 'draft';
         }
     }
     return misplaced.length;
@@ -8084,6 +8457,7 @@ function switchProject(projectId) {
     const nextProject = projectLibrary.projects.find(item => item.id === projectId);
     if (!nextProject) return;
     flushPendingProjectEdits();
+    setConversationMenuOpen(false);
     project = nextProject;
     projectLibrary.activeProjectId = project.id;
     syncEnvironmentToProject();
@@ -8669,10 +9043,11 @@ function prepareTemplateMacrosForGeneration(text) {
 function repairProjectTemplateMacros(projectData) {
     for (const [stepNumber, state] of Object.entries(projectData.steps || {})) {
         for (const collectionName of ['turns', 'artifactHistory']) {
-            if (!Array.isArray(state?.[collectionName])) continue;
-            for (const turn of state[collectionName]) {
-                if (turn?.role === 'assistant' && typeof turn.content === 'string') {
-                    turn.content = normalizeFinalArtifactUserMacros(turn.content, Number(stepNumber));
+            for (const collection of stepConversationCollections(state, Number(stepNumber), collectionName)) {
+                for (const turn of collection) {
+                    if (turn?.role === 'assistant' && typeof turn.content === 'string') {
+                        turn.content = normalizeFinalArtifactUserMacros(turn.content, Number(stepNumber));
+                    }
                 }
             }
         }
@@ -9296,8 +9671,11 @@ function snapshotOtherStepConversations(projectData, targetStepNumber) {
     for (const step of STEPS) {
         if (step.number === Number(targetStepNumber)) continue;
         const state = projectData.steps?.[step.number];
+        syncActiveStepConversation(state, step.number);
         snapshots.set(step.number, {
             status: state?.status || 'idle',
+            conversations: cloneConversationData(state?.conversations || []),
+            activeConversationId: state?.activeConversationId || '',
             turns: cloneConversationData(state?.turns || []),
             artifactHistory: cloneConversationData(state?.artifactHistory || []),
             updatedAt: state?.updatedAt || null,
@@ -9314,10 +9692,7 @@ function restoreUnexpectedStepConversationChanges(projectData, snapshots) {
         const currentSignature = conversationRecordSignature(state);
         const protectedSignature = conversationRecordSignature(snapshot);
         if (currentSignature === protectedSignature) continue;
-        state.turns = cloneConversationData(snapshot.turns);
-        state.artifactHistory = cloneConversationData(snapshot.artifactHistory);
-        state.status = snapshot.status;
-        state.updatedAt = snapshot.updatedAt;
+        projectData.steps[stepNumber] = normalizeStepState(snapshot, stepNumber);
         restored += 1;
     }
     return restored;
@@ -9595,7 +9970,8 @@ async function deleteConversationTurn(turnIndex) {
     })) return;
 
     state.turns.splice(turnIndex, 1);
-    state.status = state.turns.length ? 'draft' : 'idle';
+    syncActiveStepConversation(state, project.currentStep);
+    state.status = state.conversations.some(item => item.turns.length) ? 'draft' : 'idle';
     state.updatedAt = new Date().toISOString();
     pruneConversationShieldsForStep(project.currentStep);
     saveProject();
@@ -9696,6 +10072,7 @@ function setGenerating(value) {
         : '<i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> 生成阶段草案';
     stopButton.hidden = !value;
     shell.querySelector('#acs-accept-step').disabled = value || !latestAssistantResponse(project.currentStep);
+    renderConversationManager();
 }
 
 function stopGeneration() {
@@ -10950,8 +11327,14 @@ function downloadBlob(content, fileName, type) {
 }
 
 function projectDataSummary(targetProject, targetVault = artifactVaultFor(targetProject.id)) {
-    const stepStates = STEPS.map(step => targetProject.steps?.[step.number]).filter(Boolean);
-    const turns = stepStates.reduce((total, state) => total + (Array.isArray(state.turns) ? state.turns.length : 0), 0);
+    const stepEntries = STEPS
+        .map(step => ({ step, state: targetProject.steps?.[step.number] }))
+        .filter(item => Boolean(item.state));
+    const stepStates = stepEntries.map(item => item.state);
+    const turns = stepEntries.reduce((total, item) => (
+        total + stepConversationCollections(item.state, item.step.number)
+            .reduce((stepTotal, collection) => stepTotal + collection.length, 0)
+    ), 0);
     const artifacts = new Set((targetVault?.versions || []).map(item => `${item.step}:${item.identity}`)).size;
     return {
         completedSteps: stepStates.filter(state => state.status !== 'idle').length,
@@ -11024,6 +11407,7 @@ async function importProjectJson(event) {
         }
         imported.name = candidate;
         imported.updatedAt = new Date().toISOString();
+        setConversationMenuOpen(false);
         project = imported;
         projectLibrary.projects.push(project);
         projectLibrary.activeProjectId = project.id;
@@ -11054,6 +11438,7 @@ async function newProject() {
         return;
     }
     flushPendingProjectEdits();
+    setConversationMenuOpen(false);
     project = createDefaultProject();
     artifactVaultFor(project.id);
     void persistArtifactVault(project.id);
@@ -11073,6 +11458,7 @@ async function newProject() {
 
 function selectStep(number) {
     if (number < 1 || number > STEPS.length || isGenerating) return;
+    setConversationMenuOpen(false);
     project.currentStep = number;
     revealStepPhase(number);
     saveProject();
@@ -11564,13 +11950,31 @@ function installStepHelpUI() {
     button.innerHTML = '<i class="fa-solid fa-circle-info" aria-hidden="true"></i>';
     titleLine.append(button);
 
+    const conversationManager = document.createElement('div');
+    conversationManager.id = 'acs-conversation-manager';
+    conversationManager.className = 'acs-conversation-manager';
+    conversationManager.innerHTML = `
+      <button id="acs-conversation-manager-toggle" class="acs-conversation-manager-toggle" type="button" aria-expanded="false" aria-controls="acs-conversation-menu">
+        <i class="fa-regular fa-comments" aria-hidden="true"></i>
+        <span class="acs-conversation-manager-name">默认对话</span>
+        <span class="acs-conversation-manager-count">1</span>
+        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+      </button>
+      <section id="acs-conversation-menu" class="acs-conversation-menu" hidden aria-label="本步骤对话列表">
+        <header class="acs-conversation-menu-head"><strong>本步骤对话</strong><span class="acs-conversation-menu-count">1 个</span></header>
+        <div class="acs-conversation-menu-list"></div>
+        <footer class="acs-conversation-menu-foot"></footer>
+      </section>`;
+
     const clearButton = document.createElement('button');
     clearButton.id = 'acs-clear-step';
     clearButton.className = 'acs-clear-step-button';
     clearButton.type = 'button';
     clearButton.disabled = true;
     clearButton.innerHTML = '<i class="fa-regular fa-trash-can" aria-hidden="true"></i><span>清空对话</span>';
-    shell.querySelector('.acs-stage-heading-actions').prepend(clearButton);
+    const headingActions = shell.querySelector('.acs-stage-heading-actions');
+    headingActions.prepend(clearButton);
+    headingActions.prepend(conversationManager);
 
     const overlay = document.createElement('div');
     overlay.id = 'acs-step-help-overlay';
@@ -12039,6 +12443,10 @@ async function importRegexFile(event) {
 function bindStudioEvents() {
     for (const close of shell.querySelectorAll('[data-acs-close]')) close.addEventListener('click', closeStudio);
     shell.addEventListener('pointerdown', event => {
+        const conversationMenu = shell.querySelector('#acs-conversation-menu');
+        if (!conversationMenu?.hidden && !event.target.closest('#acs-conversation-manager')) {
+            setConversationMenuOpen(false);
+        }
         const drawer = shell.querySelector('#acs-resource-drawer');
         if (!drawer?.classList.contains('is-open')) return;
         // 编辑窗口覆盖在条目列表之上时，列表保持展开，方便保存后继续切换条目。
@@ -12064,7 +12472,7 @@ function bindStudioEvents() {
     stageHeading.setAttribute('tabindex', '0');
     stageHeading.setAttribute('aria-controls', 'acs-brief-panel');
     stageHeading.addEventListener('click', event => {
-        if (!event.target.closest('button')) toggleOverview();
+        if (!event.target.closest('button, .acs-conversation-manager')) toggleOverview();
     });
     stageHeading.addEventListener('keydown', event => {
         if (event.target !== stageHeading || (event.key !== 'Enter' && event.key !== ' ')) return;
@@ -12145,6 +12553,77 @@ function bindStudioEvents() {
     shell.querySelector('#acs-tour-overlay').addEventListener('keydown', handleTourKeydown);
     shell.querySelector('#acs-step-help').addEventListener('click', openStepHelp);
     shell.querySelector('#acs-clear-step').addEventListener('click', clearCurrentStepConversation);
+    shell.querySelector('#acs-conversation-manager-toggle').addEventListener('click', () => {
+        const menu = shell.querySelector('#acs-conversation-menu');
+        const willOpen = menu.hidden;
+        if (willOpen) renderConversationManager();
+        setConversationMenuOpen(willOpen);
+    });
+    shell.querySelector('#acs-conversation-menu').addEventListener('click', event => {
+        event.stopPropagation();
+        const switchButton = event.target.closest('[data-conversation-switch]');
+        if (switchButton) {
+            switchStepConversation(switchButton.dataset.conversationSwitch);
+            return;
+        }
+        const rename = event.target.closest('[data-conversation-rename]');
+        if (rename) {
+            conversationRenameId = rename.dataset.conversationRename;
+            conversationCreateFormOpen = false;
+            renderConversationManager();
+            shell.querySelector('.acs-conversation-rename-input')?.focus();
+            shell.querySelector('.acs-conversation-rename-input')?.select();
+            return;
+        }
+        if (event.target.closest('[data-conversation-rename-save]')) {
+            const row = event.target.closest('[data-conversation-id]');
+            renameCurrentStepConversation(row?.dataset.conversationId || '');
+            return;
+        }
+        if (event.target.closest('[data-conversation-rename-cancel]')) {
+            conversationRenameId = '';
+            renderConversationManager();
+            return;
+        }
+        const remove = event.target.closest('[data-conversation-delete]');
+        if (remove) {
+            void deleteCurrentStepConversation(remove.dataset.conversationDelete);
+            return;
+        }
+        if (event.target.closest('[data-conversation-create]')) {
+            if (isGenerating) return;
+            conversationCreateFormOpen = true;
+            conversationRenameId = '';
+            renderConversationManager();
+            shell.querySelector('.acs-conversation-create-input')?.focus();
+            return;
+        }
+        if (event.target.closest('[data-conversation-create-save]')) {
+            createCurrentStepConversation();
+            return;
+        }
+        if (event.target.closest('[data-conversation-create-cancel]')) {
+            conversationCreateFormOpen = false;
+            renderConversationManager();
+        }
+    });
+    shell.querySelector('#acs-conversation-menu').addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setConversationMenuOpen(false);
+            shell.querySelector('#acs-conversation-manager-toggle')?.focus();
+            return;
+        }
+        if (event.key !== 'Enter') return;
+        if (event.target.matches('.acs-conversation-rename-input')) {
+            event.preventDefault();
+            const row = event.target.closest('[data-conversation-id]');
+            renameCurrentStepConversation(row?.dataset.conversationId || '');
+        } else if (event.target.matches('.acs-conversation-create-input')) {
+            event.preventDefault();
+            createCurrentStepConversation();
+        }
+    });
     shell.querySelector('#acs-step-help-overlay').addEventListener('click', event => {
         if (event.target === event.currentTarget) closeStepHelp();
     });
@@ -12403,7 +12882,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}\n${SETTINGS_LAYOUT_CSS}\n${MOBILE_POLISH_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${MULTI_CONVERSATION_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}\n${SETTINGS_LAYOUT_CSS}\n${MOBILE_POLISH_CSS}`;
     document.head.append(style);
 }
 
