@@ -2581,7 +2581,7 @@ const REFERENCE_ASSET_CSS = `
 .acs-reference-worldbook-copy small { margin-top: 3px; color: var(--acs-muted); font-size: 8px; }
 .acs-reference-worldbook-count {
   display: grid;
-  height: 22px;
+  height: 24px;
   min-width: 43px;
   padding: 0 7px;
   place-items: center;
@@ -2595,15 +2595,15 @@ const REFERENCE_ASSET_CSS = `
 }
 .acs-reference-worldbook-summary-controls {
   display: flex;
-  min-height: 22px;
+  min-height: 24px;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 .acs-reference-worldbook-summary-controls > .acs-resource-switch {
   display: block;
-  width: 38px;
-  height: 22px;
-  flex: 0 0 38px;
+  width: 42px;
+  height: 24px;
+  flex: 0 0 42px;
 }
 .acs-reference-worldbook-summary-controls > .acs-resource-switch span {
   border-color: rgba(157,151,142,.36);
@@ -2611,7 +2611,7 @@ const REFERENCE_ASSET_CSS = `
 }
 .acs-reference-worldbook-summary-controls > .acs-resource-switch span::after {
   top: 50%;
-  left: 3px;
+  left: 4px;
   width: 14px;
   height: 14px;
   transform: translateY(-50%);
@@ -2621,19 +2621,27 @@ const REFERENCE_ASSET_CSS = `
   background: rgba(147,189,145,.14);
 }
 .acs-reference-worldbook-summary-controls > .acs-resource-switch input:checked + span::after {
-  transform: translate(18px,-50%);
+  transform: translate(20px,-50%);
 }
 .acs-reference-worldbook-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
   align-items: center;
   gap: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--acs-line-soft);
   background: rgba(183,163,207,.05);
 }
+.acs-reference-worldbook-actions.has-sync {
+  grid-template-columns: repeat(3,minmax(0,1fr));
+}
 .acs-reference-worldbook-actions > span {
-  margin-right: auto;
+  display: flex;
+  grid-column: 1 / -1;
   min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   overflow: hidden;
   color: var(--acs-muted);
   font-size: 8px;
@@ -2641,16 +2649,21 @@ const REFERENCE_ASSET_CSS = `
   white-space: nowrap;
 }
 .acs-reference-worldbook-actions button {
+  display: inline-flex;
+  width: 100%;
   min-height: 28px;
-  padding: 5px 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 7px;
   border: 1px solid var(--acs-line);
-  border-radius: 6px;
+  border-radius: 999px;
   background: transparent;
   color: var(--acs-muted);
   cursor: pointer;
   font-size: 8px;
 }
-.acs-reference-worldbook-actions button i { margin-right: 4px; }
+.acs-reference-worldbook-actions button i { margin: 0; }
 .acs-reference-worldbook-actions button[data-reference-book-manage] {
   border-color: rgba(183,163,207,.3);
   color: #d0c1df;
@@ -2957,7 +2970,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-62';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-63';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -6249,12 +6262,12 @@ function renderReferenceWorldbooks() {
             </span>
           </div>`;
         const actions = document.createElement('div');
-        actions.className = 'acs-reference-worldbook-actions';
+        actions.className = `acs-reference-worldbook-actions${book.sourceType === 'sillytavern' ? ' has-sync' : ''}`;
         actions.innerHTML = `
           <span><i class="fa-solid fa-circle-info" aria-hidden="true"></i> 当前项目独立启用</span>
           <button type="button" data-reference-book-manage><i class="fa-solid fa-list"></i>管理条目</button>
           ${book.sourceType === 'sillytavern' ? '<button type="button" data-reference-book-sync><i class="fa-solid fa-rotate"></i>同步</button>' : ''}
-          <button type="button" class="is-danger" data-reference-book-delete aria-label="删除附属世界书"><i class="fa-regular fa-trash-can"></i></button>`;
+          <button type="button" class="is-danger" data-reference-book-delete aria-label="删除附属世界书"><i class="fa-regular fa-trash-can"></i><span>删除</span></button>`;
         card.append(actions);
         card.querySelector('.acs-reference-worldbook-copy strong').textContent = book.name;
         card.querySelector('[data-reference-book-toggle]').dataset.referenceBookToggle = book.id;
