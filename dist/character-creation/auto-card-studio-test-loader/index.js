@@ -1,7 +1,8 @@
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
 const TEST_SCRIPT_PATH = 'dist/character-creation/auto-card-studio/index.js';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
-const FALLBACK_REVISION = '9ecd9a5fedf9ebc1463484360812332c6f83c67e';
+// GitHub 分支接口暂时不可用时，至少回退到最近一次已验收的测试构建。
+const FALLBACK_REVISION = 'ed3c8d41b7b2525d39869b8511d95453b6aa884a';
 
 const hostWindow = window.parent;
 
