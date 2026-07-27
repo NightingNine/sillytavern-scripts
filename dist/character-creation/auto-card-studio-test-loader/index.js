@@ -2,7 +2,7 @@ const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytave
 const TEST_SCRIPT_PATH = 'dist/character-creation/auto-card-studio/index.js';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 // GitHub 分支接口暂时不可用时，至少回退到最近一次已验收的测试构建。
-const FALLBACK_REVISION = '80be48c9c5765d64945248f9b5cd354de5560549';
+const FALLBACK_REVISION = '07dfa8a2031318042383b41a9a0a2ba0ef34a417';
 
 const hostWindow = window.parent;
 
