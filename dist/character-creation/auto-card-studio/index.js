@@ -2553,24 +2553,22 @@ const REFERENCE_ASSET_CSS = `
 .acs-reference-worldbook-empty strong { color: var(--acs-text-soft); font-size: 10px; }
 .acs-reference-worldbook-empty span { max-width: 260px; font-size: 8px; line-height: 1.5; }
 .acs-reference-worldbook {
-  overflow: hidden;
+  display: grid;
+  gap: 8px;
+  padding: 9px;
   border: 1px solid var(--acs-line-soft);
   border-radius: 9px;
   background: #2d2b27;
 }
 .acs-reference-worldbook.is-enabled { border-color: rgba(183,163,207,.3); }
-.acs-reference-worldbook > summary {
+.acs-reference-worldbook-summary {
   display: grid;
-  grid-template-columns: 25px minmax(0,1fr) auto auto 10px;
+  grid-template-columns: 32px minmax(0,1fr) auto 36px;
   gap: 8px;
   align-items: center;
-  min-height: 49px;
-  padding: 8px 9px;
-  cursor: pointer;
-  list-style: none;
+  min-height: 42px;
 }
-.acs-reference-worldbook > summary::-webkit-details-marker { display: none; }
-.acs-reference-worldbook-mark { width: 25px; height: 31px; border-radius: 4px 4px 8px 8px; }
+.acs-reference-worldbook-mark { width: 32px; height: 36px; border-radius: 7px 7px 10px 10px; }
 .acs-reference-worldbook-copy { min-width: 0; }
 .acs-reference-worldbook-copy strong,
 .acs-reference-worldbook-copy small {
@@ -2581,20 +2579,58 @@ const REFERENCE_ASSET_CSS = `
 }
 .acs-reference-worldbook-copy strong { color: var(--acs-text-soft); font-size: 10px; }
 .acs-reference-worldbook-copy small { margin-top: 3px; color: var(--acs-muted); font-size: 8px; }
-.acs-reference-worldbook-count { color: var(--acs-violet); font: 700 8px/1 var(--acs-body); }
-.acs-reference-worldbook-chevron { color: var(--acs-muted); font-size: 8px; transition: transform 140ms ease; }
-.acs-reference-worldbook[open] .acs-reference-worldbook-chevron { transform: rotate(180deg); }
-.acs-reference-worldbook-body { border-top: 1px solid var(--acs-line-soft); }
+.acs-reference-worldbook-count {
+  min-width: 43px;
+  padding: 5px 7px;
+  border: 1px solid rgba(183,163,207,.2);
+  border-radius: 999px;
+  color: var(--acs-violet);
+  background: rgba(183,163,207,.06);
+  font: 700 8px/1 var(--acs-body);
+  text-align: center;
+  white-space: nowrap;
+}
+.acs-reference-worldbook-summary > .acs-resource-switch {
+  width: 36px;
+  height: 20px;
+}
+.acs-reference-worldbook-summary > .acs-resource-switch span {
+  border-color: rgba(157,151,142,.36);
+  background: #25231f;
+}
+.acs-reference-worldbook-summary > .acs-resource-switch span::after {
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+}
+.acs-reference-worldbook-summary > .acs-resource-switch input:checked + span {
+  border-color: rgba(147,189,145,.62);
+  background: rgba(147,189,145,.14);
+}
+.acs-reference-worldbook-summary > .acs-resource-switch input:checked + span::after {
+  transform: translateX(16px);
+}
 .acs-reference-worldbook-actions {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--acs-line-soft);
   background: rgba(183,163,207,.05);
 }
-.acs-reference-worldbook-actions > span { margin-right: auto; color: var(--acs-muted); font-size: 8px; }
+.acs-reference-worldbook-actions > span {
+  margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--acs-muted);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .acs-reference-worldbook-actions button {
-  padding: 4px 6px;
+  min-height: 28px;
+  padding: 5px 8px;
   border: 1px solid var(--acs-line);
   border-radius: 6px;
   background: transparent;
@@ -2603,27 +2639,256 @@ const REFERENCE_ASSET_CSS = `
   font-size: 8px;
 }
 .acs-reference-worldbook-actions button i { margin-right: 4px; }
+.acs-reference-worldbook-actions button[data-reference-book-manage] {
+  border-color: rgba(183,163,207,.3);
+  color: #d0c1df;
+  background: rgba(183,163,207,.08);
+}
 .acs-reference-worldbook-actions button.is-danger:hover { border-color: rgba(217,132,127,.4); color: var(--acs-red); }
-.acs-reference-entry-list { display: grid; max-height: 240px; overflow: auto; scrollbar-width: thin; }
-.acs-reference-entry {
+
+/* 附属资料在独立大窗口中阅读与筛选，避免设置栏承担密集内容管理。 */
+.acs-reference-manager-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 74;
+  display: grid;
+  padding: clamp(18px,4vh,46px);
+  place-items: center;
+  background: rgba(18,16,14,.78);
+  backdrop-filter: blur(10px);
+}
+.acs-reference-manager-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0,1fr);
+  width: min(1080px,96vw);
+  height: min(760px,90vh);
+  overflow: hidden;
+  border: 1px solid rgba(183,163,207,.38);
+  border-radius: 18px;
+  background: #302e29;
+  box-shadow: 0 32px 100px rgba(10,9,8,.66);
+  animation: acs-confirm-in 160ms ease-out;
+}
+.acs-reference-manager-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 19px 22px 16px;
+  border-bottom: 1px solid var(--acs-line-soft);
+  background: linear-gradient(115deg,rgba(183,163,207,.12),transparent 58%);
+}
+.acs-reference-manager-head p,
+.acs-reference-manager-head h2 { margin: 0; }
+.acs-reference-manager-head p {
+  color: var(--acs-violet);
+  font: 700 8px/1 var(--acs-mono);
+  letter-spacing: .16em;
+}
+.acs-reference-manager-head h2 {
+  margin-top: 7px;
+  color: var(--acs-text);
+  font: 500 23px/1.25 var(--acs-display);
+}
+.acs-reference-manager-head small {
+  display: block;
+  margin-top: 6px;
+  color: var(--acs-muted);
+  font-size: 9px;
+}
+.acs-reference-manager-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--acs-line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--acs-muted);
+  cursor: pointer;
+}
+.acs-reference-manager-layout {
+  display: grid;
+  grid-template-columns: minmax(290px,36%) minmax(0,1fr);
+  min-height: 0;
+}
+.acs-reference-manager-sidebar {
+  display: grid;
+  grid-template-rows: auto auto minmax(0,1fr);
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--acs-line-soft);
+  background: #2b2925;
+}
+.acs-reference-manager-toolbar {
   display: grid;
   grid-template-columns: minmax(0,1fr) auto;
   gap: 9px;
   align-items: center;
-  padding: 8px 9px;
-  border-top: 1px solid rgba(232,224,212,.07);
-  cursor: pointer;
+  padding: 13px 14px 9px;
 }
-.acs-reference-entry-copy { min-width: 0; }
-.acs-reference-entry-copy strong,
-.acs-reference-entry-copy small {
+.acs-reference-manager-search {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--acs-line);
+  border-radius: 8px;
+  color: var(--acs-muted);
+  background: #24221f;
+}
+.acs-reference-manager-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--acs-text);
+  font: 500 10px/1.3 var(--acs-body);
+}
+.acs-reference-manager-book-toggle {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--acs-muted);
+  font-size: 7px;
+}
+.acs-reference-manager-dialog .acs-resource-switch {
+  width: 38px;
+  height: 22px;
+}
+.acs-reference-manager-dialog .acs-resource-switch span::after {
+  width: 14px;
+  height: 14px;
+}
+.acs-reference-manager-dialog .acs-resource-switch input:checked + span::after {
+  transform: translateX(16px);
+}
+.acs-reference-manager-stats {
+  padding: 0 14px 10px;
+  color: var(--acs-muted);
+  font-size: 8px;
+}
+.acs-reference-manager-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 0 9px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(183,163,207,.34) transparent;
+}
+.acs-reference-manager-entry {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 40px;
+  gap: 8px;
+  align-items: center;
+  min-height: 56px;
+  padding: 7px 8px 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.acs-reference-manager-entry + .acs-reference-manager-entry { margin-top: 4px; }
+.acs-reference-manager-entry:hover { background: rgba(183,163,207,.05); }
+.acs-reference-manager-entry.is-selected {
+  border-color: rgba(183,163,207,.3);
+  background: rgba(183,163,207,.09);
+}
+.acs-reference-manager-entry button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.acs-reference-manager-entry strong,
+.acs-reference-manager-entry small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.acs-reference-entry-copy strong { color: var(--acs-text-soft); font-size: 9px; }
-.acs-reference-entry-copy small { margin-top: 3px; color: var(--acs-muted); font-size: 8px; }
+.acs-reference-manager-entry strong { color: var(--acs-text-soft); font-size: 10px; }
+.acs-reference-manager-entry small { margin-top: 5px; color: var(--acs-muted); font-size: 8px; }
+.acs-reference-manager-content {
+  display: grid;
+  grid-template-rows: auto minmax(0,1fr);
+  min-width: 0;
+  min-height: 0;
+  background: #302e29;
+}
+.acs-reference-manager-content-stage {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.acs-reference-manager-content-stage > .acs-reference-manager-content { height: 100%; }
+.acs-reference-manager-content-head {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 17px 20px 14px;
+  border-bottom: 1px solid var(--acs-line-soft);
+}
+.acs-reference-manager-content-head h3,
+.acs-reference-manager-content-head p { margin: 0; }
+.acs-reference-manager-content-head h3 { color: var(--acs-text); font-size: 14px; }
+.acs-reference-manager-content-head p { margin-top: 6px; color: var(--acs-muted); font-size: 8px; }
+.acs-reference-manager-content-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 24px 34px;
+  color: var(--acs-text-soft);
+  font-family: var(--acs-body);
+  font-size: 12px;
+  line-height: 1.78;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(183,163,207,.34) transparent;
+}
+.acs-reference-manager-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  padding: 24px;
+  color: var(--acs-muted);
+  font-size: 10px;
+  text-align: center;
+}
+@media(max-width:700px) {
+  .acs-reference-manager-overlay { padding: 0; }
+  .acs-reference-manager-dialog {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+  .acs-reference-manager-head {
+    padding-top: max(17px,env(safe-area-inset-top,0px));
+    padding-right: 15px;
+    padding-left: 15px;
+  }
+  .acs-reference-manager-head h2 { font-size: 19px; }
+  .acs-reference-manager-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(235px,42%) minmax(0,1fr);
+  }
+  .acs-reference-manager-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--acs-line-soft);
+  }
+  .acs-reference-manager-content-head { padding: 12px 15px; }
+  .acs-reference-manager-content-body { padding: 16px 17px 28px; font-size: 13px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .acs-reference-manager-dialog { animation: none; }
+}
 .acs-reference-worldbook-picker-dialog { width: min(520px,94vw); border-color: rgba(183,163,207,.38); }
 .acs-reference-worldbook-picker-dialog > header { background: linear-gradient(120deg,rgba(183,163,207,.1),transparent 58%); }
 .acs-reference-worldbook-picker-dialog header p { color: var(--acs-violet); }
@@ -2663,7 +2928,6 @@ const REFERENCE_ASSET_CSS = `
   .acs-reference-worldbook-picker-body { align-content: start; padding: 18px 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .acs-reference-worldbook-chevron { transition: none; }
 }
 `;
 
@@ -2681,7 +2945,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-59';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-60';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -5729,6 +5993,112 @@ async function deleteReferenceWorldbook(bookId) {
     notify('success', `已删除附属世界书快照“${book.name}”。`);
 }
 
+let activeReferenceManagerBookId = '';
+let activeReferenceManagerEntryId = '';
+
+function closeReferenceWorldbookManager() {
+    const overlay = shell?.querySelector('#acs-reference-manager-overlay');
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+}
+
+function openReferenceWorldbookManager(bookId) {
+    const book = studioResources.referenceWorldbooks.find(item => item.id === bookId);
+    const overlay = shell?.querySelector('#acs-reference-manager-overlay');
+    if (!book || !overlay) return;
+    activeReferenceManagerBookId = book.id;
+    if (!book.entries.some(entry => entry.id === activeReferenceManagerEntryId)) {
+        activeReferenceManagerEntryId = book.entries[0]?.id || '';
+    }
+    const search = overlay.querySelector('#acs-reference-manager-search');
+    if (search) search.value = '';
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    renderReferenceWorldbookManager();
+    requestAnimationFrame(() => search?.focus({ preventScroll: true }));
+}
+
+function renderReferenceWorldbookManager() {
+    const overlay = shell?.querySelector('#acs-reference-manager-overlay');
+    if (!overlay || overlay.hidden) return;
+    const book = studioResources.referenceWorldbooks.find(item => item.id === activeReferenceManagerBookId);
+    if (!book) {
+        closeReferenceWorldbookManager();
+        return;
+    }
+
+    const state = referenceWorldbookProjectState(book, project, true);
+    const query = String(overlay.querySelector('#acs-reference-manager-search')?.value || '').trim().toLocaleLowerCase();
+    const filteredEntries = book.entries.filter(entry => (
+        !query
+        || entry.name.toLocaleLowerCase().includes(query)
+        || entry.content.toLocaleLowerCase().includes(query)
+    ));
+    const enabledCount = book.entries.filter(entry => state.entries?.[entry.id] !== false).length;
+    let selectedEntry = book.entries.find(entry => entry.id === activeReferenceManagerEntryId) || book.entries[0] || null;
+    if (query && !filteredEntries.some(entry => entry.id === selectedEntry?.id)) selectedEntry = filteredEntries[0] || null;
+    if (selectedEntry) activeReferenceManagerEntryId = selectedEntry.id;
+
+    overlay.querySelector('#acs-reference-manager-title').textContent = book.name;
+    overlay.querySelector('#acs-reference-manager-source').textContent = book.sourceType === 'sillytavern'
+        ? `酒馆快照 · ${new Date(book.syncedAt).toLocaleDateString()}`
+        : `JSON 快照 · ${new Date(book.importedAt).toLocaleDateString()}`;
+    overlay.querySelector('#acs-reference-manager-stats').textContent = `${enabledCount} / ${book.entries.length} 条已启用${query ? ` · ${filteredEntries.length} 条匹配` : ''}`;
+    const bookToggle = overlay.querySelector('#acs-reference-manager-book-toggle');
+    bookToggle.checked = state.enabled === true;
+    bookToggle.dataset.referenceBookToggle = book.id;
+
+    const list = overlay.querySelector('#acs-reference-manager-list');
+    list.replaceChildren();
+    if (!filteredEntries.length) {
+        const empty = document.createElement('div');
+        empty.className = 'acs-reference-manager-empty';
+        empty.textContent = '没有匹配的条目。';
+        list.append(empty);
+    } else {
+        for (const entry of filteredEntries) {
+            const row = document.createElement('div');
+            const enabled = state.entries?.[entry.id] !== false;
+            row.className = `acs-reference-manager-entry${entry.id === activeReferenceManagerEntryId ? ' is-selected' : ''}`;
+            row.innerHTML = `
+              <button type="button" data-reference-manager-entry>
+                <strong></strong>
+                <small></small>
+              </button>
+              <label class="acs-resource-switch" title="发送此条目">
+                <input type="checkbox" data-reference-manager-entry-toggle ${enabled ? 'checked' : ''}>
+                <span></span>
+              </label>`;
+            const selectButton = row.querySelector('[data-reference-manager-entry]');
+            selectButton.dataset.referenceManagerEntry = entry.id;
+            selectButton.querySelector('strong').textContent = entry.name;
+            selectButton.querySelector('small').textContent = entry.content.replace(/\s+/g, ' ').slice(0, 64) || '空条目';
+            const toggle = row.querySelector('[data-reference-manager-entry-toggle]');
+            toggle.dataset.referenceManagerEntryToggle = entry.id;
+            toggle.dataset.referenceManagerBook = book.id;
+            list.append(row);
+        }
+    }
+
+    const content = overlay.querySelector('#acs-reference-manager-content');
+    const emptyContent = overlay.querySelector('#acs-reference-manager-empty-content');
+    if (!selectedEntry) {
+        content.hidden = true;
+        emptyContent.hidden = false;
+        return;
+    }
+    emptyContent.hidden = true;
+    content.hidden = false;
+    overlay.querySelector('#acs-reference-manager-entry-title').textContent = selectedEntry.name;
+    overlay.querySelector('#acs-reference-manager-entry-meta').textContent = `附属参考条目 · ${state.entries?.[selectedEntry.id] !== false ? '已发送给 AI' : '未发送给 AI'}`;
+    overlay.querySelector('#acs-reference-manager-entry-content').textContent = selectedEntry.content || '此条目没有正文。';
+    const selectedToggle = overlay.querySelector('#acs-reference-manager-selected-toggle');
+    selectedToggle.checked = state.entries?.[selectedEntry.id] !== false;
+    selectedToggle.dataset.referenceManagerEntryToggle = selectedEntry.id;
+    selectedToggle.dataset.referenceManagerBook = book.id;
+}
+
 function renderReferenceWorldbooks() {
     const list = shell?.querySelector('#acs-reference-worldbook-list');
     const summary = shell?.querySelector('#acs-reference-worldbook-summary');
@@ -5749,56 +6119,39 @@ function renderReferenceWorldbooks() {
         const state = referenceWorldbookProjectState(book, project, false);
         const bookEnabled = state?.enabled === true;
         const enabledEntryCount = book.entries.filter(entry => state?.entries?.[entry.id] !== false).length;
-        const details = document.createElement('details');
-        details.className = `acs-reference-worldbook${bookEnabled ? ' is-enabled' : ''}`;
-        details.dataset.referenceBookId = book.id;
+        const card = document.createElement('article');
+        card.className = `acs-reference-worldbook${bookEnabled ? ' is-enabled' : ''}`;
+        card.dataset.referenceBookId = book.id;
         const sourceCopy = book.sourceType === 'sillytavern'
             ? `酒馆快照 · ${new Date(book.syncedAt).toLocaleDateString()}`
             : `JSON 快照 · ${new Date(book.importedAt).toLocaleDateString()}`;
-        details.innerHTML = `
-          <summary>
+        card.innerHTML = `
+          <div class="acs-reference-worldbook-summary">
             <span class="acs-reference-worldbook-mark"><i class="fa-solid fa-book-bookmark" aria-hidden="true"></i></span>
             <span class="acs-reference-worldbook-copy"><strong></strong><small>${sourceCopy}</small></span>
             <span class="acs-reference-worldbook-count">${enabledEntryCount}/${book.entries.length}</span>
-            <label class="acs-resource-switch" title="仅控制当前项目">
+            <label class="acs-resource-switch" title="仅控制当前项目" aria-label="启用这本附属世界书">
               <input type="checkbox" data-reference-book-toggle ${bookEnabled ? 'checked' : ''}>
               <span></span>
             </label>
-            <i class="fa-solid fa-chevron-down acs-reference-worldbook-chevron" aria-hidden="true"></i>
-          </summary>
-          <div class="acs-reference-worldbook-body">
-            <div class="acs-reference-worldbook-actions">
-              <span><i class="fa-solid fa-circle-info" aria-hidden="true"></i> 当前项目独立启用</span>
-              ${book.sourceType === 'sillytavern' ? '<button type="button" data-reference-book-sync><i class="fa-solid fa-rotate"></i>重新同步</button>' : ''}
-              <button type="button" class="is-danger" data-reference-book-delete><i class="fa-regular fa-trash-can"></i>删除</button>
-            </div>
-            <div class="acs-reference-entry-list"></div>
           </div>`;
-        details.querySelector('.acs-reference-worldbook-copy strong').textContent = book.name;
-        details.querySelector('[data-reference-book-toggle]').dataset.referenceBookToggle = book.id;
-        const syncButton = details.querySelector('[data-reference-book-sync]');
+        const actions = document.createElement('div');
+        actions.className = 'acs-reference-worldbook-actions';
+        actions.innerHTML = `
+          <span><i class="fa-solid fa-circle-info" aria-hidden="true"></i> 当前项目独立启用</span>
+          <button type="button" data-reference-book-manage><i class="fa-solid fa-list"></i>管理条目</button>
+          ${book.sourceType === 'sillytavern' ? '<button type="button" data-reference-book-sync><i class="fa-solid fa-rotate"></i>同步</button>' : ''}
+          <button type="button" class="is-danger" data-reference-book-delete aria-label="删除附属世界书"><i class="fa-regular fa-trash-can"></i></button>`;
+        card.append(actions);
+        card.querySelector('.acs-reference-worldbook-copy strong').textContent = book.name;
+        card.querySelector('[data-reference-book-toggle]').dataset.referenceBookToggle = book.id;
+        card.querySelector('[data-reference-book-manage]').dataset.referenceBookManage = book.id;
+        const syncButton = card.querySelector('[data-reference-book-sync]');
         if (syncButton) syncButton.dataset.referenceBookSync = book.id;
-        details.querySelector('[data-reference-book-delete]').dataset.referenceBookDelete = book.id;
-        const entryList = details.querySelector('.acs-reference-entry-list');
-        for (const entry of book.entries) {
-            const enabled = state?.entries?.[entry.id] !== false;
-            const row = document.createElement('label');
-            row.className = 'acs-reference-entry';
-            row.innerHTML = `
-              <span class="acs-reference-entry-copy"><strong></strong><small></small></span>
-              <span class="acs-resource-switch">
-                <input type="checkbox" data-reference-entry-toggle data-reference-entry-book ${enabled ? 'checked' : ''}>
-                <span></span>
-              </span>`;
-            row.querySelector('strong').textContent = entry.name;
-            row.querySelector('small').textContent = entry.content.replace(/\s+/g, ' ').slice(0, 90);
-            const entryToggle = row.querySelector('[data-reference-entry-toggle]');
-            entryToggle.dataset.referenceEntryToggle = entry.id;
-            entryToggle.dataset.referenceEntryBook = book.id;
-            entryList.append(row);
-        }
-        list.append(details);
+        card.querySelector('[data-reference-book-delete]').dataset.referenceBookDelete = book.id;
+        list.append(card);
     }
+    if (!shell.querySelector('#acs-reference-manager-overlay')?.hidden) renderReferenceWorldbookManager();
 }
 
 function normalizeImportedPreset(raw, fileName = '') {
@@ -13196,6 +13549,60 @@ function installResourceManagerUI() {
         </footer>
       </section>`;
     shell.append(referencePicker);
+
+    const referenceManager = document.createElement('div');
+    referenceManager.id = 'acs-reference-manager-overlay';
+    referenceManager.className = 'acs-reference-manager-overlay';
+    referenceManager.hidden = true;
+    referenceManager.setAttribute('aria-hidden', 'true');
+    referenceManager.innerHTML = `
+      <section class="acs-reference-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-reference-manager-title">
+        <header class="acs-reference-manager-head">
+          <div>
+            <p>REFERENCE LIBRARY</p>
+            <h2 id="acs-reference-manager-title">附属世界书条目</h2>
+            <small id="acs-reference-manager-source"></small>
+          </div>
+          <button class="acs-reference-manager-close" type="button" data-reference-manager-close aria-label="关闭条目窗口"><i class="fa-solid fa-xmark"></i></button>
+        </header>
+        <div class="acs-reference-manager-layout">
+          <aside class="acs-reference-manager-sidebar" aria-label="附属世界书条目列表">
+            <div class="acs-reference-manager-toolbar">
+              <label class="acs-reference-manager-search">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input id="acs-reference-manager-search" type="search" placeholder="搜索标题或正文" autocomplete="off">
+              </label>
+              <label class="acs-reference-manager-book-toggle">
+                <span class="acs-resource-switch" title="控制当前项目是否发送这本世界书">
+                  <input id="acs-reference-manager-book-toggle" type="checkbox">
+                  <span></span>
+                </span>
+                整本启用
+              </label>
+            </div>
+            <div id="acs-reference-manager-stats" class="acs-reference-manager-stats"></div>
+            <div id="acs-reference-manager-list" class="acs-reference-manager-list"></div>
+          </aside>
+          <div class="acs-reference-manager-content-stage">
+            <article id="acs-reference-manager-content" class="acs-reference-manager-content">
+              <header class="acs-reference-manager-content-head">
+                <div>
+                  <h3 id="acs-reference-manager-entry-title"></h3>
+                  <p id="acs-reference-manager-entry-meta"></p>
+                </div>
+                <label class="acs-resource-switch" title="发送此条目" aria-label="发送当前条目">
+                  <input id="acs-reference-manager-selected-toggle" type="checkbox">
+                  <span></span>
+                </label>
+              </header>
+              <div id="acs-reference-manager-entry-content" class="acs-reference-manager-content-body"></div>
+            </article>
+            <div id="acs-reference-manager-empty-content" class="acs-reference-manager-empty" hidden>这本世界书没有可显示的条目。</div>
+          </div>
+        </div>
+      </section>`;
+    shell.append(referenceManager);
+
     referenceCard.querySelector('#acs-import-reference-worldbook-button').addEventListener('click', () => referenceInput.click());
     referenceInput.addEventListener('change', importReferenceWorldbookFile);
     referenceCard.querySelector('#acs-select-reference-worldbook').addEventListener('click', openReferenceWorldbookPicker);
@@ -13211,6 +13618,47 @@ function installResourceManagerUI() {
     referencePicker.querySelector('#acs-import-selected-reference-worldbook').addEventListener('click', () => {
         void importSelectedReferenceWorldbook();
     });
+    referenceManager.addEventListener('click', event => {
+        if (event.target === referenceManager || event.target.closest('[data-reference-manager-close]')) {
+            closeReferenceWorldbookManager();
+            return;
+        }
+        const entryButton = event.target.closest('[data-reference-manager-entry]');
+        if (entryButton) {
+            activeReferenceManagerEntryId = entryButton.dataset.referenceManagerEntry;
+            renderReferenceWorldbookManager();
+        }
+    });
+    referenceManager.addEventListener('input', event => {
+        if (event.target.matches('#acs-reference-manager-search')) renderReferenceWorldbookManager();
+    });
+    referenceManager.addEventListener('change', event => {
+        const bookToggle = event.target.closest('#acs-reference-manager-book-toggle');
+        if (bookToggle) {
+            const book = studioResources.referenceWorldbooks.find(item => item.id === bookToggle.dataset.referenceBookToggle);
+            if (!book) return;
+            referenceWorldbookProjectState(book, project, true).enabled = bookToggle.checked;
+            saveProject();
+            renderReferenceWorldbooks();
+            renderCurrentStep();
+            return;
+        }
+        const entryToggle = event.target.closest('[data-reference-manager-entry-toggle]');
+        if (entryToggle) {
+            const book = studioResources.referenceWorldbooks.find(item => item.id === entryToggle.dataset.referenceManagerBook);
+            if (!book) return;
+            referenceWorldbookProjectState(book, project, true).entries[entryToggle.dataset.referenceManagerEntryToggle] = entryToggle.checked;
+            saveProject();
+            renderReferenceWorldbooks();
+            renderCurrentStep();
+        }
+    });
+    referenceManager.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            event.stopPropagation();
+            closeReferenceWorldbookManager();
+        }
+    });
     referenceCard.addEventListener('click', event => {
         const switchControl = event.target.closest('.acs-resource-switch');
         if (switchControl) {
@@ -13222,6 +13670,12 @@ function installResourceManagerUI() {
                 input.checked = !input.checked;
                 input.dispatchEvent(new Event('change', { bubbles: true }));
             }
+            return;
+        }
+        const manageButton = event.target.closest('[data-reference-book-manage]');
+        if (manageButton) {
+            event.preventDefault();
+            openReferenceWorldbookManager(manageButton.dataset.referenceBookManage);
             return;
         }
         const syncButton = event.target.closest('[data-reference-book-sync]');
