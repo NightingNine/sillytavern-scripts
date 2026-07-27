@@ -13,10 +13,10 @@
 在酒馆助手中新建一个脚本，并填入：
 
 ```javascript
-import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v3/dist/character-creation/auto-card-studio/index.js';
+import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v4/dist/character-creation/auto-card-studio-bootstrap/index.js';
 ```
 
-这个入口内置自动更新器。刷新 SillyTavern 时会检查 `catalog.json`，也可以在创作台标题栏中手动检查更新；发现更高版本后自动加载对应的固定版本，检查或加载失败时继续运行当前版本。
+这个入口只负责读取 `catalog.json` 并加载对应的固定正式版本，不内置任何旧版创作台。检查或加载失败时会明确报错，不会静默回退到历史版本；创作台标题栏仍可手动检查更新。
 
 ## 目录约定
 

@@ -16,7 +16,7 @@
 3. 启用脚本，然后点击“打开 A.U.T.O 创作台”。
 
 ```javascript
-import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v3/dist/character-creation/auto-card-studio/index.js';
+import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v4/dist/character-creation/auto-card-studio-bootstrap/index.js';
 ```
 
 ## 数据与更新
@@ -76,7 +76,7 @@ Step23 生成的“显示状态栏”正则仍按当前项目动态创建；通�
 - 项目元数据与 29 个步骤分别保存在浏览器 IndexedDB 数据库中；修改单个步骤时不会整包重写其他步骤或项目。
 - 首次升级会自动合并旧项目存档与分步骤对话保护记录；迁移成功后以 IndexedDB 为项目事实源，旧 localStorage 快照暂时保留用于短期降级。
 - 如果浏览器无法使用 IndexedDB，创作台会回退旧 localStorage 存储并提示立即导出备份；更新远程脚本不会主动清空项目。
-- 酒馆助手使用固定的 `auto-card-studio-bootstrap-v3` 入口。v3 直接包含手动更新与新手引导，后续更新无需再修改导入地址。
+- 酒馆助手使用固定的 `auto-card-studio-bootstrap-v4` 入口。v4 只加载正式目录对应的固定版本，不再内置或回退到历史版创作台；后续正式版更新无需再次修改导入地址。
 - AI 回复的显示与后续提示词上下文只通过创作台自行导入且已启用的正则处理；SillyTavern 的全局、当前角色和当前预设正则均不会参与。
 - 对话中的 HTML 代码块支持“源码 / 预览”切换；预览在独立沙箱画布中渲染 CSS 和页面结构，并禁止执行其中的 JavaScript，避免影响创作台或 SillyTavern。
 - 生成前可点击“查看提示词”，按实际发送顺序检查系统消息、启用的预设条目、项目上下文与本轮输入，并可一键复制完整消息队列。
