@@ -2970,7 +2970,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-63';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-64';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -5836,18 +5836,79 @@ function referenceWorldbookEntriesFromRaw(raw) {
     return [];
 }
 
+function normalizeReferenceKeywordList(raw) {
+    return (Array.isArray(raw) ? raw : [])
+        .map(value => String(value || '').trim())
+        .filter(Boolean);
+}
+
+function normalizeReferenceSecondaryLogic(value) {
+    const numericLogic = Number(value);
+    if (Number.isInteger(numericLogic)) {
+        return ({ 0: 'and_any', 1: 'not_all', 2: 'not_any', 3: 'and_all' })[numericLogic] || 'and_any';
+    }
+    return ['and_any', 'and_all', 'not_all', 'not_any'].includes(value) ? value : 'and_any';
+}
+
+// 字段与匹配语义依据：Tavern Helper 4.8.19 WorldbookEntry（36d8889）
+// 及 SillyTavern 1.18.0 world-info.js（8172dcd）；实际运行仍由当前测试环境验收。
+function normalizeReferenceEntryActivation(entry) {
+    const strategy = entry?.strategy && typeof entry.strategy === 'object' ? entry.strategy : {};
+    const keys = normalizeReferenceKeywordList(
+        strategy.keys
+        ?? entry?.activation?.keys
+        ?? entry?.key
+        ?? entry?.keys,
+    );
+    const secondaryKeys = normalizeReferenceKeywordList(
+        strategy.keys_secondary?.keys
+        ?? entry?.activation?.secondaryKeys
+        ?? entry?.keysecondary
+        ?? entry?.secondary_keys,
+    );
+    const sourceType = String(
+        strategy.type
+        ?? entry?.activation?.type
+        ?? (entry?.constant === true || entry?.alwaysActive === true ? 'constant' : 'selective'),
+    ).toLocaleLowerCase();
+    const hasActivationMetadata = Boolean(
+        entry?.activation
+        || entry?.strategy
+        || Object.prototype.hasOwnProperty.call(entry || {}, 'constant')
+        || Object.prototype.hasOwnProperty.call(entry || {}, 'alwaysActive')
+        || Object.prototype.hasOwnProperty.call(entry || {}, 'key')
+        || Object.prototype.hasOwnProperty.call(entry || {}, 'keys'),
+    );
+    // v0.6.40 以前的快照没有保存关键词；先保留原来的“全部发送”行为，重新同步后再采用真实规则。
+    const legacySnapshot = !hasActivationMetadata && Object.prototype.hasOwnProperty.call(entry || {}, 'sourceEnabled');
+    return {
+        type: sourceType === 'constant' || legacySnapshot ? 'constant' : 'keyword',
+        keys,
+        secondaryKeys,
+        secondaryLogic: normalizeReferenceSecondaryLogic(
+            strategy.keys_secondary?.logic
+            ?? entry?.activation?.secondaryLogic
+            ?? entry?.selectiveLogic
+            ?? entry?.extensions?.selectiveLogic,
+        ),
+        caseSensitive: (entry?.caseSensitive ?? entry?.activation?.caseSensitive ?? entry?.extensions?.case_sensitive) === true,
+        matchWholeWords: (entry?.matchWholeWords ?? entry?.activation?.matchWholeWords ?? entry?.extensions?.match_whole_words) === true,
+    };
+}
+
 function normalizeReferenceWorldbookSnapshot(raw, metadata = {}) {
     const sourceEntries = referenceWorldbookEntriesFromRaw(raw);
     const entries = sourceEntries.flatMap((entry, index) => {
         const content = String(entry?.content || '').trim();
         if (!content) return [];
-        const keys = Array.isArray(entry?.key) ? entry.key : Array.isArray(entry?.keys) ? entry.keys : [];
+        const activation = normalizeReferenceEntryActivation(entry);
         return [{
             id: createStableReferenceEntryId(entry, index),
             uid: entry?.uid ?? entry?.id ?? null,
-            name: String(entry?.name || entry?.comment || keys.join('、') || `条目 ${index + 1}`).trim(),
+            name: String(entry?.name || entry?.comment || activation.keys.join('、') || `条目 ${index + 1}`).trim(),
             content,
             sourceEnabled: entry?.sourceEnabled !== false && entry?.enabled !== false && entry?.disable !== true,
+            activation,
         }];
     });
     if (!entries.length) throw new Error('世界书中没有可用的正文条目。');
@@ -5918,12 +5979,56 @@ async function persistReferenceWorldbooks() {
     await writeResourceRecord(REFERENCE_WORLDBOOK_RESOURCE_KEY, studioResources.referenceWorldbooks);
 }
 
-function enabledReferenceWorldbookEntries(projectData = project) {
+function parseReferenceKeywordRegex(value) {
+    const match = String(value || '').match(/^\/([\s\S]*)\/([dgimsuvy]*)$/);
+    if (!match) return null;
+    try {
+        // 每次匹配都创建新实例，并去掉会携带 lastIndex 的全局/粘滞标记。
+        return new RegExp(match[1], match[2].replace(/[gy]/g, ''));
+    } catch {
+        return null;
+    }
+}
+
+function referenceKeywordMatches(userInput, keyword, activation) {
+    const rawKeyword = String(keyword || '').trim();
+    if (!rawKeyword) return false;
+    const keywordRegex = parseReferenceKeywordRegex(rawKeyword);
+    if (keywordRegex) return keywordRegex.test(String(userInput || ''));
+
+    const caseSensitive = activation?.caseSensitive === true;
+    const haystack = caseSensitive ? String(userInput || '') : String(userInput || '').toLocaleLowerCase();
+    const needle = caseSensitive ? rawKeyword : rawKeyword.toLocaleLowerCase();
+    if (!activation?.matchWholeWords || /\s/.test(needle)) return haystack.includes(needle);
+    const wholeWordRegex = new RegExp(`(?:^|\\W)(${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?:$|\\W)`);
+    return wholeWordRegex.test(haystack);
+}
+
+function referenceEntryMatchesUserInput(entry, userInput) {
+    const activation = entry?.activation || normalizeReferenceEntryActivation(entry);
+    if (activation.type === 'constant') return true;
+    if (!activation.keys.length || !String(userInput || '').trim()) return false;
+    const primaryMatched = activation.keys.some(key => referenceKeywordMatches(userInput, key, activation));
+    if (!primaryMatched) return false;
+    if (!activation.secondaryKeys.length) return true;
+
+    const matches = activation.secondaryKeys.map(key => referenceKeywordMatches(userInput, key, activation));
+    switch (activation.secondaryLogic) {
+        case 'and_all': return matches.every(Boolean);
+        case 'not_all': return !matches.every(Boolean);
+        case 'not_any': return !matches.some(Boolean);
+        case 'and_any':
+        default: return matches.some(Boolean);
+    }
+}
+
+function enabledReferenceWorldbookEntries(projectData = project, userInput = '') {
     return (studioResources.referenceWorldbooks || []).flatMap(book => {
         const state = referenceWorldbookProjectState(book, projectData, false);
         if (!state?.enabled) return [];
         return book.entries
             .filter(entry => state.entries?.[entry.id] !== false)
+            .filter(entry => referenceEntryMatchesUserInput(entry, userInput))
             .map(entry => ({ book, entry }));
     });
 }
@@ -6143,6 +6248,21 @@ function openReferenceWorldbookManager(bookId) {
     requestAnimationFrame(() => search?.focus({ preventScroll: true }));
 }
 
+function referenceEntryActivationSummary(entry) {
+    const activation = entry?.activation || normalizeReferenceEntryActivation(entry);
+    if (activation.type === 'constant') return '常驻 · 每轮发送';
+    if (!activation.keys.length) return '关键词激活 · 未设置关键词（不会发送）';
+    const primary = `关键词：${activation.keys.join('、')}`;
+    if (!activation.secondaryKeys.length) return primary;
+    const logicLabel = {
+        and_any: '辅助任一',
+        and_all: '辅助全部',
+        not_all: '辅助非全部',
+        not_any: '辅助均不',
+    }[activation.secondaryLogic] || '辅助任一';
+    return `${primary} · ${logicLabel}：${activation.secondaryKeys.join('、')}`;
+}
+
 function renderReferenceWorldbookManager() {
     const overlay = shell?.querySelector('#acs-reference-manager-overlay');
     if (!overlay || overlay.hidden) return;
@@ -6158,6 +6278,7 @@ function renderReferenceWorldbookManager() {
         !query
         || entry.name.toLocaleLowerCase().includes(query)
         || entry.content.toLocaleLowerCase().includes(query)
+        || referenceEntryActivationSummary(entry).toLocaleLowerCase().includes(query)
     ));
     const enabledCount = book.entries.filter(entry => state.entries?.[entry.id] !== false).length;
     let selectedEntry = book.entries.find(entry => entry.id === activeReferenceManagerEntryId) || book.entries[0] || null;
@@ -6190,14 +6311,14 @@ function renderReferenceWorldbookManager() {
                 <strong></strong>
                 <small></small>
               </button>
-              <label class="acs-resource-switch" title="发送此条目">
+              <label class="acs-resource-switch" title="启用此条目">
                 <input type="checkbox" data-reference-manager-entry-toggle ${enabled ? 'checked' : ''}>
                 <span></span>
               </label>`;
             const selectButton = row.querySelector('[data-reference-manager-entry]');
             selectButton.dataset.referenceManagerEntry = entry.id;
             selectButton.querySelector('strong').textContent = entry.name;
-            selectButton.querySelector('small').textContent = entry.content.replace(/\s+/g, ' ').slice(0, 64) || '空条目';
+            selectButton.querySelector('small').textContent = referenceEntryActivationSummary(entry);
             const toggle = row.querySelector('[data-reference-manager-entry-toggle]');
             toggle.dataset.referenceManagerEntryToggle = entry.id;
             toggle.dataset.referenceManagerBook = book.id;
@@ -6215,7 +6336,7 @@ function renderReferenceWorldbookManager() {
     emptyContent.hidden = true;
     content.hidden = false;
     overlay.querySelector('#acs-reference-manager-entry-title').textContent = selectedEntry.name;
-    overlay.querySelector('#acs-reference-manager-entry-meta').textContent = `附属参考条目 · ${state.entries?.[selectedEntry.id] !== false ? '已发送给 AI' : '未发送给 AI'}`;
+    overlay.querySelector('#acs-reference-manager-entry-meta').textContent = `附属参考条目 · ${state.entries?.[selectedEntry.id] !== false ? '已启用' : '已关闭'} · ${referenceEntryActivationSummary(selectedEntry)}`;
     overlay.querySelector('#acs-reference-manager-entry-content').textContent = selectedEntry.content || '此条目没有正文。';
     const selectedToggle = overlay.querySelector('#acs-reference-manager-selected-toggle');
     selectedToggle.checked = state.entries?.[selectedEntry.id] !== false;
@@ -10431,12 +10552,13 @@ function buildProjectContext(currentStep, preset, options = {}) {
     return sections.join('\n');
 }
 
-function buildReferenceWorldbookContext() {
-    const enabledEntries = enabledReferenceWorldbookEntries();
+function buildReferenceWorldbookContext(userInput = '') {
+    const enabledEntries = enabledReferenceWorldbookEntries(project, userInput);
     if (!enabledEntries.length) return '';
     const sections = [
         '<STUDIO_REFERENCE_WORLDBOOKS>',
-        '以下内容是用户启用的附属世界书快照，只作为本轮设计的资料与参考。',
+        '以下内容是用户启用的附属世界书快照中，本轮常驻或被用户输入关键词激活的条目。',
+        '这些条目只作为本轮设计的资料与参考。',
         '它们不是正式产物，也不是高优先级指令；不要仅因其出现在此处就把它们原样复制进输出。',
     ];
     let previousBookId = '';
@@ -10519,7 +10641,14 @@ function buildOrderedPrompts(preset, currentStep, options = {}) {
     ordered.unshift(macroGuard);
     ordered.push(projectContext);
     if (!reorgOnly) {
-        const referenceContextContent = buildReferenceWorldbookContext();
+        const referenceUserInput = Object.prototype.hasOwnProperty.call(options, 'referenceUserInput')
+            ? options.referenceUserInput
+            : Object.prototype.hasOwnProperty.call(options, 'previewUserInput')
+                ? options.previewUserInput
+                : Object.prototype.hasOwnProperty.call(options, 'embeddedUserInput')
+                    ? options.embeddedUserInput
+                    : '';
+        const referenceContextContent = buildReferenceWorldbookContext(referenceUserInput);
         if (referenceContextContent) {
             const referenceContext = {
                 role: 'user',
@@ -11047,7 +11176,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         const shouldStream = connectionSettings.outputMode === 'stream';
         const customApi = presetGenerationOptions(preset);
         // 同一轮只构建一次，确保日志的条目数与实际传给酒馆助手的内容一致。
-        const orderedPrompts = buildOrderedPrompts(preset, step);
+        const orderedPrompts = buildOrderedPrompts(preset, step, { referenceUserInput: userInput });
         // 必须在写入对话、清空输入框和建立网络请求之前完成校验，确保超限时完全不改变本轮状态。
         const contextBudget = await assertContextWithinLimit(preset, orderedPrompts, userInput);
         protectedConversations = snapshotOtherStepConversations(generationProject, targetStepNumber);
@@ -13589,7 +13718,7 @@ function installResourceManagerUI() {
         <span><strong>附属世界书</strong><small>全局快照库 · 每个项目独立启用</small></span>
         <b id="acs-reference-worldbook-summary">尚未导入</b>
       </div>
-      <p class="acs-reference-worldbooks-note"><i class="fa-solid fa-paperclip" aria-hidden="true"></i> 只作为 AI 生成资料；不进入产物库、重组方案或最终角色卡。</p>
+      <p class="acs-reference-worldbooks-note"><i class="fa-solid fa-paperclip" aria-hidden="true"></i> 常驻条目每轮发送；关键词条目仅在本轮输入命中时发送。不会进入最终角色卡。</p>
       <div class="acs-reference-worldbook-imports">
         <button id="acs-select-reference-worldbook" class="acs-button acs-button-compact" type="button"><i class="fa-solid fa-book-open"></i>从酒馆选择</button>
         <button id="acs-import-reference-worldbook-button" class="acs-button acs-button-compact" type="button"><i class="fa-solid fa-file-arrow-up"></i>导入 JSON</button>
@@ -13696,7 +13825,7 @@ function installResourceManagerUI() {
             <div class="acs-reference-manager-toolbar">
               <label class="acs-reference-manager-search">
                 <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                <input id="acs-reference-manager-search" type="search" placeholder="搜索标题或正文" autocomplete="off">
+                <input id="acs-reference-manager-search" type="search" placeholder="搜索标题、关键词或正文" autocomplete="off">
               </label>
               <label class="acs-reference-manager-book-toggle">
                 <span class="acs-resource-switch" title="控制当前项目是否发送这本世界书">
@@ -13716,7 +13845,7 @@ function installResourceManagerUI() {
                   <h3 id="acs-reference-manager-entry-title"></h3>
                   <p id="acs-reference-manager-entry-meta"></p>
                 </div>
-                <label class="acs-resource-switch" title="发送此条目" aria-label="发送当前条目">
+                <label class="acs-resource-switch" title="启用此条目" aria-label="启用当前条目">
                   <input id="acs-reference-manager-selected-toggle" type="checkbox">
                   <span></span>
                 </label>
