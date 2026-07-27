@@ -2945,7 +2945,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-60';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-61';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -4727,6 +4727,105 @@ const MOBILE_POLISH_CSS = `
   height: 22px;
   flex: 0 0 auto;
   font-size: 9px;
+}
+
+/* 手机端步骤标题栏只保留标题，并把四个常用操作压成同一行。 */
+.acs-shell.acs-mobile-layout .acs-stage-heading,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 48px;
+  gap: 4px;
+  align-items: start;
+  padding: 6px 7px 5px 9px;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading > div:first-child,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading > div:first-child {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout #acs-step-kicker,
+.acs-shell.acs-mobile-layout #acs-current-step-requirement {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-title-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  gap: 3px;
+  align-items: center;
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading h2,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading h2 {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading-actions,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading-actions {
+  gap: 3px;
+  align-items: center;
+}
+
+.acs-shell.acs-mobile-layout .acs-step-help-button,
+.acs-shell.acs-mobile-layout .acs-conversation-manager-toggle,
+.acs-shell.acs-mobile-layout .acs-clear-step-button,
+.acs-shell.acs-mobile-layout .acs-overview-toggle,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-step-help-button,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-conversation-manager-toggle,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-clear-step-button,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-overview-toggle {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  justify-content: center;
+  font-size: 8px;
+}
+
+.acs-shell.acs-mobile-layout .acs-conversation-manager-toggle {
+  display: inline-flex;
+}
+
+.acs-shell.acs-mobile-layout .acs-conversation-manager-name,
+.acs-shell.acs-mobile-layout .acs-conversation-manager-toggle .fa-chevron-down,
+.acs-shell.acs-mobile-layout .acs-clear-step-button span,
+.acs-shell.acs-mobile-layout .acs-overview-toggle span,
+.acs-shell.acs-mobile-layout .acs-state-chip {
+  display: none;
+}
+
+.acs-shell.acs-mobile-layout .acs-conversation-manager-count {
+  top: -4px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  font-size: 5px;
+}
+
+.acs-shell.acs-mobile-layout .acs-stage-heading .acs-step-goal,
+.acs-shell.acs-mobile-layout .acs-stage.is-overview-collapsed .acs-stage-heading .acs-step-goal {
+  display: block;
+  grid-column: 1;
+  width: 100%;
+  margin-top: 0;
+  overflow: hidden;
+  font-size: 8px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 四个主要操作共用一行；生成中由“停止”原位接替“生成”。 */
