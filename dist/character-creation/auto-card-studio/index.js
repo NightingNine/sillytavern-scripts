@@ -2563,7 +2563,7 @@ const REFERENCE_ASSET_CSS = `
 .acs-reference-worldbook.is-enabled { border-color: rgba(183,163,207,.3); }
 .acs-reference-worldbook-summary {
   display: grid;
-  grid-template-columns: 32px minmax(0,1fr) auto 36px;
+  grid-template-columns: 32px minmax(0,1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 42px;
@@ -2580,8 +2580,11 @@ const REFERENCE_ASSET_CSS = `
 .acs-reference-worldbook-copy strong { color: var(--acs-text-soft); font-size: 10px; }
 .acs-reference-worldbook-copy small { margin-top: 3px; color: var(--acs-muted); font-size: 8px; }
 .acs-reference-worldbook-count {
+  display: grid;
+  height: 22px;
   min-width: 43px;
-  padding: 5px 7px;
+  padding: 0 7px;
+  place-items: center;
   border: 1px solid rgba(183,163,207,.2);
   border-radius: 999px;
   color: var(--acs-violet);
@@ -2590,26 +2593,35 @@ const REFERENCE_ASSET_CSS = `
   text-align: center;
   white-space: nowrap;
 }
-.acs-reference-worldbook-summary > .acs-resource-switch {
-  width: 36px;
-  height: 20px;
+.acs-reference-worldbook-summary-controls {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  gap: 8px;
 }
-.acs-reference-worldbook-summary > .acs-resource-switch span {
+.acs-reference-worldbook-summary-controls > .acs-resource-switch {
+  display: block;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 38px;
+}
+.acs-reference-worldbook-summary-controls > .acs-resource-switch span {
   border-color: rgba(157,151,142,.36);
   background: #25231f;
 }
-.acs-reference-worldbook-summary > .acs-resource-switch span::after {
-  top: 3px;
+.acs-reference-worldbook-summary-controls > .acs-resource-switch span::after {
+  top: 50%;
   left: 3px;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
 }
-.acs-reference-worldbook-summary > .acs-resource-switch input:checked + span {
+.acs-reference-worldbook-summary-controls > .acs-resource-switch input:checked + span {
   border-color: rgba(147,189,145,.62);
   background: rgba(147,189,145,.14);
 }
-.acs-reference-worldbook-summary > .acs-resource-switch input:checked + span::after {
-  transform: translateX(16px);
+.acs-reference-worldbook-summary-controls > .acs-resource-switch input:checked + span::after {
+  transform: translate(18px,-50%);
 }
 .acs-reference-worldbook-actions {
   display: flex;
@@ -2764,7 +2776,7 @@ const REFERENCE_ASSET_CSS = `
   height: 14px;
 }
 .acs-reference-manager-dialog .acs-resource-switch input:checked + span::after {
-  transform: translateX(16px);
+  transform: translate(18px,-50%);
 }
 .acs-reference-manager-stats {
   padding: 0 14px 10px;
@@ -2945,7 +2957,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-61';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-62';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -3162,7 +3174,7 @@ const RESOURCE_MANAGER_CSS = `
 .acs-resource-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 11px; border:1px solid var(--acs-line-soft); border-radius:9px; background:#34312c; transition:border-color 140ms ease,background 140ms ease,transform 140ms ease; }.acs-resource-item+.acs-resource-item{margin-top:7px}
 .acs-resource-item.is-editable { cursor:pointer; }.acs-resource-item.is-editable:hover{border-color:rgba(217,119,87,.38);background:#3a3731;transform:translateX(-2px)}.acs-resource-item.is-empty .acs-resource-item-copy strong{color:var(--acs-muted);font-style:italic}.acs-resource-item.is-empty .acs-resource-item-copy small{color:var(--acs-gold)}
 .acs-resource-item-copy{min-width:0}.acs-resource-item-copy strong,.acs-resource-item-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.acs-resource-item-copy strong{color:var(--acs-text-soft);font-size:10px}.acs-resource-item-copy small{margin-top:4px;color:var(--acs-muted);font:700 8px/1 var(--acs-mono)}
-.acs-resource-switch { position:relative; width:34px; height:18px; }.acs-resource-switch input{position:absolute;opacity:0}.acs-resource-switch span{position:absolute;inset:0;border:1px solid var(--acs-line);border-radius:999px;background:#2b2925;cursor:pointer}.acs-resource-switch span::after{position:absolute;top:3px;left:3px;width:10px;height:10px;border-radius:50%;background:var(--acs-muted);content:"";transition:transform 140ms ease,background 140ms ease}.acs-resource-switch input:checked+span{border-color:rgba(147,189,145,.48);background:rgba(147,189,145,.1)}.acs-resource-switch input:checked+span::after{transform:translateX(16px);background:var(--acs-green)}
+.acs-resource-switch { position:relative; width:34px; height:18px; }.acs-resource-switch input{position:absolute;opacity:0}.acs-resource-switch span{position:absolute;inset:0;border:1px solid var(--acs-line);border-radius:999px;background:#2b2925;cursor:pointer}.acs-resource-switch span::after{position:absolute;top:50%;left:3px;width:10px;height:10px;border-radius:50%;background:var(--acs-muted);content:"";transform:translateY(-50%);transition:transform 140ms ease,background 140ms ease}.acs-resource-switch input:checked+span{border-color:rgba(147,189,145,.48);background:rgba(147,189,145,.1)}.acs-resource-switch input:checked+span::after{transform:translate(16px,-50%);background:var(--acs-green)}
 .acs-resource-empty { padding:24px 12px; color:var(--acs-muted); font-size:10px; line-height:1.65; text-align:center; }
 .acs-resource-editor-overlay,.acs-update-notes-overlay{position:absolute;inset:0;z-index:70;display:grid;padding:clamp(12px,4vh,42px);place-items:center;background:rgba(18,16,14,.76);backdrop-filter:blur(10px)}
 .acs-resource-editor-dialog,.acs-update-notes-dialog{display:grid;width:min(820px,94vw);max-height:min(820px,90vh);overflow:hidden;border:1px solid rgba(217,119,87,.36);border-radius:18px;background:#302e29;box-shadow:0 30px 90px rgba(10,9,8,.62);animation:acs-confirm-in 160ms ease-out}
@@ -6228,11 +6240,13 @@ function renderReferenceWorldbooks() {
           <div class="acs-reference-worldbook-summary">
             <span class="acs-reference-worldbook-mark"><i class="fa-solid fa-book-bookmark" aria-hidden="true"></i></span>
             <span class="acs-reference-worldbook-copy"><strong></strong><small>${sourceCopy}</small></span>
-            <span class="acs-reference-worldbook-count">${enabledEntryCount}/${book.entries.length}</span>
-            <label class="acs-resource-switch" title="仅控制当前项目" aria-label="启用这本附属世界书">
-              <input type="checkbox" data-reference-book-toggle ${bookEnabled ? 'checked' : ''}>
-              <span></span>
-            </label>
+            <span class="acs-reference-worldbook-summary-controls">
+              <span class="acs-reference-worldbook-count">${enabledEntryCount}/${book.entries.length}</span>
+              <label class="acs-resource-switch" title="仅控制当前项目" aria-label="启用这本附属世界书">
+                <input type="checkbox" data-reference-book-toggle ${bookEnabled ? 'checked' : ''}>
+                <span></span>
+              </label>
+            </span>
           </div>`;
         const actions = document.createElement('div');
         actions.className = 'acs-reference-worldbook-actions';
