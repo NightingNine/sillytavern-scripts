@@ -5443,6 +5443,12 @@ let helper = null;
 let launcherInstallTimer = null;
 let isGenerating = false;
 let activeGenerationId = null;
+const CONVERSATION_BOTTOM_TOLERANCE = 24;
+let conversationAutoFollow = true;
+let conversationScrollSyncing = false;
+let conversationLastScrollTop = 0;
+let conversationScrollContextKey = '';
+let conversationTouchY = null;
 let artifactPanelExpanded = false;
 let projectMenuCloseTimer = null;
 let updateFeedbackTimer = null;
@@ -7980,6 +7986,17 @@ function renderCurrentStep() {
     const guide = STEP_GUIDES[step.number - 1];
     const state = project.steps[step.number];
     ensureStepConversationState(state, step.number);
+    const activeConversation = activeStepConversation(state, step.number);
+    const nextScrollContextKey = `${project.id}:${step.number}:${activeConversation.id}`;
+    const scrollContextChanged = nextScrollContextKey !== conversationScrollContextKey;
+    if (scrollContextChanged) {
+        conversationScrollContextKey = nextScrollContextKey;
+        conversationAutoFollow = true;
+    }
+    const conversation = shell.querySelector('.acs-conversation');
+    const preservedScrollTop = conversation?.scrollTop || 0;
+    const shouldFollowBottom = conversationAutoFollow;
+    conversationScrollSyncing = true;
     const requirement = getStepRequirement(step.number);
     shell.querySelector('#acs-step-kicker').textContent = `PHASE ${String(step.number).padStart(2, '0')} / ${STEPS.length}`;
     shell.querySelector('#acs-step-title').textContent = step.name;
@@ -8024,7 +8041,6 @@ function renderCurrentStep() {
     delete shell.querySelector('.acs-conversation').dataset.previousTurnIndex;
     const hasTurns = Array.isArray(state.turns) && state.turns.length > 0;
     const clearStepButton = shell.querySelector('#acs-clear-step');
-    const activeConversation = activeStepConversation(state, step.number);
     clearStepButton.disabled = !hasTurns || isGenerating;
     clearStepButton.title = hasTurns ? `清空“${activeConversation.name}”的对话记录` : '当前对话没有消息';
     shell.querySelector('#acs-conversation-nav').hidden = !hasTurns;
@@ -8115,7 +8131,15 @@ function renderCurrentStep() {
 
     requestAnimationFrame(() => {
         const conversation = shell.querySelector('.acs-conversation');
-        conversation.scrollTop = conversation.scrollHeight;
+        if (!conversation) {
+            conversationScrollSyncing = false;
+            return;
+        }
+        if (shouldFollowBottom) scrollConversationToBottom(conversation, { force: true });
+        else conversation.scrollTop = Math.min(preservedScrollTop, Math.max(0, conversation.scrollHeight - conversation.clientHeight));
+        conversationLastScrollTop = conversation.scrollTop;
+        conversationAutoFollow = shouldFollowBottom;
+        conversationScrollSyncing = false;
     });
 }
 
@@ -9330,6 +9354,32 @@ function installConversationNavigation() {
     composer.append(navigation);
 }
 
+function isConversationNearBottom(conversation) {
+    if (!conversation) return true;
+    return conversation.scrollHeight - conversation.clientHeight - conversation.scrollTop <= CONVERSATION_BOTTOM_TOLERANCE;
+}
+
+function setConversationAutoFollow(enabled) {
+    conversationAutoFollow = Boolean(enabled);
+}
+
+function handleConversationScroll(event) {
+    const conversation = event.currentTarget;
+    const currentScrollTop = conversation.scrollTop;
+    if (!conversationScrollSyncing) {
+        // 向上滚动立即退出跟随；用户自己回到底部后自动恢复跟随。
+        if (currentScrollTop < conversationLastScrollTop - 1) conversationAutoFollow = false;
+        else if (isConversationNearBottom(conversation)) conversationAutoFollow = true;
+    }
+    conversationLastScrollTop = currentScrollTop;
+}
+
+function scrollConversationToBottom(conversation, { force = false, behavior = 'auto' } = {}) {
+    if (!conversation || (!force && !conversationAutoFollow)) return;
+    conversation.scrollTo({ top: conversation.scrollHeight, behavior });
+    conversationLastScrollTop = conversation.scrollTop;
+}
+
 function scrollToPreviousTurnTop() {
     const conversation = shell.querySelector('.acs-conversation');
     const turns = [...shell.querySelectorAll('#acs-turns .acs-turn')];
@@ -9345,6 +9395,7 @@ function scrollToPreviousTurnTop() {
     const target = conversation.scrollTop + targetBounds.top - conversationBounds.top - 10;
     const maximum = Math.max(0, conversation.scrollHeight - conversation.clientHeight);
     const prefersReducedMotion = hostWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    setConversationAutoFollow(false);
     conversation.scrollTo({
         top: Math.max(0, Math.min(maximum, target)),
         behavior: prefersReducedMotion ? 'auto' : 'smooth',
@@ -9361,6 +9412,7 @@ function scrollToLatestTurnBottom() {
     const target = conversation.scrollTop + turnBounds.bottom - conversationBounds.bottom + 10;
     const maximum = Math.max(0, conversation.scrollHeight - conversation.clientHeight);
     const prefersReducedMotion = hostWindow.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    setConversationAutoFollow(true);
     conversation.scrollTo({
         top: Math.max(0, Math.min(maximum, target)),
         behavior: prefersReducedMotion ? 'auto' : 'smooth',
@@ -11160,6 +11212,8 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         void syncConversationVaults(generationProject);
         saveProjectLibrary();
     }
+    // 新一轮生成默认从底部开始；生成中一旦用户上滚，后续 token 不再抢夺滚动位置。
+    setConversationAutoFollow(true);
     setGenerating(true);
     renderCurrentStep();
     renderStepRail();
@@ -11238,7 +11292,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
                 const content = shell.querySelector('#acs-turns .acs-turn:last-child .acs-turn-content');
                 if (content) content.textContent = streamingTurn.content;
                 const conversation = shell.querySelector('.acs-conversation');
-                if (conversation) conversation.scrollTop = conversation.scrollHeight;
+                scrollConversationToBottom(conversation);
             });
         }
 
@@ -14215,6 +14269,23 @@ function bindStudioEvents() {
     });
     shell.querySelector('#acs-previous-turn-top').addEventListener('click', scrollToPreviousTurnTop);
     shell.querySelector('#acs-latest-turn-bottom').addEventListener('click', scrollToLatestTurnBottom);
+    const conversation = shell.querySelector('.acs-conversation');
+    conversation.addEventListener('scroll', handleConversationScroll, { passive: true });
+    conversation.addEventListener('wheel', event => {
+        if (event.deltaY < 0) setConversationAutoFollow(false);
+    }, { passive: true });
+    conversation.addEventListener('touchstart', event => {
+        conversationTouchY = event.touches?.[0]?.clientY ?? null;
+    }, { passive: true });
+    conversation.addEventListener('touchmove', event => {
+        const nextY = event.touches?.[0]?.clientY;
+        if (Number.isFinite(nextY) && Number.isFinite(conversationTouchY) && nextY > conversationTouchY) {
+            setConversationAutoFollow(false);
+        }
+        conversationTouchY = Number.isFinite(nextY) ? nextY : conversationTouchY;
+    }, { passive: true });
+    conversation.addEventListener('touchend', () => { conversationTouchY = null; }, { passive: true });
+    conversation.addEventListener('touchcancel', () => { conversationTouchY = null; }, { passive: true });
     shell.querySelector('#acs-future-artifacts-toggle').addEventListener('click', toggleFutureArtifactsContext);
     shell.querySelector('#acs-generate').addEventListener('click', generateCurrentStep);
     shell.querySelector('#acs-preview-prompt').addEventListener('click', openPromptPreview);
