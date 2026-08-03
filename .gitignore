@@ -1,0 +1,6 @@
+standalone/**/bin/
+standalone/**/obj/
+standalone/**/data/
+standalone/publish/
+*.user
+

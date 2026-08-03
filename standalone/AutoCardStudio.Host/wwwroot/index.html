@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>A.U.T.O 角色卡创作台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell" aria-busy="true">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <div class="brand-copy">
+          <span class="eyebrow">L3 / CHARACTER FORGE</span>
+          <strong>A.U.T.O 角色卡创作台</strong>
+        </div>
+        <button class="guide-button" type="button" disabled title="新手引导将在完整界面阶段接通">◉ <span>新手引导</span></button>
+      </div>
+      <div class="top-actions">
+        <span id="service-status" class="service-status"><i></i><span>正在读取本地资料</span></span>
+        <button id="reload-button" class="icon-button" type="button" title="重新载入">↻</button>
+        <button class="icon-button" type="button" disabled title="项目导入导出将在后续阶段接通">▣</button>
+        <button id="close-button" class="icon-button" type="button" title="关闭创作台">×</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="rail">
+        <section class="project-card">
+          <span class="section-caption">当前项目</span>
+          <button id="project-menu-button" class="project-button" type="button" aria-expanded="false">
+            <span class="folder-icon" aria-hidden="true">▰</span>
+            <span id="project-button-name">读取中…</span>
+            <span aria-hidden="true">⌄</span>
+          </button>
+          <div class="progress-copy"><span id="progress-copy">0 / 29</span><span>0%</span></div>
+          <div class="progress-track"><span></span></div>
+        </section>
+
+        <nav id="step-rail" class="step-rail" aria-label="创作步骤"></nav>
+
+        <button id="new-project-button" class="new-project-button" type="button">＋ 新建项目</button>
+        <section id="project-menu" class="project-menu" hidden>
+          <header><strong>项目库</strong><button id="project-menu-close" type="button">×</button></header>
+          <div id="project-list" class="project-list"></div>
+        </section>
+      </aside>
+
+      <main class="stage">
+        <header class="stage-heading">
+          <div class="stage-title-line">
+            <span id="step-number" class="step-number">01</span>
+            <h1 id="step-title">交互范式和美学纲领</h1>
+            <span id="requirement-chip" class="requirement-chip">必做</span>
+          </div>
+          <p id="step-goal" class="step-goal"></p>
+        </header>
+
+        <section class="conversation">
+          <div class="empty-state">
+            <span class="empty-orbit" aria-hidden="true"><i></i></span>
+            <span id="station-label" class="empty-kicker">STATION 01 · 创作航标</span>
+            <h2 id="guide-title">先定下这段体验的方向</h2>
+            <p id="guide-description">先规定玩家与 AI 的互动关系，再描定希望持续获得的审美体验。</p>
+            <div class="guide-panel">
+              <strong>可以从这些问题开始</strong>
+              <ol id="guide-prompts"></ol>
+            </div>
+          </div>
+        </section>
+
+        <section class="composer" aria-label="本轮补充">
+          <label id="brief-label" for="project-brief">创作母题 · 交互范式和美学纲领</label>
+          <textarea id="project-brief" rows="3" maxlength="20000" placeholder="描述你想创作的世界、主控角色、核心体验、边界与参考作品。无需一次写完，后续可以持续补充。"></textarea>
+          <div class="composer-footer">
+            <span id="save-status" class="save-status">资料会自动保存在本机</span>
+            <div class="future-actions" aria-label="后续阶段功能">
+              <button type="button" disabled>提示词</button>
+              <button type="button" disabled class="primary">生成阶段草案</button>
+              <button type="button" disabled class="confirm">确认并前往下一站 →</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="inspector">
+        <div class="tabs" role="tablist">
+          <button class="tab is-active" type="button" data-tab="artifacts">产物</button>
+          <button class="tab" type="button" data-tab="settings">设置</button>
+          <button class="tab" type="button" data-tab="publish">发布</button>
+        </div>
+        <section class="tab-panel" data-panel="artifacts">
+          <div class="panel-heading"><strong>结构解析</strong><span>0 个产物</span></div>
+          <p>正式产物将在生成闭环接通后显示。项目和步骤资料已经由独立版保存。</p>
+          <div class="placeholder-list">
+            <span></span><span></span><span></span>
+          </div>
+        </section>
+        <section class="tab-panel" data-panel="settings" hidden>
+          <div class="panel-heading"><strong>界面与数据</strong><span>阶段 1</span></div>
+          <label class="field-label" for="project-name">项目名称</label>
+          <input id="project-name" class="text-field" type="text" maxlength="80">
+          <div class="info-card"><i>●</i><div><strong>本地安全保存</strong><p>项目按步骤写入程序旁的 data 文件夹，旧页面不会静默覆盖新资料。</p></div></div>
+        </section>
+        <section class="tab-panel" data-panel="publish" hidden>
+          <div class="panel-heading"><strong>角色卡交付</strong><span>后续阶段</span></div>
+          <p>世界书重组与角色卡 ZIP 会在发布阶段接通。当前不会创建空白或不完整角色卡。</p>
+        </section>
+      </aside>
+    </div>
+
+    <div id="modal-backdrop" class="modal-backdrop" hidden></div>
+    <section id="confirm-modal" class="confirm-modal" role="dialog" aria-modal="true" hidden>
+      <h2 id="confirm-title">确认操作</h2>
+      <p id="confirm-message"></p>
+      <div><button id="confirm-cancel" type="button">取消</button><button id="confirm-accept" type="button" class="danger">确认</button></div>
+    </section>
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  </div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
+
