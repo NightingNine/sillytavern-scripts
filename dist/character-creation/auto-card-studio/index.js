@@ -399,6 +399,15 @@ const CONVERSATION_NAV_CSS = `
   box-shadow: inset 2px 0 0 rgba(217, 119, 87, 0.72);
 }
 
+/* 编辑时沿用消息原本的阅读尺寸，避免正文被替换后卡片按操作按钮收缩。 */
+.acs-turn.is-editing {
+  max-width: 100%;
+}
+
+.acs-turn.is-editing .acs-turn-editor {
+  max-height: none;
+}
+
 .acs-turn.is-user .acs-turn-editor {
   min-height: 88px;
 }
@@ -2970,7 +2979,7 @@ const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.07.27-64';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.04-66';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -11409,6 +11418,12 @@ function beginTurnEdit(turnIndex) {
     const actions = article?.querySelector('.acs-turn-actions');
     if (!turn || !article || !content || !actions) return;
 
+    // 替换正文前先固定消息卡片的实际尺寸，保证阅读态与编辑态无跳变。
+    const articleRect = article.getBoundingClientRect();
+    const contentRect = content.getBoundingClientRect();
+    article.style.width = `${articleRect.width}px`;
+    article.style.maxWidth = '100%';
+
     const editor = document.createElement('textarea');
     editor.className = 'acs-turn-editor';
     editor.value = String(turn.content || '');
@@ -11430,7 +11445,9 @@ function beginTurnEdit(turnIndex) {
     save.innerHTML = '<i class="fa-solid fa-check" aria-hidden="true"></i><span>保存</span>';
     actions.append(cancel, save);
 
-    editor.style.height = `${Math.min(Math.max(editor.scrollHeight, turn.role === 'user' ? 88 : 120), hostWindow.innerHeight * 0.58)}px`;
+    const minimumEditorHeight = turn.role === 'user' ? 88 : 120;
+    editor.style.height = `${Math.max(contentRect.height, minimumEditorHeight)}px`;
+    editor.style.maxHeight = 'none';
     editor.focus();
     editor.setSelectionRange(editor.value.length, editor.value.length);
 }
