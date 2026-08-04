@@ -16,6 +16,8 @@ public sealed class GenerationCoordinator(
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _active = new(StringComparer.Ordinal);
 
+    public bool HasActiveGenerations => !_active.IsEmpty;
+
     public bool Cancel(string generationId)
     {
         if (!_active.TryGetValue(generationId, out var source)) return false;

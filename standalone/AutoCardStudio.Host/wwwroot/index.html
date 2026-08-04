@@ -21,7 +21,7 @@
       <div class="top-actions">
         <span id="service-status" class="service-status"><i></i><span>正在读取本地资料</span></span>
         <button id="reload-button" class="icon-button" type="button" title="重新载入">↻</button>
-        <button class="icon-button" type="button" disabled title="项目导入导出将在后续阶段接通">▣</button>
+        <button id="maintenance-button" class="icon-button" type="button" title="数据维护与诊断">▣</button>
         <button id="close-button" class="icon-button" type="button" title="关闭创作台">×</button>
       </div>
     </header>
@@ -200,6 +200,12 @@
             <div id="reference-worldbook-list" class="reference-worldbook-list"></div>
           </section>
 
+          <section class="settings-card maintenance-card">
+            <header><div><strong>数据与诊断</strong><small id="maintenance-summary">正在读取工作区状态</small></div><span id="maintenance-health">检查中</span></header>
+            <p>每天自动保留一份本地备份，最多 7 份。备份包含项目与创作资源，但不包含 API 密钥。</p>
+            <div class="button-row"><button id="open-maintenance" type="button">打开数据维护</button></div>
+          </section>
+
           <div class="info-card"><i>●</i><div><strong>密钥与项目分离</strong><p>项目、预设和导出文件都不会包含 API 密钥；更换 Windows 用户后需要重新填写。</p></div></div>
         </section>
         <section class="tab-panel" data-panel="publish" hidden>
@@ -269,6 +275,25 @@
       <header><div><p class="eyebrow">REFERENCE WORLDBOOK</p><h2 id="reference-manager-title">附属世界书条目</h2></div><button id="close-reference-manager" type="button" aria-label="关闭">×</button></header>
       <div class="reference-manager-toolbar"><input id="reference-manager-search" class="text-field" type="search" placeholder="搜索标题、关键词或正文…"><span id="reference-manager-count"></span></div>
       <div class="reference-manager-body"><nav id="reference-manager-entries" aria-label="世界书条目列表"></nav><article id="reference-manager-content"></article></div>
+    </section>
+    <section id="maintenance-modal" class="maintenance-modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-title" hidden>
+      <header>
+        <div><h2 id="maintenance-title">数据维护与诊断</h2><p id="maintenance-location">data</p></div>
+        <button id="close-maintenance" type="button" aria-label="关闭数据维护">×</button>
+      </header>
+      <section class="maintenance-diagnosis">
+        <div><span>工作区状态</span><strong id="diagnosis-status">检查中</strong></div>
+        <div><span>项目</span><strong id="diagnosis-projects">0</strong></div>
+        <div><span>资料文件</span><strong id="diagnosis-files">0</strong></div>
+        <div><span>占用空间</span><strong id="diagnosis-size">0 B</strong></div>
+      </section>
+      <p id="diagnosis-detail" class="maintenance-detail">诊断只检查文件结构，不读取或显示对话、产物和密钥正文。</p>
+      <div class="maintenance-actions"><button id="refresh-maintenance" type="button">重新诊断</button><button id="create-backup" type="button" class="primary">立即备份</button></div>
+      <section class="backup-section">
+        <header><strong>本机备份</strong><span>恢复前会再自动创建恢复点</span></header>
+        <div id="backup-list" class="backup-list"></div>
+      </section>
+      <footer class="maintenance-danger"><div><strong>清空独立版资料</strong><span>不会触碰 SillyTavern 和脚本版，并会先创建恢复点。</span></div><button id="clear-workspace" type="button" class="danger">清空资料</button></footer>
     </section>
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
   </div>

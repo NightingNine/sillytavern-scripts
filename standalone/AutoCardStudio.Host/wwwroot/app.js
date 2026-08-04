@@ -78,6 +78,7 @@ const state = {
   artifactQuery: '',
   referenceManagerBookId: '',
   referenceManagerEntryId: '',
+  maintenance: null,
   collapsedPhases: new Set(JSON.parse(localStorage.getItem('acs:collapsed-phases') || '[]')),
 };
 
@@ -87,7 +88,7 @@ let conversationLastScrollTop = 0;
 let conversationScrollSyncing = false;
 
 const elements = Object.fromEntries([
-  'app', 'service-status', 'reload-button', 'close-button', 'project-menu-button', 'project-button-name',
+  'app', 'service-status', 'reload-button', 'maintenance-button', 'close-button', 'project-menu-button', 'project-button-name',
   'progress-copy', 'step-rail', 'new-project-button', 'project-menu', 'project-menu-close', 'project-list',
   'step-number', 'step-title', 'step-goal', 'requirement-chip', 'station-label', 'guide-title',
   'guide-description', 'guide-prompts', 'brief-label', 'project-brief', 'save-status', 'project-name',
@@ -107,6 +108,9 @@ const elements = Object.fromEntries([
   'reference-worldbook-summary', 'reference-worldbook-list', 'import-worldbook-button', 'worldbook-file',
   'reference-manager-modal', 'reference-manager-title', 'reference-manager-search', 'reference-manager-count',
   'reference-manager-entries', 'reference-manager-content', 'close-reference-manager',
+  'maintenance-summary', 'maintenance-health', 'open-maintenance', 'maintenance-modal', 'maintenance-location',
+  'close-maintenance', 'diagnosis-status', 'diagnosis-projects', 'diagnosis-files', 'diagnosis-size',
+  'diagnosis-detail', 'refresh-maintenance', 'create-backup', 'backup-list', 'clear-workspace',
   'publication-cache-status', 'publication-character-name', 'publication-worldbook-name',
   'publication-creator', 'publication-language', 'publication-person', 'publication-avatar',
   'publication-avatar-name', 'publication-selection-count', 'publication-select-all',
@@ -131,6 +135,19 @@ async function api(path, options = {}) {
     throw error;
   }
   return payload;
+}
+
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let amount = bytes / 1024;
+  let unit = units[0];
+  for (let index = 1; index < units.length && amount >= 1024; index += 1) {
+    amount /= 1024;
+    unit = units[index];
+  }
+  return `${amount >= 10 ? amount.toFixed(0) : amount.toFixed(1)} ${unit}`;
 }
 
 async function loadState(projectId = '') {
@@ -1647,6 +1664,107 @@ async function deleteProject(projectSummary) {
   } catch (error) { toast(error.message, true); }
 }
 
+async function loadMaintenanceState(renderModal = true) {
+  const maintenance = await api('/api/maintenance');
+  state.maintenance = maintenance;
+  const diagnosis = maintenance.diagnosis;
+  const healthy = diagnosis.status === 'healthy';
+  elements.maintenance_health.textContent = healthy ? '正常' : '需处理';
+  elements.maintenance_summary.textContent = `${diagnosis.projectCount} 个项目 · ${diagnosis.fileCount} 个资料文件 · ${maintenance.backups.length} 份备份`;
+  if (!renderModal) return maintenance;
+
+  elements.maintenance_location.textContent = maintenance.dataDirectory;
+  elements.diagnosis_status.textContent = healthy ? '结构正常' : '发现异常';
+  elements.diagnosis_projects.textContent = String(diagnosis.projectCount);
+  elements.diagnosis_files.textContent = String(diagnosis.fileCount);
+  elements.diagnosis_size.textContent = formatBytes(diagnosis.totalBytes);
+  elements.diagnosis_detail.textContent = healthy
+    ? '全部 JSON 资料均可解析。诊断不会显示对话、产物、提示词和 API 密钥正文。'
+    : `以下 JSON 文件不可解析：${diagnosis.invalidJsonFiles.join('、')}`;
+  renderBackups(maintenance.backups);
+  return maintenance;
+}
+
+function renderBackups(backups) {
+  if (!backups.length) {
+    const empty = document.createElement('p');
+    empty.className = 'backup-empty';
+    empty.textContent = '还没有本机备份。';
+    elements.backup_list.replaceChildren(empty);
+    return;
+  }
+  elements.backup_list.replaceChildren(...backups.map(backup => {
+    const row = document.createElement('article');
+    row.className = 'backup-item';
+    const copy = document.createElement('div');
+    const kindNames = { automatic: '每日自动', manual: '手动', recovery: '恢复点' };
+    copy.innerHTML = `<strong>${escapeHtml(backup.name)}</strong><small>${kindNames[backup.kind] || '未知'} · ${new Date(backup.createdAt).toLocaleString()} · ${formatBytes(backup.size)} · ${backup.fileCount} 个文件${backup.valid ? '' : ' · 已损坏'}</small>`;
+    const download = document.createElement('button');
+    download.type = 'button';
+    download.className = 'backup-download';
+    download.textContent = '下载';
+    download.disabled = !backup.valid;
+    download.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.href = `/api/maintenance/backups/${encodeURIComponent(backup.name)}`;
+      link.download = backup.name;
+      link.click();
+    });
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.className = 'is-restore';
+    restore.textContent = '恢复';
+    restore.disabled = !backup.valid;
+    restore.addEventListener('click', () => restoreBackup(backup));
+    row.append(copy, download, restore);
+    return row;
+  }));
+}
+
+async function openMaintenance() {
+  elements.modal_backdrop.hidden = false;
+  elements.maintenance_modal.hidden = false;
+  elements.diagnosis_status.textContent = '检查中';
+  try { await loadMaintenanceState(true); }
+  catch (error) { toast(error.message, true); }
+}
+
+function closeMaintenance() {
+  elements.maintenance_modal.hidden = true;
+  elements.modal_backdrop.hidden = true;
+}
+
+async function createWorkspaceBackup() {
+  elements.create_backup.disabled = true;
+  try {
+    await flushPendingPatch();
+    const backup = await api('/api/maintenance/backups', { method: 'POST' });
+    toast(`备份已创建：${backup.name}`);
+    await loadMaintenanceState(true);
+  } catch (error) { toast(error.message, true); }
+  finally { elements.create_backup.disabled = false; }
+}
+
+async function restoreBackup(backup) {
+  const accepted = await confirmAction('恢复这份备份？', `将用“${backup.name}”替换当前独立版资料。\n恢复前会自动保存当前资料，完成后创作台会关闭。`, '恢复并关闭');
+  if (!accepted) return;
+  try {
+    const result = await api(`/api/maintenance/backups/${encodeURIComponent(backup.name)}/restore`, { method: 'POST' });
+    document.body.innerHTML = `<main style="display:grid;height:100vh;place-items:center;background:#1d1b18;color:#cec5b9;font-family:system-ui"><div style="max-width:520px;padding:24px;text-align:center"><h1>备份已恢复</h1><p>${escapeHtml(result.message)}</p></div></main>`;
+  } catch (error) { toast(error.message, true); }
+}
+
+async function clearWorkspace() {
+  const first = await confirmAction('清空独立版资料？', '会删除所有项目、产物、导入资源、连接配置与对应凭据。SillyTavern 和脚本版不受影响。', '继续确认');
+  if (!first) return;
+  const second = await confirmAction('最后确认', '操作前会在 data/backups 建立恢复点；完成后创作台自动关闭。确定清空吗？', '创建恢复点并清空');
+  if (!second) return;
+  try {
+    const result = await api('/api/maintenance/clear', { method: 'POST' });
+    document.body.innerHTML = `<main style="display:grid;height:100vh;place-items:center;background:#1d1b18;color:#cec5b9;font-family:system-ui"><div style="max-width:520px;padding:24px;text-align:center"><h1>独立版资料已清空</h1><p>${escapeHtml(result.message)}</p></div></main>`;
+  } catch (error) { toast(error.message, true); }
+}
+
 function toggleProjectMenu(force) {
   const open = typeof force === 'boolean' ? force : elements.project_menu.hidden;
   elements.project_menu.hidden = !open;
@@ -1722,6 +1840,12 @@ elements.reload_button.addEventListener('click', async () => {
     await loadState();
   } catch (error) { toast(error.message, true); }
 });
+elements.maintenance_button.addEventListener('click', openMaintenance);
+elements.open_maintenance.addEventListener('click', openMaintenance);
+elements.close_maintenance.addEventListener('click', closeMaintenance);
+elements.refresh_maintenance.addEventListener('click', () => loadMaintenanceState(true).catch(error => toast(error.message, true)));
+elements.create_backup.addEventListener('click', createWorkspaceBackup);
+elements.clear_workspace.addEventListener('click', clearWorkspace);
 elements.project_brief.addEventListener('input', () => queueProjectPatch({ brief: elements.project_brief.value }));
 elements.project_brief.addEventListener('change', () => flushPendingPatch().catch(() => {}));
 elements.project_name.addEventListener('input', () => queueProjectPatch({ name: elements.project_name.value }));
@@ -1789,12 +1913,14 @@ elements.modal_backdrop.addEventListener('click', () => {
   if (!elements.prompt_preview_modal.hidden) closePromptPreview();
   else if (!elements.manual_artifact_modal.hidden) closeManualArtifact();
   else if (!elements.reference_manager_modal.hidden) closeReferenceManager();
+  else if (!elements.maintenance_modal.hidden) closeMaintenance();
 });
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape' || !elements.confirm_modal.hidden) return;
   if (!elements.prompt_preview_modal.hidden) closePromptPreview();
   else if (!elements.manual_artifact_modal.hidden) closeManualArtifact();
   else if (!elements.reference_manager_modal.hidden) closeReferenceManager();
+  else if (!elements.maintenance_modal.hidden) closeMaintenance();
 });
 elements.generate_button.addEventListener('click', generateCurrentStep);
 elements.stop_generation.addEventListener('click', stopGeneration);
@@ -1814,6 +1940,10 @@ loadState().then(() => {
   elements.app.setAttribute('aria-busy', 'false');
   elements.service_status.classList.add('is-ready');
   elements.service_status.querySelector('span').textContent = '独立环境已就绪';
+  loadMaintenanceState(false).catch(() => {
+    elements.maintenance_health.textContent = '不可用';
+    elements.maintenance_summary.textContent = '数据诊断暂时不可读取';
+  });
 }).catch(error => {
   elements.app.setAttribute('aria-busy', 'false');
   elements.service_status.querySelector('span').textContent = '本地资料读取失败';

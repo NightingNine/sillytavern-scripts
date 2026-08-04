@@ -26,7 +26,9 @@ public static class Program
             var stage3Result = await Stage3SelfTest.RunAsync();
             if (stage3Result != 0) return stage3Result;
             var stage4Result = await Stage4SelfTest.RunAsync();
-            return stage4Result == 0 ? await Stage5SelfTest.RunAsync() : stage4Result;
+            if (stage4Result != 0) return stage4Result;
+            var stage5Result = await Stage5SelfTest.RunAsync();
+            return stage5Result == 0 ? await Stage6SelfTest.RunAsync() : stage5Result;
         }
 
         // 自动验收可使用独立实例域，避免碰触用户已经运行的正式独立版。
@@ -73,11 +75,13 @@ public static class Program
         var credentialVault = new WindowsCredentialVault();
         var resourceStore = new ResourceStore(dataDirectory);
         var connectionStore = new ConnectionStore(dataDirectory, credentialVault);
+        var maintenance = new WorkspaceMaintenanceService(dataDirectory, credentialVault);
         builder.Services.AddSingleton(store);
         builder.Services.AddSingleton(artifactStore);
         builder.Services.AddSingleton(referenceWorldbookStore);
         builder.Services.AddSingleton(resourceStore);
         builder.Services.AddSingleton(connectionStore);
+        builder.Services.AddSingleton(maintenance);
         builder.Services.AddSingleton(credentialVault);
         builder.Services.AddHttpClient<ModelGateway>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         builder.Services.AddSingleton<GenerationCoordinator>();
@@ -95,6 +99,7 @@ public static class Program
         await referenceWorldbookStore.InitializeAsync();
         await resourceStore.InitializeAsync();
         await connectionStore.InitializeAsync();
+        await maintenance.InitializeAsync();
         var indexHtml = ReadEmbeddedWebAsset("index.html");
         var stylesCss = ReadEmbeddedWebAsset("styles.css");
         var appJavaScript = ReadEmbeddedWebAsset("app.js");
@@ -168,9 +173,60 @@ public static class Program
         app.MapGet("/api/health", () => Results.Ok(new
         {
             status = "ready",
-            version = "0.5.0-stage5",
+            version = "0.6.0-stage6",
             dataDirectory,
         }));
+
+        app.MapGet("/api/maintenance", async (WorkspaceMaintenanceService service) => Results.Ok(await service.GetStateAsync()));
+
+        app.MapPost("/api/maintenance/backups", async (WorkspaceMaintenanceService service, GenerationCoordinator coordinator) =>
+        {
+            if (coordinator.HasActiveGenerations) return Results.Conflict(new { code = "generation_active", message = "请先停止当前生成，再创建备份。" });
+            return Results.Ok(await service.CreateBackupAsync());
+        });
+
+        app.MapGet("/api/maintenance/backups/{name}", async (string name, WorkspaceMaintenanceService service) =>
+        {
+            try
+            {
+                var backup = await service.GetBackupAsync(name);
+                return Results.File(backup.Content, "application/zip", backup.Info.Name);
+            }
+            catch (Exception error) when (error is InvalidDataException or FileNotFoundException)
+            {
+                return Results.BadRequest(new { code = "invalid_backup", message = error.Message });
+            }
+        });
+
+        app.MapPost("/api/maintenance/backups/{name}/restore", async (
+            string name,
+            WorkspaceMaintenanceService service,
+            GenerationCoordinator coordinator,
+            IHostApplicationLifetime lifetime) =>
+        {
+            if (coordinator.HasActiveGenerations) return Results.Conflict(new { code = "generation_active", message = "请先停止当前生成，再恢复备份。" });
+            try
+            {
+                var result = await service.RestoreAsync(name);
+                _ = Task.Run(async () => { await Task.Delay(700); lifetime.StopApplication(); });
+                return Results.Ok(result);
+            }
+            catch (Exception error) when (error is InvalidDataException or FileNotFoundException or IOException)
+            {
+                return Results.BadRequest(new { code = "restore_failed", message = error.Message });
+            }
+        });
+
+        app.MapPost("/api/maintenance/clear", async (
+            WorkspaceMaintenanceService service,
+            GenerationCoordinator coordinator,
+            IHostApplicationLifetime lifetime) =>
+        {
+            if (coordinator.HasActiveGenerations) return Results.Conflict(new { code = "generation_active", message = "请先停止当前生成，再清理资料。" });
+            var result = await service.ClearAsync();
+            _ = Task.Run(async () => { await Task.Delay(700); lifetime.StopApplication(); });
+            return Results.Ok(result);
+        });
 
         app.MapGet("/api/state", async (
             string? projectId,
