@@ -3048,8 +3048,8 @@ const CLOUD_REGISTRY_PATH = 'registry.json';
 const CLOUD_SCHEMA_VERSION = 1;
 const GITHUB_API_VERSION = '2026-03-10';
 // GitHub App 创建完成后由正式构建写入；保留可覆盖输入便于测试与私有部署。
-const DEFAULT_GITHUB_APP_CLIENT_ID = '';
-const DEFAULT_GITHUB_APP_SLUG = '';
+const DEFAULT_GITHUB_APP_CLIENT_ID = 'Iv23liCdP6AKzGp5KhEY';
+const DEFAULT_GITHUB_APP_SLUG = 'a-u-t-o-card-cloud';
 const DEFAULT_CONVERSATION_FONT_SIZE = 15;
 const MIN_CONVERSATION_FONT_SIZE = 12;
 const MAX_CONVERSATION_FONT_SIZE = 20;
