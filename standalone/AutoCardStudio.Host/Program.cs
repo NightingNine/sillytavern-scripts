@@ -24,7 +24,9 @@ public static class Program
             var stage2Result = await Stage2SelfTest.RunAsync();
             if (stage2Result != 0) return stage2Result;
             var stage3Result = await Stage3SelfTest.RunAsync();
-            return stage3Result == 0 ? await Stage4SelfTest.RunAsync() : stage3Result;
+            if (stage3Result != 0) return stage3Result;
+            var stage4Result = await Stage4SelfTest.RunAsync();
+            return stage4Result == 0 ? await Stage5SelfTest.RunAsync() : stage4Result;
         }
 
         // 自动验收可使用独立实例域，避免碰触用户已经运行的正式独立版。
@@ -79,6 +81,14 @@ public static class Program
         builder.Services.AddSingleton(credentialVault);
         builder.Services.AddHttpClient<ModelGateway>(client => client.Timeout = Timeout.InfiniteTimeSpan);
         builder.Services.AddSingleton<GenerationCoordinator>();
+        builder.Services.AddSingleton(serviceProvider => new PublicationService(
+            store,
+            artifactStore,
+            resourceStore,
+            connectionStore,
+            serviceProvider.GetRequiredService<ModelGateway>(),
+            dataDirectory,
+            serviceProvider.GetRequiredService<ILogger<PublicationService>>()));
 
         var app = builder.Build();
         await store.InitializeAsync();
@@ -158,7 +168,7 @@ public static class Program
         app.MapGet("/api/health", () => Results.Ok(new
         {
             status = "ready",
-            version = "0.4.0-stage4",
+            version = "0.5.0-stage5",
             dataDirectory,
         }));
 
@@ -220,6 +230,43 @@ public static class Program
 
         app.MapGet("/api/projects/{projectId}/artifacts", async (string projectId, ArtifactStore artifacts) =>
             Results.Ok(await artifacts.GetStateAsync(projectId)));
+
+        app.MapGet("/api/projects/{projectId}/publication", async (string projectId, PublicationService publication) =>
+        {
+            try { return Results.Ok(await publication.GetStateAsync(projectId)); }
+            catch (KeyNotFoundException error) { return Results.NotFound(new { code = "project_not_found", message = error.Message }); }
+        });
+
+        app.MapPost("/api/projects/{projectId}/publication/build", async (
+            string projectId,
+            BuildPublicationRequest request,
+            HttpContext context,
+            PublicationService publication) =>
+        {
+            try
+            {
+                var package = await publication.BuildAsync(projectId, request, context.RequestAborted);
+                context.Response.Headers["X-AUTO-Reorg-Mode"] = package.ReorgMode;
+                context.Response.Headers["X-AUTO-Warning-Count"] = package.Warnings.Count.ToString();
+                return Results.File(package.Content, "application/zip", package.FileName, enableRangeProcessing: false);
+            }
+            catch (PublicationRejectedException error)
+            {
+                return Results.Json(new { code = error.Code, message = error.Message }, statusCode: error.StatusCode);
+            }
+            catch (KeyNotFoundException error)
+            {
+                return Results.NotFound(new { code = "project_not_found", message = error.Message });
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+            {
+                return Results.Empty;
+            }
+            catch (Exception error) when (error is InvalidDataException or JsonException or ModelGatewayException or InvalidOperationException)
+            {
+                return Results.BadRequest(new { code = "publication_failed", message = error.Message });
+            }
+        });
 
         app.MapPost("/api/projects/{projectId}/artifacts/{key}/versions/{versionId}/select", async (
             string projectId, string key, string versionId, ArtifactRevisionRequest request, ArtifactStore artifacts) =>

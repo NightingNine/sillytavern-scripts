@@ -60,6 +60,9 @@ const state = {
   resources: null,
   connections: null,
   artifacts: { revision: 1, groups: [] },
+  publication: null,
+  publicationProjectId: '',
+  publicationSelectedVersionIds: new Set(),
   referenceWorldbooks: { libraryRevision: 1, projectRevision: 1, books: [], projectBooks: {} },
   saveChain: Promise.resolve(),
   pendingPatch: {},
@@ -104,6 +107,11 @@ const elements = Object.fromEntries([
   'reference-worldbook-summary', 'reference-worldbook-list', 'import-worldbook-button', 'worldbook-file',
   'reference-manager-modal', 'reference-manager-title', 'reference-manager-search', 'reference-manager-count',
   'reference-manager-entries', 'reference-manager-content', 'close-reference-manager',
+  'publication-cache-status', 'publication-character-name', 'publication-worldbook-name',
+  'publication-creator', 'publication-language', 'publication-person', 'publication-avatar',
+  'publication-avatar-name', 'publication-selection-count', 'publication-select-all',
+  'publication-select-none', 'publication-choice-list', 'publication-output-regex',
+  'publication-build-status', 'publication-build',
   'prompt-preview-button', 'prompt-preview-modal', 'prompt-preview-title', 'prompt-preview-summary',
   'prompt-preview-list', 'copy-prompt-preview', 'close-prompt-preview',
   'modal-backdrop', 'confirm-modal', 'confirm-title', 'confirm-message', 'confirm-cancel', 'confirm-accept', 'toast-region',
@@ -135,6 +143,7 @@ async function loadState(projectId = '') {
   applyState(payload);
   state.resources = resources;
   state.connections = connections;
+  await loadPublicationState();
   renderResourceSettings();
   renderConnectionSettings();
   renderGenerationAvailability();
@@ -161,6 +170,7 @@ function renderAll() {
   renderProjectList();
   renderArtifacts();
   renderReferenceWorldbooks();
+  renderPublicationChoices();
   renderGenerationAvailability();
 }
 
@@ -806,12 +816,14 @@ function renderArtifacts() {
 async function refreshArtifacts() {
   state.artifacts = await api(`/api/projects/${encodeURIComponent(state.project.id)}/artifacts`);
   renderArtifacts();
+  await loadPublicationState({ preserveFields: true });
 }
 
 async function applyArtifactMutation(operation, successMessage) {
   try {
     state.artifacts = await operation();
     renderArtifacts();
+    await loadPublicationState({ preserveFields: true });
     if (successMessage) toast(successMessage);
     return true;
   } catch (error) {
@@ -819,6 +831,174 @@ async function applyArtifactMutation(operation, successMessage) {
     if (error.code === 'artifact_revision_conflict') await refreshArtifacts().catch(() => {});
     return false;
   }
+}
+
+async function loadPublicationState({ preserveFields = false } = {}) {
+  if (!state.project?.id) return;
+  const previous = state.publication;
+  const previousIds = new Set(previous?.choices?.map(item => item.versionId) || []);
+  const sameProject = state.publicationProjectId === state.project.id;
+  const publication = await api(`/api/projects/${encodeURIComponent(state.project.id)}/publication`);
+  const nextIds = publication.choices.map(item => item.versionId);
+  if (!sameProject || !previous) {
+    state.publicationSelectedVersionIds = new Set(nextIds);
+  } else {
+    state.publicationSelectedVersionIds = new Set(nextIds.filter(id =>
+      state.publicationSelectedVersionIds.has(id) || !previousIds.has(id)));
+  }
+  state.publication = publication;
+  state.publicationProjectId = state.project.id;
+  if (!preserveFields || !sameProject) {
+    elements.publication_character_name.value = publication.settings.characterName;
+    elements.publication_worldbook_name.value = publication.settings.worldbookName;
+    elements.publication_creator.value = publication.settings.creator;
+    elements.publication_language.value = publication.settings.language;
+    elements.publication_person.value = publication.settings.person;
+    elements.publication_output_regex.checked = publication.settings.includeOutputRegexBundle !== false;
+    elements.publication_avatar.value = '';
+    elements.publication_avatar_name.textContent = '可选 PNG 头像';
+  }
+  elements.publication_cache_status.textContent = publication.hasReusableReorgPlan ? '重组方案可复用' : '发布时自动重组';
+  renderPublicationChoices();
+}
+
+function renderPublicationChoices() {
+  if (!elements.publication_choice_list) return;
+  const choices = state.publication?.choices || [];
+  if (choices.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'publication-choice-empty';
+    empty.textContent = '还没有可交付的正式产物。先在步骤中生成产物，或从“产物”页新建一项。';
+    elements.publication_choice_list.replaceChildren(empty);
+  } else {
+    elements.publication_choice_list.replaceChildren(...choices.map(choice => {
+      const label = document.createElement('label');
+      label.className = 'publication-choice';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = state.publicationSelectedVersionIds.has(choice.versionId);
+      input.addEventListener('change', () => {
+        if (input.checked) state.publicationSelectedVersionIds.add(choice.versionId);
+        else state.publicationSelectedVersionIds.delete(choice.versionId);
+        updatePublicationSelection();
+      });
+      const copy = document.createElement('span');
+      copy.className = 'publication-choice-copy';
+      const name = document.createElement('strong');
+      name.textContent = choice.displayName;
+      const destination = document.createElement('small');
+      destination.textContent = `写入：${choice.targetName}`;
+      copy.append(name, destination);
+      const step = document.createElement('span');
+      step.className = 'publication-choice-step';
+      step.textContent = `S${String(choice.step).padStart(2, '0')}`;
+      label.append(input, copy, step);
+      return label;
+    }));
+  }
+  updatePublicationSelection();
+}
+
+function updatePublicationSelection() {
+  const choices = state.publication?.choices || [];
+  const selected = choices.filter(item => state.publicationSelectedVersionIds.has(item.versionId));
+  elements.publication_selection_count.textContent = `${selected.length} / ${choices.length}`;
+  const hasOutputFormat = selected.some(item => item.step === 24 && item.identity === 'SYS_output_format');
+  elements.publication_output_regex.disabled = !hasOutputFormat;
+  elements.publication_build.disabled = selected.length === 0;
+}
+
+function selectPublicationChoices(mode) {
+  const choices = state.publication?.choices || [];
+  state.publicationSelectedVersionIds = new Set(mode === 'all' ? choices.map(item => item.versionId) : []);
+  renderPublicationChoices();
+}
+
+async function buildPublicationPackage() {
+  if (!state.publication || elements.publication_build.disabled) return;
+  const selectedVersionIds = [...state.publicationSelectedVersionIds];
+  const characterName = elements.publication_character_name.value.trim();
+  const worldbookName = elements.publication_worldbook_name.value.trim();
+  if (!characterName || !worldbookName) { toast('请填写角色卡名称和世界书名称。', true); return; }
+  const accepted = await confirmAction(
+    '创建角色卡交付包？',
+    `将用 ${selectedVersionIds.length} 项正式产物创建“${characterName}”。AI 重组不写入普通步骤对话。`,
+    '创建 ZIP');
+  if (!accepted) return;
+
+  const avatar = elements.publication_avatar.files?.[0];
+  if (avatar && avatar.size > 12 * 1024 * 1024) { toast('PNG 头像不能超过 12 MB。', true); return; }
+  elements.publication_build.disabled = true;
+  elements.publication_build.textContent = '正在创建…';
+  elements.publication_build_status.textContent = '正在重组、校验并打包';
+  try {
+    const avatarPngBase64 = avatar ? await fileAsBase64(avatar) : null;
+    const response = await fetch(`/api/projects/${encodeURIComponent(state.project.id)}/publication/build`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedArtifactRevision: state.publication.artifactRevision,
+        selectedVersionIds,
+        settings: {
+          characterName,
+          worldbookName,
+          creator: elements.publication_creator.value.trim(),
+          language: elements.publication_language.value.trim(),
+          person: elements.publication_person.value.trim(),
+          includeOutputRegexBundle: elements.publication_output_regex.checked,
+        },
+        avatarPngBase64,
+      }),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const error = new Error(payload.message || `创建失败（${response.status}）`);
+      error.code = payload.code;
+      throw error;
+    }
+    const blob = await response.blob();
+    const fileName = responseFileName(response.headers.get('Content-Disposition')) || `${characterName}-角色卡交付.zip`;
+    downloadBrowserBlob(blob, fileName);
+    const mode = response.headers.get('X-AUTO-Reorg-Mode') || 'unknown';
+    const warningCount = Number(response.headers.get('X-AUTO-Warning-Count') || 0);
+    elements.publication_build_status.textContent = mode === 'safe-fallback' ? '交付包已创建 · 已安全补齐' : '交付包已创建';
+    toast(warningCount > 0 ? `ZIP 已下载；${warningCount} 条发布提示已写入创作档案。` : '角色卡交付 ZIP 已下载。');
+    await loadPublicationState({ preserveFields: true });
+  } catch (error) {
+    elements.publication_build_status.textContent = '创建未完成';
+    toast(error.message, true);
+    if (error.code === 'artifact_revision_conflict' || error.code === 'publication_stale') await loadPublicationState({ preserveFields: true }).catch(() => {});
+  } finally {
+    elements.publication_build.textContent = '创建 ZIP';
+    updatePublicationSelection();
+  }
+}
+
+function fileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || '').split(',').pop() || '');
+    reader.onerror = () => reject(new Error('头像文件读取失败。'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function responseFileName(disposition) {
+  const encoded = String(disposition || '').match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) try { return decodeURIComponent(encoded); } catch { return encoded; }
+  return String(disposition || '').match(/filename="?([^";]+)"?/i)?.[1] || '';
+}
+
+function downloadBrowserBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 function selectArtifactVersion(group, versionId) {
@@ -1587,6 +1767,20 @@ elements.worldbook_file.addEventListener('change', async event => {
 });
 elements.close_reference_manager.addEventListener('click', closeReferenceManager);
 elements.reference_manager_search.addEventListener('input', renderReferenceManager);
+elements.publication_select_all.addEventListener('click', () => selectPublicationChoices('all'));
+elements.publication_select_none.addEventListener('click', () => selectPublicationChoices('none'));
+elements.publication_build.addEventListener('click', buildPublicationPackage);
+elements.publication_output_regex.addEventListener('change', updatePublicationSelection);
+elements.publication_avatar.addEventListener('change', event => {
+  const file = event.currentTarget.files?.[0];
+  if (file && file.type && file.type !== 'image/png') {
+    event.currentTarget.value = '';
+    elements.publication_avatar_name.textContent = '可选 PNG 头像';
+    toast('头像必须是 PNG 文件。', true);
+    return;
+  }
+  elements.publication_avatar_name.textContent = file?.name || '可选 PNG 头像';
+});
 elements.prompt_preview_button.addEventListener('click', openPromptPreview);
 elements.copy_prompt_preview.addEventListener('click', copyPromptPreview);
 elements.close_prompt_preview.addEventListener('click', closePromptPreview);

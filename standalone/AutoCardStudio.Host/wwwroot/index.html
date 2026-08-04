@@ -203,8 +203,43 @@
           <div class="info-card"><i>●</i><div><strong>密钥与项目分离</strong><p>项目、预设和导出文件都不会包含 API 密钥；更换 Windows 用户后需要重新填写。</p></div></div>
         </section>
         <section class="tab-panel" data-panel="publish" hidden>
-          <div class="panel-heading"><strong>角色卡交付</strong><span>后续阶段</span></div>
-          <p>世界书重组与角色卡 ZIP 会在发布阶段接通。当前不会创建空白或不完整角色卡。</p>
+          <div class="panel-heading"><strong>角色卡交付</strong><span id="publication-cache-status">准备发布</span></div>
+          <p>只打包本次勾选的当前版本。附属世界书只供创作参考，永远不会进入角色卡。</p>
+
+          <section class="publish-card publish-identity-card">
+            <header><div><strong>交付身份</strong><small>这些名称会写进角色卡和下载文件</small></div><span>PACKAGE</span></header>
+            <label><span>角色卡名称</span><input id="publication-character-name" class="text-field" type="text" maxlength="90"></label>
+            <label><span>世界书名称</span><input id="publication-worldbook-name" class="text-field" type="text" maxlength="120"></label>
+            <div class="two-columns">
+              <label><span>创作者</span><input id="publication-creator" class="text-field" type="text" maxlength="80"></label>
+              <label><span>输出语言</span><input id="publication-language" class="text-field" type="text" maxlength="30"></label>
+            </div>
+            <label><span>叙事人称</span><input id="publication-person" class="text-field" type="text" maxlength="30"></label>
+            <label class="publication-avatar-picker" for="publication-avatar">
+              <span class="publication-avatar-mark" aria-hidden="true">◉</span>
+              <span><strong id="publication-avatar-name">可选 PNG 头像</strong><small>选择后会额外生成可直接导入的角色卡 PNG · 最大 12 MB</small></span>
+              <b>选择</b>
+            </label>
+            <input id="publication-avatar" type="file" accept="image/png,.png" hidden>
+          </section>
+
+          <section class="publish-card publish-selection-card">
+            <header><div><strong>本次交付内容</strong><small>每项都固定为产物库当前选中的版本</small></div><span id="publication-selection-count">0 / 0</span></header>
+            <div class="publication-selection-actions"><button id="publication-select-all" type="button">全选</button><button id="publication-select-none" type="button">清空</button></div>
+            <div id="publication-choice-list" class="publication-choice-list"></div>
+          </section>
+
+          <section class="publish-card publish-options-card">
+            <label class="publication-option">
+              <input id="publication-output-regex" type="checkbox" checked>
+              <span><strong>附加 Step 24 通用正则</strong><small>只有本次勾选“输出格式”时才会写入九条局部正则</small></span>
+            </label>
+          </section>
+
+          <div class="publication-build-bar">
+            <div><strong id="publication-build-status">等待创建</strong><small>先由 AI 重组世界书；候选不完整时会自动修正并安全补齐</small></div>
+            <button id="publication-build" type="button">创建 ZIP</button>
+          </div>
         </section>
       </aside>
     </div>
