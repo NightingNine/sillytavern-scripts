@@ -18,7 +18,7 @@ public static class Stage2SelfTest
             await resources.InitializeAsync();
             var presetText = BuildPresetFixture();
             var resourceState = await resources.ImportPresetAsync(new ImportFileRequest("AUTO-test.json", presetText));
-            if (resourceState.Preset?.PromptCount != 30 || resourceState.Regexes.Total != 1) return 20;
+            if (resourceState.Preset?.PromptCount != 31 || resourceState.Regexes.Total != 1) return 20;
             var standaloneRegex = new JsonArray(new JsonObject
             {
                 ["id"] = "standalone-regex",
@@ -31,6 +31,16 @@ public static class Stage2SelfTest
             if (resourceState.Regexes.Total != 1 ||
                 !Directory.EnumerateFiles(Path.Combine(root, "imports", "presets"), "*.json").Any() ||
                 !Directory.EnumerateFiles(Path.Combine(root, "imports", "regexes"), "*.json").Any()) return 31;
+            var editor = await resources.GetEditorStateAsync();
+            if (editor.Prompts.Count != 1 || editor.Regexes.Count != 1) return 32;
+            var auxiliary = editor.Prompts.Single();
+            editor = await resources.UpdatePromptAsync(auxiliary.Id,
+                new ResourcePromptUpdateRequest(editor.Revision, auxiliary.Name, auxiliary.Role, "已编辑辅助条目", false));
+            if (editor.Prompts.Single().Content != "已编辑辅助条目" || editor.Prompts.Single().Enabled) return 33;
+            var regexEntry = editor.Regexes.Single();
+            editor = await resources.UpdateRegexAsync(regexEntry.Id,
+                new ResourceRegexUpdateRequest(editor.Revision, regexEntry.ScriptName, regexEntry.FindRegex, regexEntry.ReplaceString, false));
+            if (!editor.Regexes.Single().Disabled) return 34;
 
             vault.Save(credentialId, "A.U.T.O 自检", "stage2-secret");
             if (vault.Read(credentialId) != "stage2-secret") return 21;
@@ -149,6 +159,14 @@ public static class Stage2SelfTest
             });
             order.Add(new JsonObject { ["identifier"] = ids[index], ["enabled"] = true });
         }
+        prompts.Add(new JsonObject
+        {
+            ["identifier"] = "stage2-auxiliary-prompt",
+            ["name"] = "辅助条目",
+            ["role"] = "system",
+            ["content"] = "AUXILIARY-CONTENT",
+        });
+        order.Add(new JsonObject { ["identifier"] = "stage2-auxiliary-prompt", ["enabled"] = true });
         prompts.Add(new JsonObject { ["identifier"] = "orphan", ["content"] = "不能导入" });
         return new JsonObject
         {

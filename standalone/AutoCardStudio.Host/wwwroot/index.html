@@ -22,11 +22,14 @@
         <span id="service-status" class="service-status"><i></i><span>正在读取本地资料</span></span>
         <button id="reload-button" class="icon-button" type="button" title="重新载入">↻</button>
         <button id="maintenance-button" class="icon-button" type="button" title="数据维护与诊断">▣</button>
+        <button id="mobile-inspector-button" class="icon-button mobile-inspector-button" type="button" title="打开产物、设置与发布">◫</button>
         <button id="close-button" class="icon-button" type="button" title="关闭创作台">×</button>
       </div>
     </header>
 
     <div class="workspace">
+      <div id="left-splitter" class="workspace-splitter is-left" role="separator" aria-label="调整左侧步骤栏宽度" aria-orientation="vertical" tabindex="0"></div>
+      <div id="right-splitter" class="workspace-splitter is-right" role="separator" aria-label="调整右侧面板宽度" aria-orientation="vertical" tabindex="0"></div>
       <aside class="rail">
         <section class="project-card">
           <span class="section-caption">当前项目</span>
@@ -151,6 +154,7 @@
               <button id="import-preset-button" type="button">导入 / 替换预设</button>
               <button id="import-regex-button" type="button">单独导入正则</button>
             </div>
+            <button id="open-resource-manager" class="resource-manage-button" type="button">管理预设与正则条目</button>
             <input id="preset-file" type="file" accept="application/json,.json" hidden>
             <input id="regex-file" type="file" accept="application/json,.json" hidden>
             <p>只读取 `prompt_order` 实际引用的条目；原始文件会保存在 data/imports。</p>
@@ -249,6 +253,7 @@
         </section>
       </aside>
     </div>
+    <button id="mobile-panel-scrim" class="mobile-panel-scrim" type="button" aria-label="关闭右侧面板" hidden></button>
 
     <div id="modal-backdrop" class="modal-backdrop" hidden></div>
     <section id="confirm-modal" class="confirm-modal" role="dialog" aria-modal="true" hidden>
@@ -299,6 +304,16 @@
         <div id="backup-list" class="backup-list"></div>
       </section>
       <footer class="maintenance-danger"><div><strong>清空独立版资料</strong><span>不会触碰 SillyTavern 和脚本版，并会先创建恢复点。</span></div><button id="clear-workspace" type="button" class="danger">清空资料</button></footer>
+    </section>
+    <aside id="resource-drawer" class="resource-drawer" aria-labelledby="resource-drawer-title" hidden>
+      <header><div><p class="eyebrow">LOCAL RESOURCES</p><h2 id="resource-drawer-title">预设与正则条目</h2></div><button id="close-resource-manager" type="button" aria-label="关闭资源管理">×</button></header>
+      <div class="resource-drawer-tabs" role="tablist"><button type="button" class="is-active" data-resource-kind="prompts">预设条目</button><button type="button" data-resource-kind="regexes">正则条目</button></div>
+      <div id="resource-entry-list" class="resource-entry-list"></div>
+    </aside>
+    <section id="resource-editor-modal" class="resource-editor-modal" role="dialog" aria-modal="true" aria-labelledby="resource-editor-title" hidden>
+      <header><div><p class="eyebrow">PRESET ENTRY</p><h2 id="resource-editor-title">编辑预设条目</h2></div><button id="close-resource-editor" type="button" aria-label="关闭编辑窗口">×</button></header>
+      <textarea id="resource-editor-content" spellcheck="false" aria-label="预设条目内容"></textarea>
+      <footer><button id="cancel-resource-editor" type="button">取消</button><button id="save-resource-editor" type="button" class="primary-action">保存条目</button></footer>
     </section>
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
   </div>

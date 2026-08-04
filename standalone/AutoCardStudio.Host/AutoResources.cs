@@ -81,6 +81,61 @@ public sealed class ResourceStore
         finally { _gate.Release(); }
     }
 
+    public async Task<ResourceEditorState> GetEditorStateAsync()
+    {
+        await _gate.WaitAsync();
+        try { return await ReadEditorStateUnsafeAsync(); }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<ResourceEditorState> UpdatePromptAsync(string promptId, ResourcePromptUpdateRequest request)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var preset = await _files.ReadRecoverableAsync<ImportedPreset>(_presetPath) ?? throw new KeyNotFoundException("尚未导入创作预设。");
+            var regexes = await _files.ReadRecoverableAsync<List<StudioRegex>>(_regexPath) ?? [];
+            EnsureEditorRevision(EditorRevision(preset, regexes), request.ExpectedRevision);
+            var target = preset.Prompts.FirstOrDefault(item => item.Id == promptId) ?? throw new KeyNotFoundException("预设条目不存在。");
+            if (AutoWorkflow.WorkflowPromptIds.Contains(target.Id) || AutoWorkflow.PlaceholderIds.Contains(target.Id))
+                throw new InvalidDataException("固定流程条目和宿主占位条目不能在资源管理器中修改。");
+            var updated = target with
+            {
+                Name = NormalizeEditorText(request.Name, target.Name, 120),
+                Role = NormalizeRole(request.Role ?? target.Role),
+                Content = NormalizeEditorContent(request.Content, target.Content, 2_000_000),
+                Enabled = request.Enabled,
+            };
+            preset = preset with { Prompts = preset.Prompts.Select(item => item.Id == promptId ? updated : item).ToList() };
+            await _files.WriteAtomicAsync(_presetPath, preset);
+            return BuildEditorState(preset, regexes);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<ResourceEditorState> UpdateRegexAsync(string regexId, ResourceRegexUpdateRequest request)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var preset = await _files.ReadRecoverableAsync<ImportedPreset>(_presetPath);
+            var regexes = await _files.ReadRecoverableAsync<List<StudioRegex>>(_regexPath) ?? [];
+            EnsureEditorRevision(EditorRevision(preset, regexes), request.ExpectedRevision);
+            var target = regexes.FirstOrDefault(item => item.Id == regexId) ?? throw new KeyNotFoundException("正则条目不存在。");
+            var updated = target with
+            {
+                ScriptName = NormalizeEditorText(request.Name, target.ScriptName, 120),
+                Disabled = !request.Enabled,
+                FindRegex = NormalizeEditorContent(request.FindRegex, target.FindRegex, 200_000),
+                ReplaceString = NormalizeEditorContent(request.ReplaceString, target.ReplaceString, 2_000_000),
+            };
+            regexes = regexes.Select(item => item.Id == regexId ? updated : item).ToList();
+            await _files.WriteAtomicAsync(_regexPath, regexes);
+            return BuildEditorState(preset, regexes);
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task<ResourceState> ImportPresetAsync(ImportFileRequest request)
     {
         ValidateImport(request);
@@ -122,6 +177,46 @@ public sealed class ResourceStore
         return new ResourceState(
             preset is null ? null : new PresetSummary(preset.Name, preset.Prompts.Count, preset.ImportedAt, preset.SourceFileName, preset.SourceSha256, preset.Settings),
             new RegexSummary(regexes.Count, regexes.Count(item => !item.Disabled)));
+    }
+
+    private async Task<ResourceEditorState> ReadEditorStateUnsafeAsync()
+    {
+        var preset = await _files.ReadRecoverableAsync<ImportedPreset>(_presetPath);
+        var regexes = await _files.ReadRecoverableAsync<List<StudioRegex>>(_regexPath) ?? [];
+        return BuildEditorState(preset, regexes);
+    }
+
+    private static ResourceEditorState BuildEditorState(ImportedPreset? preset, IReadOnlyList<StudioRegex> regexes) =>
+        new(
+            EditorRevision(preset, regexes),
+            preset?.Name ?? string.Empty,
+            (preset?.Prompts ?? []).Where(prompt => !AutoWorkflow.WorkflowPromptIds.Contains(prompt.Id) && !AutoWorkflow.PlaceholderIds.Contains(prompt.Id)).ToList(),
+            regexes);
+
+    private static string EditorRevision(ImportedPreset? preset, IReadOnlyList<StudioRegex> regexes)
+    {
+        var payload = JsonSerializer.Serialize(new { preset, regexes });
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload))).ToLowerInvariant();
+    }
+
+    private static void EnsureEditorRevision(string current, string expected)
+    {
+        if (!string.Equals(current, expected, StringComparison.Ordinal)) throw new ResourceRevisionConflictException(current);
+    }
+
+    private static string NormalizeEditorText(string? value, string fallback, int maximum, bool allowEmpty = false)
+    {
+        var normalized = value?.Trim() ?? string.Empty;
+        if (!allowEmpty && normalized.Length == 0) normalized = fallback;
+        if (normalized.Length > maximum) throw new InvalidDataException($"条目内容超过 {maximum:N0} 个字符。");
+        return normalized;
+    }
+
+    private static string NormalizeEditorContent(string? value, string fallback, int maximum)
+    {
+        var normalized = value ?? fallback;
+        if (normalized.Length > maximum) throw new InvalidDataException($"条目内容超过 {maximum:N0} 个字符。");
+        return normalized;
     }
 
     private async Task ArchiveOriginalAsync(string kind, string fileName, string hash, string content)
@@ -291,3 +386,7 @@ public sealed record StudioRegex(string Id, string ScriptName, bool Disabled, st
 public sealed record ResourceState(PresetSummary? Preset, RegexSummary Regexes);
 public sealed record PresetSummary(string Name, int PromptCount, DateTimeOffset ImportedAt, string SourceFileName, string SourceSha256, ModelParameters Settings);
 public sealed record RegexSummary(int Total, int Enabled);
+public sealed record ResourceEditorState(string Revision, string PresetName, IReadOnlyList<PresetPrompt> Prompts, IReadOnlyList<StudioRegex> Regexes);
+public sealed record ResourcePromptUpdateRequest(string ExpectedRevision, string? Name, string? Role, string? Content, bool Enabled);
+public sealed record ResourceRegexUpdateRequest(string ExpectedRevision, string? Name, string? FindRegex, string? ReplaceString, bool Enabled);
+public sealed class ResourceRevisionConflictException(string currentRevision) : Exception { public string CurrentRevision { get; } = currentRevision; }

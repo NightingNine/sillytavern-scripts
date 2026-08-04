@@ -232,20 +232,46 @@ public static class Program
             string? projectId,
             ProjectStore projectStore,
             ArtifactStore projectArtifacts,
-            ReferenceWorldbookStore worldbooks) =>
+            ReferenceWorldbookStore worldbooks,
+            ResourceStore resources) =>
         {
             var state = await projectStore.GetStateAsync(projectId);
+            var displayStep = ApplyDisplayRegexes(state.Step, await resources.GetRegexesAsync());
             return Results.Ok(new
             {
                 state.Index,
                 state.Project,
-                state.Step,
+                Step = displayStep,
                 Artifacts = await projectArtifacts.GetStateAsync(state.Project.Id),
                 ReferenceWorldbooks = await worldbooks.GetStateAsync(state.Project.Id),
             });
         });
 
         app.MapGet("/api/resources", async (ResourceStore resources) => Results.Ok(await resources.GetStateAsync()));
+
+        app.MapGet("/api/resources/editor", async (ResourceStore resources) => Results.Ok(await resources.GetEditorStateAsync()));
+
+        app.MapPatch("/api/resources/prompts/{promptId}", async (string promptId, ResourcePromptUpdateRequest request, ResourceStore resources) =>
+        {
+            try { return Results.Ok(await resources.UpdatePromptAsync(promptId, request)); }
+            catch (ResourceRevisionConflictException conflict)
+            {
+                return Results.Conflict(new { code = "resource_revision_conflict", message = "创作资源已在其他页面发生变化，请重新载入。", currentRevision = conflict.CurrentRevision });
+            }
+            catch (KeyNotFoundException error) { return Results.NotFound(new { code = "resource_not_found", message = error.Message }); }
+            catch (InvalidDataException error) { return Results.BadRequest(new { code = "invalid_resource", message = error.Message }); }
+        });
+
+        app.MapPatch("/api/resources/regexes/{regexId}", async (string regexId, ResourceRegexUpdateRequest request, ResourceStore resources) =>
+        {
+            try { return Results.Ok(await resources.UpdateRegexAsync(regexId, request)); }
+            catch (ResourceRevisionConflictException conflict)
+            {
+                return Results.Conflict(new { code = "resource_revision_conflict", message = "创作资源已在其他页面发生变化，请重新载入。", currentRevision = conflict.CurrentRevision });
+            }
+            catch (KeyNotFoundException error) { return Results.NotFound(new { code = "resource_not_found", message = error.Message }); }
+            catch (InvalidDataException error) { return Results.BadRequest(new { code = "invalid_resource", message = error.Message }); }
+        });
 
         app.MapPost("/api/resources/preset", async (ImportFileRequest request, ResourceStore resources) =>
         {
@@ -628,6 +654,31 @@ public static class Program
         }
 
         return 0;
+    }
+
+    private static StepData ApplyDisplayRegexes(StepData step, IReadOnlyList<StudioRegex> regexes)
+    {
+        var conversations = step.Conversations.Select(conversation => conversation with
+        {
+            Turns = conversation.Turns.Select(turn =>
+                turn.Role == "assistant" && turn.RawContent is not null
+                    ? turn with
+                    {
+                        Content = ResponseRegexProcessor.Process(
+                            ResponseRegexProcessor.Process(turn.RawContent, regexes, "output"),
+                            regexes,
+                            "display"),
+                    }
+                    : turn).ToList(),
+        }).ToList();
+        return new StepData
+        {
+            Number = step.Number,
+            Revision = step.Revision,
+            Status = step.Status,
+            ActiveConversationId = step.ActiveConversationId,
+            Conversations = conversations,
+        };
     }
 
     private static bool TryOpenExistingInstance(string instanceFile, bool suppressBrowser)

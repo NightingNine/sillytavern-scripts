@@ -79,6 +79,10 @@ const state = {
   referenceManagerBookId: '',
   referenceManagerEntryId: '',
   maintenance: null,
+  previewTurnIds: new Set(),
+  resourceEditor: null,
+  resourceKind: 'prompts',
+  resourceEditingPromptId: '',
   collapsedPhases: new Set(JSON.parse(localStorage.getItem('acs:collapsed-phases') || '[]')),
 };
 
@@ -88,7 +92,7 @@ let conversationLastScrollTop = 0;
 let conversationScrollSyncing = false;
 
 const elements = Object.fromEntries([
-  'app', 'service-status', 'reload-button', 'maintenance-button', 'close-button', 'project-menu-button', 'project-button-name',
+  'app', 'service-status', 'reload-button', 'maintenance-button', 'mobile-inspector-button', 'mobile-panel-scrim', 'close-button', 'left-splitter', 'right-splitter', 'project-menu-button', 'project-button-name',
   'progress-copy', 'step-rail', 'new-project-button', 'project-menu', 'project-menu-close', 'project-list',
   'step-number', 'step-title', 'step-goal', 'requirement-chip', 'station-label', 'guide-title',
   'guide-description', 'guide-prompts', 'brief-label', 'project-brief', 'save-status', 'project-name',
@@ -97,6 +101,9 @@ const elements = Object.fromEntries([
   'conversation-menu-count', 'conversation-list', 'new-conversation-name', 'create-conversation',
   'clear-conversation', 'conversation-nav', 'previous-turn-top', 'latest-turn-bottom',
   'preset-summary', 'regex-summary', 'import-preset-button', 'import-regex-button', 'preset-file', 'regex-file',
+  'open-resource-manager', 'resource-drawer', 'close-resource-manager', 'resource-entry-list',
+  'resource-editor-modal', 'resource-editor-title', 'resource-editor-content', 'close-resource-editor',
+  'cancel-resource-editor', 'save-resource-editor',
   'connection-profile', 'connection-name', 'connection-provider', 'connection-url', 'connection-key',
   'connection-model', 'connection-output', 'connection-timeout', 'parameter-context', 'parameter-completion',
   'parameter-temperature', 'parameter-top-p', 'connection-secret-state', 'model-options', 'fetch-models',
@@ -149,6 +156,123 @@ function formatBytes(value) {
     unit = units[index];
   }
   return `${amount >= 10 ? amount.toFixed(0) : amount.toFixed(1)} ${unit}`;
+}
+
+const PANEL_WIDTH_KEYS = { left: 'acs:rail-width', right: 'acs:inspector-width' };
+
+function defaultPanelWidths() {
+  return window.innerWidth <= 1150 ? { left: 240, right: 300 } : { left: 300, right: 360 };
+}
+
+function normalizedPanelWidths(left, right) {
+  const total = elements.left_splitter.parentElement.clientWidth || window.innerWidth;
+  const compact = total <= 1150;
+  const minimumCenter = compact ? 320 : 420;
+  const minimumLeft = compact ? 190 : 220;
+  const minimumRight = compact ? 230 : 280;
+  const maximumLeft = Math.min(500, total - minimumCenter - minimumRight);
+  const nextLeft = Math.max(minimumLeft, Math.min(maximumLeft, Number(left) || defaultPanelWidths().left));
+  const maximumRight = Math.min(620, total - minimumCenter - nextLeft);
+  const nextRight = Math.max(minimumRight, Math.min(maximumRight, Number(right) || defaultPanelWidths().right));
+  return { left: Math.round(nextLeft), right: Math.round(nextRight) };
+}
+
+function applyPanelWidths(left, right, persist = false) {
+  if (window.innerWidth <= 820) return;
+  const widths = normalizedPanelWidths(left, right);
+  const workspace = elements.left_splitter.parentElement;
+  workspace.style.setProperty('--rail-width', `${widths.left}px`);
+  workspace.style.setProperty('--inspector-width', `${widths.right}px`);
+  elements.left_splitter.setAttribute('aria-valuenow', String(widths.left));
+  elements.right_splitter.setAttribute('aria-valuenow', String(widths.right));
+  if (persist) {
+    localStorage.setItem(PANEL_WIDTH_KEYS.left, String(widths.left));
+    localStorage.setItem(PANEL_WIDTH_KEYS.right, String(widths.right));
+  }
+  return widths;
+}
+
+function currentPanelWidths() {
+  const styles = getComputedStyle(elements.left_splitter.parentElement);
+  return {
+    left: parseFloat(styles.getPropertyValue('--rail-width')) || defaultPanelWidths().left,
+    right: parseFloat(styles.getPropertyValue('--inspector-width')) || defaultPanelWidths().right,
+  };
+}
+
+function resetPanelWidths() {
+  localStorage.removeItem(PANEL_WIDTH_KEYS.left);
+  localStorage.removeItem(PANEL_WIDTH_KEYS.right);
+  const defaults = defaultPanelWidths();
+  applyPanelWidths(defaults.left, defaults.right, false);
+}
+
+function initializePanelSplitter(splitter, side) {
+  splitter.setAttribute('aria-valuemin', side === 'left' ? '190' : '230');
+  splitter.setAttribute('aria-valuemax', side === 'left' ? '500' : '620');
+  splitter.addEventListener('pointerdown', event => {
+    if (window.innerWidth <= 820) return;
+    event.preventDefault();
+    splitter.setPointerCapture(event.pointerId);
+    splitter.classList.add('is-dragging');
+    document.body.classList.add('is-resizing-panels');
+  });
+  splitter.addEventListener('pointermove', event => {
+    if (!splitter.hasPointerCapture(event.pointerId)) return;
+    const rect = splitter.parentElement.getBoundingClientRect();
+    const widths = currentPanelWidths();
+    if (side === 'left') applyPanelWidths(event.clientX - rect.left, widths.right, false);
+    else applyPanelWidths(widths.left, rect.right - event.clientX, false);
+  });
+  const finish = event => {
+    if (!splitter.hasPointerCapture(event.pointerId)) return;
+    splitter.releasePointerCapture(event.pointerId);
+    splitter.classList.remove('is-dragging');
+    document.body.classList.remove('is-resizing-panels');
+    const widths = currentPanelWidths();
+    applyPanelWidths(widths.left, widths.right, true);
+  };
+  splitter.addEventListener('pointerup', finish);
+  splitter.addEventListener('pointercancel', finish);
+  splitter.addEventListener('dblclick', resetPanelWidths);
+  splitter.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home'].includes(event.key)) return;
+    event.preventDefault();
+    if (event.key === 'Home') { resetPanelWidths(); return; }
+    const widths = currentPanelWidths();
+    const movement = event.key === 'ArrowRight' ? 10 : -10;
+    if (side === 'left') applyPanelWidths(widths.left + movement, widths.right, true);
+    else applyPanelWidths(widths.left, widths.right - movement, true);
+  });
+}
+
+function initializePanelLayout() {
+  initializePanelSplitter(elements.left_splitter, 'left');
+  initializePanelSplitter(elements.right_splitter, 'right');
+  const defaults = defaultPanelWidths();
+  applyPanelWidths(localStorage.getItem(PANEL_WIDTH_KEYS.left) || defaults.left, localStorage.getItem(PANEL_WIDTH_KEYS.right) || defaults.right);
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (window.innerWidth <= 820) return;
+      setMobileInspectorOpen(false);
+      const widths = currentPanelWidths();
+      applyPanelWidths(widths.left, widths.right, false);
+    }, 80);
+  });
+}
+
+function setMobileInspectorOpen(open) {
+  const inspector = document.querySelector('.inspector');
+  inspector.classList.toggle('is-mobile-open', open);
+  elements.mobile_panel_scrim.hidden = !open;
+  elements.mobile_inspector_button.setAttribute('aria-expanded', String(open));
+}
+
+function toggleMobileInspector() {
+  const inspector = document.querySelector('.inspector');
+  setMobileInspectorOpen(!inspector.classList.contains('is-mobile-open'));
 }
 
 async function loadState(projectId = '') {
@@ -297,10 +421,20 @@ function createTurnElement(turn, streaming = false, isLatestUser = false) {
   label.textContent = turn.role === 'assistant' ? 'A.U.T.O.' : '你';
   const actions = document.createElement('span');
   actions.className = 'turn-actions';
+  const htmlPreview = !streaming && turn.role === 'assistant' ? extractHtmlPreview(turn.content) : '';
   if (!streaming) {
     const edit = turnAction('✎', '编辑这条消息', () => beginTurnEdit(turn.id));
     edit.disabled = state.generating;
     actions.append(edit);
+    if (htmlPreview) {
+      const previewing = state.previewTurnIds.has(turn.id);
+      const preview = turnAction(previewing ? '源码' : '预览', previewing ? '返回消息源码' : '在安全沙箱中预览 HTML', () => {
+        if (previewing) state.previewTurnIds.delete(turn.id);
+        else state.previewTurnIds.add(turn.id);
+        renderTurns();
+      });
+      actions.append(preview);
+    }
     if (turn.role === 'assistant') {
       const capture = turnAction('＋ 产物', '从这条 AI 回复加入正式产物', () => captureTurnArtifacts(turn));
       capture.disabled = state.generating;
@@ -319,9 +453,56 @@ function createTurnElement(turn, streaming = false, isLatestUser = false) {
   header.append(label, actions);
   const content = document.createElement('div');
   content.className = 'turn-content';
-  content.textContent = turn.content || (streaming ? '正在连接模型…' : '');
+  if (htmlPreview && state.previewTurnIds.has(turn.id)) {
+    article.classList.add('is-html-preview');
+    content.classList.add('is-previewing');
+    const frame = document.createElement('iframe');
+    frame.className = 'turn-preview-frame';
+    frame.title = 'HTML 安全预览';
+    frame.setAttribute('sandbox', '');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.srcdoc = sanitizeHtmlPreview(htmlPreview);
+    content.append(frame);
+  } else {
+    content.textContent = turn.content || (streaming ? '正在连接模型…' : '');
+  }
   article.append(header, content);
   return article;
+}
+
+function extractHtmlPreview(content) {
+  const source = String(content || '');
+  const htmlFence = /```(?:html|htm)\s*([\s\S]*?)```/i.exec(source);
+  if (htmlFence) {
+    const styles = [...source.matchAll(/```css\s*([\s\S]*?)```/gi)].map(match => match[1]).join('\n');
+    return styles ? `<style>${styles}</style>\n${htmlFence[1]}` : htmlFence[1];
+  }
+  const start = source.search(/<!doctype\s+html|<html\b|<body\b/i);
+  return start >= 0 ? source.slice(start) : '';
+}
+
+function sanitizeHtmlPreview(source) {
+  const parsed = new DOMParser().parseFromString(source, 'text/html');
+  parsed.querySelectorAll('script, iframe, object, embed, link, base, meta[http-equiv], frame, frameset').forEach(node => node.remove());
+  parsed.querySelectorAll('*').forEach(node => {
+    for (const attribute of [...node.attributes]) {
+      const name = attribute.name.toLowerCase();
+      if (name.startsWith('on') || ['src', 'srcset', 'href', 'action', 'formaction', 'ping'].includes(name)) node.removeAttribute(attribute.name);
+      if (name === 'style') node.setAttribute('style', sanitizePreviewCss(attribute.value));
+    }
+  });
+  parsed.querySelectorAll('style').forEach(style => { style.textContent = sanitizePreviewCss(style.textContent || ''); });
+  const policy = parsed.createElement('meta');
+  policy.setAttribute('http-equiv', 'Content-Security-Policy');
+  policy.setAttribute('content', "default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'; connect-src 'none'; media-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'");
+  parsed.head.prepend(policy);
+  return `<!doctype html>${parsed.documentElement.outerHTML}`;
+}
+
+function sanitizePreviewCss(source) {
+  return String(source || '')
+    .replace(/@import[\s\S]*?(?:;|$)/gi, '')
+    .replace(/url\s*\(\s*(['"]?)(?!data:|blob:)[\s\S]*?\1\s*\)/gi, 'none');
 }
 
 function turnAction(label, title, action) {
@@ -713,11 +894,140 @@ async function importResource(file, kind) {
   try {
     const path = kind === 'preset' ? '/api/resources/preset' : '/api/resources/regexes';
     state.resources = await api(path, { method: 'POST', body: JSON.stringify({ fileName: file.name, content: await file.text() }) });
+    if (!elements.resource_drawer.hidden) state.resourceEditor = await api('/api/resources/editor');
     renderResourceSettings();
+    if (!elements.resource_drawer.hidden) renderResourceManager();
     if (kind === 'preset' && !elements.connection_profile.value) fillConnectionForm('');
     renderGenerationAvailability();
     toast(kind === 'preset' ? `已导入“${state.resources.preset.name}”。` : `已导入 ${state.resources.regexes.total} 条正则。`);
   } catch (error) { toast(error.message, true); }
+}
+
+async function openResourceManager() {
+  if (window.innerWidth <= 820) setMobileInspectorOpen(false);
+  elements.modal_backdrop.hidden = false;
+  elements.resource_drawer.hidden = false;
+  try {
+    state.resourceEditor = await api('/api/resources/editor');
+    renderResourceManager();
+  } catch (error) { toast(error.message, true); }
+}
+
+function closeResourceManager() {
+  if (!elements.resource_editor_modal.hidden) closeResourceEditor();
+  elements.resource_drawer.hidden = true;
+  elements.modal_backdrop.hidden = true;
+}
+
+function renderResourceManager() {
+  document.querySelectorAll('[data-resource-kind]').forEach(button => button.classList.toggle('is-active', button.dataset.resourceKind === state.resourceKind));
+  const items = state.resourceKind === 'prompts' ? state.resourceEditor?.prompts || [] : state.resourceEditor?.regexes || [];
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'resource-entry-empty';
+    empty.textContent = state.resourceKind === 'prompts'
+      ? '预设中没有可单独管理的辅助条目。29 个工作流步骤会固定随对应阶段发送。'
+      : '尚未导入正则条目。';
+    elements.resource_entry_list.replaceChildren(empty);
+    return;
+  }
+  elements.resource_entry_list.replaceChildren(...items.map(item => {
+    const row = document.createElement('div');
+    row.className = `resource-entry${state.resourceKind === 'prompts' ? ' is-editable' : ''}`;
+    if (state.resourceKind === 'prompts') {
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-label', `查看并编辑预设条目：${item.name}`);
+      row.addEventListener('click', () => openResourceEditor(item.id));
+      row.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openResourceEditor(item.id); }
+      });
+    }
+    const copy = document.createElement('div');
+    copy.className = 'resource-entry-copy';
+    const name = state.resourceKind === 'prompts' ? item.name : item.scriptName;
+    const meta = state.resourceKind === 'prompts'
+      ? `${String(item.role || 'system').toUpperCase()} · 约 ${Math.ceil(String(item.content || '').length / 3.5)} tokens`
+      : (item.findRegex || '无查找表达式');
+    copy.innerHTML = `<strong>${escapeHtml(name)}</strong><small>${escapeHtml(meta)}</small>`;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    const enabled = state.resourceKind === 'prompts' ? item.enabled !== false : !item.disabled;
+    toggle.className = `reference-switch${enabled ? ' is-on' : ''}`;
+    toggle.setAttribute('aria-label', enabled ? '条目已启用' : '条目已停用');
+    toggle.addEventListener('click', event => {
+      event.stopPropagation();
+      updateResourceEntry(item, !enabled);
+    });
+    row.append(copy, toggle);
+    return row;
+  }));
+}
+
+async function updateResourceEntry(item, enabled) {
+  try {
+    const path = state.resourceKind === 'prompts'
+      ? `/api/resources/prompts/${encodeURIComponent(item.id)}`
+      : `/api/resources/regexes/${encodeURIComponent(item.id)}`;
+    const body = state.resourceKind === 'prompts'
+      ? { expectedRevision: state.resourceEditor.revision, name: item.name, role: item.role, content: item.content, enabled }
+      : { expectedRevision: state.resourceEditor.revision, name: item.scriptName, findRegex: item.findRegex, replaceString: item.replaceString, enabled };
+    state.resourceEditor = await api(path, { method: 'PATCH', body: JSON.stringify(body) });
+    state.resources = await api('/api/resources');
+    if (state.resourceKind === 'regexes') {
+      const projection = await api(`/api/state?projectId=${encodeURIComponent(state.project.id)}`);
+      applyState(projection);
+    }
+    renderResourceSettings();
+    renderResourceManager();
+    toast(enabled ? '条目已启用。' : '条目已停用。');
+  } catch (error) {
+    toast(error.message, true);
+    if (error.code === 'resource_revision_conflict') {
+      state.resourceEditor = await api('/api/resources/editor').catch(() => state.resourceEditor);
+      renderResourceManager();
+    }
+  }
+}
+
+function openResourceEditor(promptId) {
+  const prompt = state.resourceEditor?.prompts?.find(item => item.id === promptId);
+  if (!prompt) return;
+  state.resourceEditingPromptId = promptId;
+  elements.resource_editor_title.textContent = prompt.name || '未命名预设条目';
+  elements.resource_editor_content.value = prompt.content || '';
+  elements.resource_editor_modal.hidden = false;
+  requestAnimationFrame(() => elements.resource_editor_content.focus({ preventScroll: true }));
+}
+
+function closeResourceEditor() {
+  state.resourceEditingPromptId = '';
+  elements.resource_editor_modal.hidden = true;
+  if (elements.resource_drawer.hidden) elements.modal_backdrop.hidden = true;
+}
+
+async function saveResourceEditor() {
+  const prompt = state.resourceEditor?.prompts?.find(item => item.id === state.resourceEditingPromptId);
+  if (!prompt) return;
+  elements.save_resource_editor.disabled = true;
+  try {
+    state.resourceEditor = await api(`/api/resources/prompts/${encodeURIComponent(prompt.id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        expectedRevision: state.resourceEditor.revision,
+        name: prompt.name,
+        role: prompt.role,
+        content: elements.resource_editor_content.value,
+        enabled: prompt.enabled !== false,
+      }),
+    });
+    closeResourceEditor();
+    renderResourceManager();
+    toast('预设条目已保存。');
+  } catch (error) {
+    toast(error.message, true);
+    if (error.code === 'resource_revision_conflict') state.resourceEditor = await api('/api/resources/editor').catch(() => state.resourceEditor);
+  } finally { elements.save_resource_editor.disabled = false; }
 }
 
 const ARTIFACT_CATEGORY_STEPS = {
@@ -1723,6 +2033,7 @@ function renderBackups(backups) {
 }
 
 async function openMaintenance() {
+  if (window.innerWidth <= 820) setMobileInspectorOpen(false);
   elements.modal_backdrop.hidden = false;
   elements.maintenance_modal.hidden = false;
   elements.diagnosis_status.textContent = '检查中';
@@ -1868,6 +2179,8 @@ elements.reload_button.addEventListener('click', async () => {
     await loadState();
   } catch (error) { toast(error.message, true); }
 });
+elements.mobile_inspector_button.addEventListener('click', toggleMobileInspector);
+elements.mobile_panel_scrim.addEventListener('click', () => setMobileInspectorOpen(false));
 elements.maintenance_button.addEventListener('click', openMaintenance);
 elements.open_maintenance.addEventListener('click', openMaintenance);
 elements.close_maintenance.addEventListener('click', closeMaintenance);
@@ -1886,6 +2199,15 @@ elements.project_name.addEventListener('input', () => queueProjectPatch({ name: 
 elements.project_name.addEventListener('change', () => flushPendingPatch().catch(() => {}));
 elements.import_preset_button.addEventListener('click', () => elements.preset_file.click());
 elements.import_regex_button.addEventListener('click', () => elements.regex_file.click());
+elements.open_resource_manager.addEventListener('click', openResourceManager);
+elements.close_resource_manager.addEventListener('click', closeResourceManager);
+document.querySelectorAll('[data-resource-kind]').forEach(button => button.addEventListener('click', () => {
+  state.resourceKind = button.dataset.resourceKind;
+  renderResourceManager();
+}));
+elements.close_resource_editor.addEventListener('click', closeResourceEditor);
+elements.cancel_resource_editor.addEventListener('click', closeResourceEditor);
+elements.save_resource_editor.addEventListener('click', saveResourceEditor);
 elements.preset_file.addEventListener('change', async event => {
   await importResource(event.currentTarget.files?.[0], 'preset');
   event.currentTarget.value = '';
@@ -1948,6 +2270,8 @@ elements.modal_backdrop.addEventListener('click', () => {
   else if (!elements.manual_artifact_modal.hidden) closeManualArtifact();
   else if (!elements.reference_manager_modal.hidden) closeReferenceManager();
   else if (!elements.maintenance_modal.hidden) closeMaintenance();
+  else if (!elements.resource_editor_modal.hidden) closeResourceEditor();
+  else if (!elements.resource_drawer.hidden) closeResourceManager();
 });
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape' || !elements.confirm_modal.hidden) return;
@@ -1955,6 +2279,8 @@ document.addEventListener('keydown', event => {
   else if (!elements.manual_artifact_modal.hidden) closeManualArtifact();
   else if (!elements.reference_manager_modal.hidden) closeReferenceManager();
   else if (!elements.maintenance_modal.hidden) closeMaintenance();
+  else if (!elements.resource_editor_modal.hidden) closeResourceEditor();
+  else if (!elements.resource_drawer.hidden) closeResourceManager();
 });
 elements.generate_button.addEventListener('click', generateCurrentStep);
 elements.stop_generation.addEventListener('click', stopGeneration);
@@ -1969,6 +2295,7 @@ elements.close_button.addEventListener('click', async () => {
   } catch (error) { toast(error.message, true); }
 });
 
+initializePanelLayout();
 applyConversationFontSize(localStorage.getItem('acs:conversation-font-size') || 15);
 loadState().then(() => {
   elements.app.setAttribute('aria-busy', 'false');
