@@ -6,6 +6,8 @@
 
 阶段 3 已实现：每个步骤可保存多个可命名对话，支持切换、重命名、删除、清空、消息编辑/删除、最新输入重试、提示词预览、12–20 px 对话字体和不抢用户位置的流式滚动。阶段 2 的单对话步骤文件会在首次读取时自动迁移，并保留上一份有效文件。
 
+阶段 4 已实现：AI 回复按步骤协议提取正式产物，产物与对话独立保存并保留版本历史；支持自建产物、历史回复手动提取、分类搜索、单项上下文及后序产物开关。附属世界书保存到全局本地资料库，由每个项目独立启用，并按常驻或本轮用户输入的关键词规则注入模型上下文。
+
 ## 开发启动
 
 ```powershell
@@ -26,4 +28,4 @@ dotnet publish .\AutoCardStudio.Host\AutoCardStudio.Host.csproj -c Release -o .\
 
 发布目录只生成一个内置界面的 `A.U.T.O.exe`。程序会在自身旁创建 `data` 文件夹；开发或自动检查时可通过 `ACS_DATA_DIR` 指向临时目录，避免使用真实资料。
 
-阶段验收记录见 [阶段 1](../docs/standalone-stage-1-acceptance.md)、[阶段 2](../docs/standalone-stage-2-acceptance.md)与[阶段 3](../docs/standalone-stage-3-acceptance.md)。
+阶段验收记录见 [阶段 1](../docs/standalone-stage-1-acceptance.md)、[阶段 2](../docs/standalone-stage-2-acceptance.md)、[阶段 3](../docs/standalone-stage-3-acceptance.md)与[阶段 4](../docs/standalone-stage-4-acceptance.md)。

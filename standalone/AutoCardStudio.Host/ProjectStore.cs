@@ -4,7 +4,7 @@ namespace AutoCardStudio.Host;
 
 public sealed class ProjectStore
 {
-    private const int SchemaVersion = 2;
+    private const int SchemaVersion = 3;
     private readonly string _dataRoot;
     private readonly string _projectsRoot;
     private readonly string _trashRoot;
@@ -115,6 +115,7 @@ public sealed class ProjectStore
                 Name = nextName,
                 Brief = nextBrief,
                 CurrentStep = nextStep,
+                IncludeFutureArtifacts = request.IncludeFutureArtifacts ?? current.IncludeFutureArtifacts,
                 Revision = current.Revision + 1,
                 UpdatedAt = now,
             };
@@ -570,7 +571,15 @@ public sealed class ProjectStore
 
 public sealed record AppIndex(int SchemaVersion, string ActiveProjectId, IReadOnlyList<ProjectSummary> Projects);
 public sealed record ProjectSummary(string Id, string Name, int CurrentStep, long Revision, DateTimeOffset UpdatedAt);
-public sealed record StudioProject(string Id, string Name, string Brief, int CurrentStep, long Revision, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public sealed record StudioProject(
+    string Id,
+    string Name,
+    string Brief,
+    int CurrentStep,
+    long Revision,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    bool IncludeFutureArtifacts = false);
 public sealed class StepData
 {
     public int Number { get; init; }
@@ -603,7 +612,12 @@ public sealed record StepTurn(
 public sealed record StudioState(AppIndex Index, StudioProject Project, StepData Step);
 public sealed record GenerationSnapshot(StudioProject Project, StepData Step);
 public sealed record CreateProjectRequest(string? Name);
-public sealed record UpdateProjectRequest(long ExpectedRevision, string? Name = null, string? Brief = null, int? CurrentStep = null);
+public sealed record UpdateProjectRequest(
+    long ExpectedRevision,
+    string? Name = null,
+    string? Brief = null,
+    int? CurrentStep = null,
+    bool? IncludeFutureArtifacts = null);
 public sealed record ConversationMutationRequest(long ExpectedRevision, string? Name = null);
 public sealed record TurnEditRequest(long ExpectedRevision, string Content);
 

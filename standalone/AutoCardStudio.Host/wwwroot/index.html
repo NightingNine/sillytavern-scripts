@@ -104,6 +104,7 @@
           <div class="composer-footer">
             <span id="generation-hint" class="save-status">请先导入预设并配置模型连接</span>
             <div class="future-actions" aria-label="生成操作">
+              <button id="future-artifacts-toggle" type="button" aria-pressed="false" title="默认不发送当前步骤之后的正式产物">不含后序</button>
               <button id="prompt-preview-button" type="button">提示词</button>
               <button id="stop-generation" type="button" class="danger" hidden>停止</button>
               <button id="generate-button" type="button" class="primary">生成阶段草案</button>
@@ -124,11 +125,20 @@
           <button class="tab" type="button" data-tab="publish">发布</button>
         </div>
         <section class="tab-panel" data-panel="artifacts">
-          <div class="panel-heading"><strong>结构解析</strong><span>0 个产物</span></div>
-          <p>正式产物将在生成闭环接通后显示。项目和步骤资料已经由独立版保存。</p>
-          <div class="placeholder-list">
-            <span></span><span></span><span></span>
+          <div class="panel-heading artifact-panel-heading"><strong>结构解析</strong><span><b id="artifact-count">0 个产物</b><button id="create-artifact" type="button">＋ 自建产物</button></span></div>
+          <p>这里只保存正式产物。对话删除、编辑、清空或重试都不会改写这里的版本。</p>
+          <div class="artifact-filters" role="group" aria-label="产物筛选">
+            <button type="button" class="is-active" data-artifact-scope="all">全部</button>
+            <button type="button" data-artifact-scope="current">当前步骤</button>
+            <button type="button" data-artifact-scope="story">故事核心</button>
+            <button type="button" data-artifact-scope="characters">主要角色</button>
+            <button type="button" data-artifact-scope="world">世界</button>
+            <button type="button" data-artifact-scope="narrative">叙事</button>
+            <button type="button" data-artifact-scope="variables">变量</button>
+            <button type="button" data-artifact-scope="production">装配</button>
           </div>
+          <input id="artifact-search" class="text-field artifact-search" type="search" placeholder="搜索产物名称、标签或步骤…">
+          <div id="artifact-list" class="artifact-list"></div>
         </section>
         <section class="tab-panel" data-panel="settings" hidden>
           <div class="panel-heading"><strong>模型与资源</strong><span>阶段 3</span></div>
@@ -182,6 +192,14 @@
             <p class="font-size-preview">示例：角色设定、生成建议与代码内容都会同步调整。</p>
           </section>
 
+          <section class="settings-card reference-worldbooks-card">
+            <header><div><strong>附属世界书</strong><small>全局资料库 · 每个项目独立启用</small></div><span id="reference-worldbook-summary">0 本</span></header>
+            <p>只作为 AI 生成资料；常驻条目每轮发送，关键词条目只由本轮输入激活。永远不进入正式产物与最终角色卡。</p>
+            <div class="button-row"><button id="import-worldbook-button" type="button">导入世界书 JSON</button></div>
+            <input id="worldbook-file" type="file" accept="application/json,.json" hidden>
+            <div id="reference-worldbook-list" class="reference-worldbook-list"></div>
+          </section>
+
           <div class="info-card"><i>●</i><div><strong>密钥与项目分离</strong><p>项目、预设和导出文件都不会包含 API 密钥；更换 Windows 用户后需要重新填写。</p></div></div>
         </section>
         <section class="tab-panel" data-panel="publish" hidden>
@@ -204,6 +222,18 @@
       </header>
       <p class="prompt-preview-notice">这里展示点击生成后将按顺序发送的消息。Token 为独立版当前的近似估算值。</p>
       <div id="prompt-preview-list" class="prompt-preview-list"></div>
+    </section>
+    <section id="manual-artifact-modal" class="manual-artifact-modal" role="dialog" aria-modal="true" aria-labelledby="manual-artifact-title" hidden>
+      <header><div><p class="eyebrow">CUSTOM ARTIFACT</p><h2 id="manual-artifact-title">新建正式产物</h2></div><button id="close-manual-artifact" type="button" aria-label="关闭">×</button></header>
+      <label><span>所属步骤</span><select id="manual-artifact-step" class="text-field"></select></label>
+      <label><span>产物名称</span><input id="manual-artifact-name" class="text-field" type="text" maxlength="100" placeholder="例如：核心阵营补充"></label>
+      <label class="manual-artifact-content"><span>正文</span><textarea id="manual-artifact-content" placeholder="粘贴或编写要进入后续创作上下文的正式内容。"></textarea></label>
+      <footer><button id="cancel-manual-artifact" type="button">取消</button><button id="save-manual-artifact" class="primary-action" type="button">保存为正式产物</button></footer>
+    </section>
+    <section id="reference-manager-modal" class="reference-manager-modal" role="dialog" aria-modal="true" aria-labelledby="reference-manager-title" hidden>
+      <header><div><p class="eyebrow">REFERENCE WORLDBOOK</p><h2 id="reference-manager-title">附属世界书条目</h2></div><button id="close-reference-manager" type="button" aria-label="关闭">×</button></header>
+      <div class="reference-manager-toolbar"><input id="reference-manager-search" class="text-field" type="search" placeholder="搜索标题、关键词或正文…"><span id="reference-manager-count"></span></div>
+      <div class="reference-manager-body"><nav id="reference-manager-entries" aria-label="世界书条目列表"></nav><article id="reference-manager-content"></article></div>
     </section>
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
   </div>

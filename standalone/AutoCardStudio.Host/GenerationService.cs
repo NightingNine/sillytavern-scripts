@@ -7,6 +7,8 @@ namespace AutoCardStudio.Host;
 
 public sealed class GenerationCoordinator(
     ProjectStore projects,
+    ArtifactStore artifacts,
+    ReferenceWorldbookStore referenceWorldbooks,
     ResourceStore resources,
     ConnectionStore connections,
     ModelGateway gateway,
@@ -37,7 +39,9 @@ public sealed class GenerationCoordinator(
         var input = string.IsNullOrWhiteSpace(request.UserInput)
             ? $"请执行 Step {request.StepNumber}。"
             : request.UserInput.Trim();
-        var messages = PromptAssembler.Build(preset, snapshot.Project, conversation.Turns, request.StepNumber, input, regexes);
+        var artifactContext = await artifacts.GetContextAsync(snapshot.Project, request.StepNumber, conversation.Turns);
+        var referenceContext = await referenceWorldbooks.GetActiveEntriesAsync(snapshot.Project.Id, input);
+        var messages = PromptAssembler.Build(preset, snapshot.Project, conversation.Turns, request.StepNumber, input, regexes, artifactContext, referenceContext);
         var items = messages.Select((message, index) => new PromptPreviewItem(
             index + 1,
             message.Role,
@@ -97,7 +101,9 @@ public sealed class GenerationCoordinator(
                     ? $"请执行 Step {request.StepNumber}。"
                     : request.UserInput.Trim();
             }
-            var messages = PromptAssembler.Build(preset, snapshot.Project, history, request.StepNumber, userInput, regexes);
+            var artifactContext = await artifacts.GetContextAsync(snapshot.Project, request.StepNumber, history);
+            var referenceContext = await referenceWorldbooks.GetActiveEntriesAsync(snapshot.Project.Id, userInput);
+            var messages = PromptAssembler.Build(preset, snapshot.Project, history, request.StepNumber, userInput, regexes, artifactContext, referenceContext);
             EnsureContextBudget(messages, connection.Profile.Parameters);
 
             if (retrying)
@@ -127,6 +133,15 @@ public sealed class GenerationCoordinator(
             committedStep = retrying
                 ? await projects.CompleteRetryAsync(request.ProjectId, request.StepNumber, targetConversationId, retryUserTurnId!, committedStep.Revision, assistantTurn)
                 : await projects.AppendTurnAsync(request.ProjectId, request.StepNumber, targetConversationId, committedStep.Revision, assistantTurn);
+            try
+            {
+                // 产物从模型原始回复提取并独立落盘，之后编辑或删除对话不会回写产物库。
+                await artifacts.CaptureAsync(request.ProjectId, request.StepNumber, completion.Text, "generated");
+            }
+            catch (Exception artifactError)
+            {
+                logger.LogError(artifactError, "Generation {GenerationId} response saved but artifacts could not be captured", generationId);
+            }
             await emit(new GenerationEvent("completed", generationId, Turn: assistantTurn, ConversationId: targetConversationId, StepRevision: committedStep.Revision, FinishReason: completion.FinishReason));
             logger.LogInformation(
                 "Generation {GenerationId} completed in {ElapsedMs} ms, response hash {ResponseHash}",
@@ -144,6 +159,8 @@ public sealed class GenerationCoordinator(
                     committedStep = retrying
                         ? await projects.CompleteRetryAsync(request.ProjectId, request.StepNumber, targetConversationId, retryUserTurnId!, committedStep.Revision, partial)
                         : await projects.AppendTurnAsync(request.ProjectId, request.StepNumber, targetConversationId, committedStep.Revision, partial);
+                    try { await artifacts.CaptureAsync(request.ProjectId, request.StepNumber, raw, "stopped-stream"); }
+                    catch (Exception artifactError) { logger.LogError(artifactError, "Cancelled generation artifacts could not be captured"); }
                     await emit(new GenerationEvent("cancelled", generationId, Turn: partial, ConversationId: targetConversationId, StepRevision: committedStep.Revision, Message: "生成已停止，已保存收到的部分内容。"));
                 }
                 catch (Exception saveError)
@@ -213,7 +230,9 @@ public static class PromptAssembler
         IReadOnlyList<StepTurn> conversationTurns,
         int stepNumber,
         string userInput,
-        IReadOnlyList<StudioRegex> regexes)
+        IReadOnlyList<StudioRegex> regexes,
+        IReadOnlyList<ArtifactContextItem>? artifacts = null,
+        IReadOnlyList<ActiveReferenceEntry>? referenceEntries = null)
     {
         var currentPromptId = AutoWorkflow.StepPromptIds[stepNumber - 1];
         var messages = new List<PromptMessage> { new("system", MacroGuard, "角色卡模板变量保护") };
@@ -227,7 +246,10 @@ public static class PromptAssembler
             messages.Add(new PromptMessage(prompt.Role, prompt.Content, prompt.Name));
         }
 
-        messages.Add(new PromptMessage("user", BuildProjectContext(project, stepNumber), "项目上下文"));
+        messages.Add(new PromptMessage("user", BuildProjectContext(project, stepNumber, artifacts ?? []), "项目上下文与正式产物"));
+        var referenceContext = BuildReferenceContext(referenceEntries ?? []);
+        if (!string.IsNullOrWhiteSpace(referenceContext))
+            messages.Add(new PromptMessage("user", referenceContext, "附属世界书（本轮激活）"));
         foreach (var turn in conversationTurns)
         {
             var content = turn.Role == "assistant" && !string.IsNullOrEmpty(turn.RawContent)
@@ -244,18 +266,56 @@ public static class PromptAssembler
         ?? step.Conversations.FirstOrDefault()
         ?? throw new InvalidDataException("当前步骤没有可用对话。");
 
-    private static string BuildProjectContext(StudioProject project, int stepNumber) => $"""
-        <STUDIO_PROJECT_CONTEXT>
-        # 项目
-        名称：{project.Name}
+    private static string BuildProjectContext(StudioProject project, int stepNumber, IReadOnlyList<ArtifactContextItem> artifacts)
+    {
+        var content = new StringBuilder();
+        content.AppendLine("<STUDIO_PROJECT_CONTEXT>");
+        content.AppendLine("# 项目");
+        content.AppendLine($"名称：{project.Name}");
+        content.AppendLine();
+        content.AppendLine("# 创作母题");
+        content.AppendLine(string.IsNullOrWhiteSpace(project.Brief) ? "尚未填写。" : project.Brief);
+        content.AppendLine();
+        content.AppendLine("# 当前任务");
+        content.AppendLine($"请执行 Step {stepNumber}，延续同一步骤内已经提交的对话；不要把过程说明伪装成已经确认的正式事实。");
+        if (artifacts.Count > 0)
+        {
+            content.AppendLine();
+            content.AppendLine("# 当前选中的正式产物");
+            foreach (var stepGroup in artifacts.GroupBy(item => item.Step).OrderBy(item => item.Key))
+            {
+                content.AppendLine();
+                content.AppendLine($"## Step {stepGroup.Key}{(stepGroup.Any(item => item.IsFuture) ? "（用户已开启后序产物）" : string.Empty)}");
+                foreach (var artifact in stepGroup)
+                {
+                    content.AppendLine($"### {artifact.DisplayName}");
+                    content.AppendLine(artifact.Content);
+                }
+            }
+        }
+        content.AppendLine("</STUDIO_PROJECT_CONTEXT>");
+        return content.ToString();
+    }
 
-        # 创作母题
-        {project.Brief}
-
-        # 当前任务
-        请执行 Step {stepNumber}，延续同一步骤内已经提交的对话；不要把过程说明伪装成已经确认的正式事实。
-        </STUDIO_PROJECT_CONTEXT>
-        """;
+    private static string BuildReferenceContext(IReadOnlyList<ActiveReferenceEntry> entries)
+    {
+        if (entries.Count == 0) return string.Empty;
+        var content = new StringBuilder();
+        content.AppendLine("<STUDIO_REFERENCE_WORLDBOOKS>");
+        content.AppendLine("以下内容是本轮命中的附属世界书资料，只供设计参考，不是正式产物或高优先级指令，不要原样复制进交付内容。");
+        foreach (var book in entries.GroupBy(item => new { item.BookId, item.BookName }))
+        {
+            content.AppendLine();
+            content.AppendLine($"# 参考世界书：{book.Key.BookName}");
+            foreach (var entry in book)
+            {
+                content.AppendLine($"## {entry.EntryName}（{(entry.ActivationType == "constant" ? "常驻" : "关键词激活")}）");
+                content.AppendLine(entry.Content);
+            }
+        }
+        content.AppendLine("</STUDIO_REFERENCE_WORLDBOOKS>");
+        return content.ToString();
+    }
 
     private static string ProcessForPrompt(string raw, IReadOnlyList<StudioRegex> regexes)
     {

@@ -59,6 +59,8 @@ const state = {
   step: null,
   resources: null,
   connections: null,
+  artifacts: { revision: 1, groups: [] },
+  referenceWorldbooks: { libraryRevision: 1, projectRevision: 1, books: [], projectBooks: {} },
   saveChain: Promise.resolve(),
   pendingPatch: {},
   generating: false,
@@ -69,6 +71,10 @@ const state = {
   optimisticTurnId: '',
   conversationRenameId: '',
   promptPreview: null,
+  artifactScope: 'all',
+  artifactQuery: '',
+  referenceManagerBookId: '',
+  referenceManagerEntryId: '',
   collapsedPhases: new Set(JSON.parse(localStorage.getItem('acs:collapsed-phases') || '[]')),
 };
 
@@ -92,6 +98,12 @@ const elements = Object.fromEntries([
   'parameter-temperature', 'parameter-top-p', 'connection-secret-state', 'model-options', 'fetch-models',
   'save-connection', 'delete-connection',
   'conversation-font-value', 'conversation-font-size', 'conversation-font-decrease', 'conversation-font-increase',
+  'future-artifacts-toggle', 'artifact-count', 'artifact-list', 'artifact-search', 'create-artifact',
+  'manual-artifact-modal', 'manual-artifact-step', 'manual-artifact-name', 'manual-artifact-content',
+  'close-manual-artifact', 'cancel-manual-artifact', 'save-manual-artifact',
+  'reference-worldbook-summary', 'reference-worldbook-list', 'import-worldbook-button', 'worldbook-file',
+  'reference-manager-modal', 'reference-manager-title', 'reference-manager-search', 'reference-manager-count',
+  'reference-manager-entries', 'reference-manager-content', 'close-reference-manager',
   'prompt-preview-button', 'prompt-preview-modal', 'prompt-preview-title', 'prompt-preview-summary',
   'prompt-preview-list', 'copy-prompt-preview', 'close-prompt-preview',
   'modal-backdrop', 'confirm-modal', 'confirm-title', 'confirm-message', 'confirm-cancel', 'confirm-accept', 'toast-region',
@@ -133,6 +145,8 @@ function applyState(payload) {
   state.index = payload.index;
   state.project = payload.project;
   state.step = payload.step;
+  if (payload.artifacts) state.artifacts = payload.artifacts;
+  if (payload.referenceWorldbooks) state.referenceWorldbooks = payload.referenceWorldbooks;
   renderAll();
 }
 
@@ -145,6 +159,8 @@ function renderAll() {
   renderSteps();
   renderCurrentStep();
   renderProjectList();
+  renderArtifacts();
+  renderReferenceWorldbooks();
   renderGenerationAvailability();
 }
 
@@ -193,6 +209,12 @@ function renderCurrentStep() {
   elements.guide_title.textContent = step.guideTitle;
   elements.guide_description.textContent = step.goal;
   elements.brief_label.textContent = `本轮补充 · ${step.name}`;
+  const includesFuture = state.project.includeFutureArtifacts === true;
+  elements.future_artifacts_toggle.textContent = includesFuture ? '包含后序' : '不含后序';
+  elements.future_artifacts_toggle.setAttribute('aria-pressed', String(includesFuture));
+  elements.future_artifacts_toggle.title = includesFuture
+    ? '当前会发送本步骤之后已开启的正式产物；点击关闭'
+    : '当前只发送本步骤及之前已开启的正式产物；点击开启';
   const prompts = [
     `这一步最需要确定的核心边界是什么？`,
     `哪些已有设计必须在“${step.name}”中保持一致？`,
@@ -251,6 +273,11 @@ function createTurnElement(turn, streaming = false, isLatestUser = false) {
     const edit = turnAction('✎', '编辑这条消息', () => beginTurnEdit(turn.id));
     edit.disabled = state.generating;
     actions.append(edit);
+    if (turn.role === 'assistant') {
+      const capture = turnAction('＋ 产物', '从这条 AI 回复加入正式产物', () => captureTurnArtifacts(turn));
+      capture.disabled = state.generating;
+      actions.append(capture);
+    }
     if (isLatestUser) {
       const retry = turnAction('↻ 重试', '重新生成这条输入', () => retryLatestUserInput(turn.id));
       retry.disabled = state.generating;
@@ -278,6 +305,28 @@ function turnAction(label, title, action) {
   button.setAttribute('aria-label', title);
   button.addEventListener('click', action);
   return button;
+}
+
+async function captureTurnArtifacts(turn) {
+  if (state.generating || turn.role !== 'assistant') return;
+  try {
+    const result = await api(`/api/projects/${encodeURIComponent(state.project.id)}/artifacts/capture`, {
+      method: 'POST',
+      body: JSON.stringify({
+        expectedRevision: state.artifacts.revision,
+        step: state.project.currentStep,
+        content: turn.content,
+      }),
+    });
+    state.artifacts = result.state;
+    renderArtifacts();
+    if (result.added > 0) toast(`已加入 ${result.added} 项正式产物。`);
+    else if (result.reused > 0) toast(`内容已存在，已选中对应的 ${result.reused} 项产物版本。`);
+    else toast('这条回复中没有识别到当前步骤规定的正式产物。', true);
+  } catch (error) {
+    toast(error.message, true);
+    if (error.code === 'artifact_revision_conflict') await refreshArtifacts().catch(() => {});
+  }
 }
 
 function activeConversation(step = state.step) {
@@ -525,6 +574,7 @@ function renderGenerationAvailability() {
   elements.user_input.disabled = state.generating;
   elements.project_brief.disabled = state.generating;
   elements.prompt_preview_button.disabled = state.generating || !hasPreset;
+  elements.future_artifacts_toggle.disabled = state.generating;
   elements.clear_conversation.disabled = state.generating || activeConversation().turns.length === 0;
   elements.generation_hint.textContent = state.generating
     ? 'A.U.T.O 正在生成，当前项目与步骤已锁定'
@@ -640,6 +690,331 @@ async function importResource(file, kind) {
     renderGenerationAvailability();
     toast(kind === 'preset' ? `已导入“${state.resources.preset.name}”。` : `已导入 ${state.resources.regexes.total} 条正则。`);
   } catch (error) { toast(error.message, true); }
+}
+
+const ARTIFACT_CATEGORY_STEPS = {
+  story: [1, 2, 3], characters: [5, 6], world: [4, 7, 8, 9],
+  narrative: [10, 11, 12, 13, 14, 15], variables: [16, 17, 18, 19, 20, 21, 22],
+  production: [23, 24, 25, 26, 27, 28, 29],
+};
+
+function selectedArtifactVersion(group) {
+  return group.versions.find(version => version.id === group.selectedVersionId) || group.versions.at(-1);
+}
+
+function artifactContextIsOn(group, version = selectedArtifactVersion(group)) {
+  if (group.contextMode === 'off') return false;
+  if (group.contextMode === 'on') return true;
+  if (group.step !== state.project.currentStep) return true;
+  return !activeConversation().turns.some(turn => String(turn.content || '').includes(version?.content || ''));
+}
+
+function artifactMatchesFilter(group) {
+  if (state.artifactScope === 'current' && group.step !== state.project.currentStep) return false;
+  if (!['all', 'current'].includes(state.artifactScope) && !ARTIFACT_CATEGORY_STEPS[state.artifactScope]?.includes(group.step)) return false;
+  const query = state.artifactQuery.trim().toLocaleLowerCase();
+  if (!query) return true;
+  return `${group.displayName} ${group.identity} step ${group.step} s${String(group.step).padStart(2, '0')}`.toLocaleLowerCase().includes(query);
+}
+
+function renderArtifacts() {
+  const groups = state.artifacts?.groups || [];
+  elements.artifact_count.textContent = `${groups.length} 个产物`;
+  document.querySelectorAll('[data-artifact-scope]').forEach(button => button.classList.toggle('is-active', button.dataset.artifactScope === state.artifactScope));
+  const filtered = groups.filter(artifactMatchesFilter);
+  if (!filtered.length) {
+    const empty = document.createElement('div');
+    empty.className = 'artifact-empty';
+    empty.textContent = groups.length ? '没有符合当前筛选条件的产物。' : '生成包含正式标签的阶段草案，或点击“自建产物”后，内容会保存在这里。';
+    elements.artifact_list.replaceChildren(empty);
+    return;
+  }
+  elements.artifact_list.replaceChildren(...filtered.map((group, index) => {
+    const version = selectedArtifactVersion(group);
+    const details = document.createElement('details');
+    details.className = 'artifact-card';
+    details.open = filtered.length === 1 || index === 0;
+    const summary = document.createElement('summary');
+    const context = document.createElement('button');
+    context.type = 'button';
+    context.className = `artifact-context-switch${artifactContextIsOn(group, version) ? ' is-on' : ''}`;
+    context.title = group.contextMode === 'auto'
+      ? (artifactContextIsOn(group, version) ? '自动开启：会发送当前选中版本' : '自动关闭：当前对话已经包含同一产物')
+      : (group.contextMode === 'on' ? '已强制发送；点击关闭' : '已关闭；点击开启');
+    context.setAttribute('aria-label', context.title);
+    context.addEventListener('click', event => {
+      event.preventDefault(); event.stopPropagation();
+      setArtifactContext(group, artifactContextIsOn(group, version) ? 'off' : 'on');
+    });
+    const title = document.createElement('span');
+    title.className = 'artifact-title';
+    const name = document.createElement('strong');
+    name.textContent = group.displayName;
+    const meta = document.createElement('small');
+    meta.textContent = `S${String(group.step).padStart(2, '0')} · ${group.source === 'manual' ? '自建' : group.identity}`;
+    title.append(name, meta);
+    const label = document.createElement('span');
+    label.className = 'artifact-version-label';
+    label.textContent = `${group.versions.findIndex(item => item.id === version.id) + 1}/${group.versions.length}`;
+    const chevron = document.createElement('span');
+    chevron.className = 'artifact-chevron';
+    chevron.textContent = '⌄';
+    summary.append(context, title, label, chevron);
+
+    const editor = document.createElement('div');
+    editor.className = 'artifact-editor';
+    const toolbar = document.createElement('div');
+    toolbar.className = 'artifact-editor-toolbar';
+    const select = document.createElement('select');
+    group.versions.forEach((item, versionIndex) => select.append(new Option(`版本 ${versionIndex + 1} · ${new Date(item.createdAt).toLocaleString('zh-CN')}`, item.id)));
+    select.value = version.id;
+    select.addEventListener('change', () => selectArtifactVersion(group, select.value));
+    const copy = document.createElement('button');
+    copy.type = 'button'; copy.textContent = '复制';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(textarea.value); toast('产物正文已复制。'); }
+      catch { toast('浏览器未允许复制。', true); }
+    });
+    const save = document.createElement('button');
+    save.type = 'button'; save.textContent = '保存';
+    const latest = group.versions.at(-1)?.id === version.id;
+    save.disabled = !latest;
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.textContent = '删除'; remove.className = 'is-danger';
+    remove.addEventListener('click', () => deleteArtifactGroup(group));
+    toolbar.append(select, copy, save, remove);
+    let nameInput = null;
+    if (group.source === 'manual') {
+      nameInput = document.createElement('input');
+      nameInput.className = 'text-field artifact-name-editor';
+      nameInput.value = group.displayName;
+      nameInput.maxLength = 100;
+      nameInput.readOnly = !latest;
+    }
+    const textarea = document.createElement('textarea');
+    textarea.value = version.content;
+    textarea.readOnly = !latest;
+    save.addEventListener('click', () => saveArtifactVersion(version.id, textarea.value, nameInput?.value));
+    editor.append(toolbar);
+    if (nameInput) editor.append(nameInput);
+    editor.append(textarea);
+    details.append(summary, editor);
+    return details;
+  }));
+}
+
+async function refreshArtifacts() {
+  state.artifacts = await api(`/api/projects/${encodeURIComponent(state.project.id)}/artifacts`);
+  renderArtifacts();
+}
+
+async function applyArtifactMutation(operation, successMessage) {
+  try {
+    state.artifacts = await operation();
+    renderArtifacts();
+    if (successMessage) toast(successMessage);
+    return true;
+  } catch (error) {
+    toast(error.message, true);
+    if (error.code === 'artifact_revision_conflict') await refreshArtifacts().catch(() => {});
+    return false;
+  }
+}
+
+function selectArtifactVersion(group, versionId) {
+  return applyArtifactMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/artifacts/${encodeURIComponent(group.key)}/versions/${encodeURIComponent(versionId)}/select`, {
+    method: 'POST', body: JSON.stringify({ expectedRevision: state.artifacts.revision }),
+  }), '已切换产物版本；后续上下文将使用这个版本。');
+}
+
+function setArtifactContext(group, mode) {
+  return applyArtifactMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/artifacts/${encodeURIComponent(group.key)}/context`, {
+    method: 'PATCH', body: JSON.stringify({ expectedRevision: state.artifacts.revision, mode }),
+  }), mode === 'off' ? '该产物已从 AI 上下文关闭。' : '该产物已加入 AI 上下文。');
+}
+
+function saveArtifactVersion(versionId, content, name) {
+  if (!String(content || '').trim()) { toast('产物正文不能为空。', true); return; }
+  return applyArtifactMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/artifacts/versions/${encodeURIComponent(versionId)}`, {
+    method: 'PATCH', body: JSON.stringify({ expectedRevision: state.artifacts.revision, content, name: name || null }),
+  }), '产物已保存。');
+}
+
+async function deleteArtifactGroup(group) {
+  if (!await confirmAction('删除整项产物？', `“${group.displayName}”的 ${group.versions.length} 个版本都会移除，对话记录不受影响。`, '删除产物')) return;
+  return applyArtifactMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/artifacts/${encodeURIComponent(group.key)}?expectedRevision=${state.artifacts.revision}`, { method: 'DELETE' }), '产物及其版本历史已删除。');
+}
+
+function openManualArtifact() {
+  elements.manual_artifact_step.replaceChildren(...STEPS.map(step => new Option(`Step ${step.number} · ${step.name}`, String(step.number))));
+  elements.manual_artifact_step.value = String(state.project.currentStep);
+  elements.manual_artifact_name.value = '';
+  elements.manual_artifact_content.value = '';
+  elements.modal_backdrop.hidden = false;
+  elements.manual_artifact_modal.hidden = false;
+  elements.manual_artifact_name.focus();
+}
+
+function closeManualArtifact() {
+  elements.manual_artifact_modal.hidden = true;
+  elements.modal_backdrop.hidden = true;
+}
+
+async function saveManualArtifact() {
+  const name = elements.manual_artifact_name.value.trim();
+  const content = elements.manual_artifact_content.value.trim();
+  if (!name || !content) { toast('请填写产物名称和正文。', true); return; }
+  const saved = await applyArtifactMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/artifacts/manual`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedRevision: state.artifacts.revision, step: Number(elements.manual_artifact_step.value), name, content }),
+  }), '自建产物已保存，并会遵守产物上下文开关。');
+  // 保存失败时保留用户输入，避免长文本因弹窗关闭而丢失。
+  if (saved) closeManualArtifact();
+}
+
+function referenceBookState(book) {
+  return state.referenceWorldbooks?.projectBooks?.[book.id] || { enabled: false, entries: {} };
+}
+
+function activationSummary(entry) {
+  if (entry.activation.type === 'constant') return '常驻 · 每轮发送';
+  return entry.activation.keys?.length ? `关键词：${entry.activation.keys.join('、')}` : '关键词未设置 · 不会激活';
+}
+
+function renderReferenceWorldbooks() {
+  const books = state.referenceWorldbooks?.books || [];
+  const enabled = books.filter(book => referenceBookState(book).enabled).length;
+  elements.reference_worldbook_summary.textContent = `${enabled}/${books.length} 本启用`;
+  if (!books.length) {
+    const empty = document.createElement('div');
+    empty.className = 'artifact-empty';
+    empty.textContent = '尚未导入附属世界书。导入后的资料由所有项目共用，但每个项目独立启用。';
+    elements.reference_worldbook_list.replaceChildren(empty);
+    return;
+  }
+  elements.reference_worldbook_list.replaceChildren(...books.map(book => {
+    const card = document.createElement('article');
+    card.className = 'reference-book';
+    const header = document.createElement('header');
+    const copy = document.createElement('div'); copy.className = 'reference-book-copy';
+    const title = document.createElement('strong'); title.textContent = book.name;
+    const meta = document.createElement('small'); meta.textContent = `${book.entries.length} 条 · ${book.sourceFileName}`;
+    copy.append(title, meta);
+    const controls = document.createElement('div'); controls.className = 'reference-book-controls';
+    const manage = document.createElement('button'); manage.type = 'button'; manage.textContent = '☷'; manage.title = '管理条目';
+    manage.addEventListener('click', () => openReferenceManager(book.id));
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'is-danger'; remove.textContent = '⌫'; remove.title = '从全局资料库删除';
+    remove.addEventListener('click', () => deleteReferenceBook(book));
+    const toggle = document.createElement('button'); toggle.type = 'button';
+    toggle.className = `reference-switch${referenceBookState(book).enabled ? ' is-on' : ''}`;
+    toggle.setAttribute('aria-label', referenceBookState(book).enabled ? '当前项目已启用' : '当前项目未启用');
+    toggle.addEventListener('click', () => toggleReferenceBook(book));
+    controls.append(manage, remove, toggle);
+    header.append(copy, controls); card.append(header); return card;
+  }));
+}
+
+async function applyReferenceMutation(operation, successMessage) {
+  try {
+    state.referenceWorldbooks = await operation();
+    renderReferenceWorldbooks();
+    if (!elements.reference_manager_modal.hidden) renderReferenceManager();
+    if (successMessage) toast(successMessage);
+    return true;
+  } catch (error) {
+    toast(error.message, true);
+    if (String(error.code || '').includes('reference_')) await refreshReferenceWorldbooks().catch(() => {});
+    return false;
+  }
+}
+
+async function refreshReferenceWorldbooks() {
+  state.referenceWorldbooks = await api(`/api/projects/${encodeURIComponent(state.project.id)}/reference-worldbooks`);
+  renderReferenceWorldbooks();
+}
+
+function toggleReferenceBook(book) {
+  const enabled = !referenceBookState(book).enabled;
+  return applyReferenceMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/reference-worldbooks/${encodeURIComponent(book.id)}`, {
+    method: 'PATCH', body: JSON.stringify({ expectedRevision: state.referenceWorldbooks.projectRevision, enabled }),
+  }), enabled ? `已在当前项目启用“${book.name}”。` : `已在当前项目关闭“${book.name}”。`);
+}
+
+function toggleReferenceEntry(book, entry) {
+  const bookState = referenceBookState(book);
+  const enabled = !(bookState.entries?.[entry.id] ?? entry.sourceEnabled);
+  return applyReferenceMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/reference-worldbooks/${encodeURIComponent(book.id)}/entries/${encodeURIComponent(entry.id)}`, {
+    method: 'PATCH', body: JSON.stringify({ expectedRevision: state.referenceWorldbooks.projectRevision, enabled }),
+  }), enabled ? '该条目已在当前项目启用。' : '该条目已在当前项目关闭。');
+}
+
+async function importReferenceWorldbook(file) {
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { toast('世界书文件超过 10 MB。', true); return; }
+  const content = await file.text();
+  await applyReferenceMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/reference-worldbooks/import`, {
+    method: 'POST', body: JSON.stringify({ fileName: file.name, content }),
+  }), `已导入“${file.name}”，并在当前项目启用。`);
+}
+
+async function deleteReferenceBook(book) {
+  if (!await confirmAction('从全局资料库删除？', `“${book.name}”由所有项目共用。删除不会影响正式产物，也不会删除原始导入文件。`, '删除全局资料')) return;
+  await applyReferenceMutation(() => api(`/api/projects/${encodeURIComponent(state.project.id)}/reference-worldbooks/${encodeURIComponent(book.id)}?expectedLibraryRevision=${state.referenceWorldbooks.libraryRevision}`, { method: 'DELETE' }), '附属世界书已从全局资料库删除。');
+}
+
+function openReferenceManager(bookId) {
+  const book = state.referenceWorldbooks.books.find(item => item.id === bookId);
+  if (!book) return;
+  state.referenceManagerBookId = bookId;
+  if (!book.entries.some(entry => entry.id === state.referenceManagerEntryId)) state.referenceManagerEntryId = book.entries[0]?.id || '';
+  elements.reference_manager_search.value = '';
+  elements.modal_backdrop.hidden = false;
+  elements.reference_manager_modal.hidden = false;
+  renderReferenceManager();
+  elements.reference_manager_search.focus();
+}
+
+function closeReferenceManager() {
+  elements.reference_manager_modal.hidden = true;
+  elements.modal_backdrop.hidden = true;
+}
+
+function renderReferenceManager() {
+  const book = state.referenceWorldbooks.books.find(item => item.id === state.referenceManagerBookId);
+  if (!book) { closeReferenceManager(); return; }
+  elements.reference_manager_title.textContent = book.name;
+  const query = elements.reference_manager_search.value.trim().toLocaleLowerCase();
+  const filtered = book.entries.filter(entry => `${entry.name} ${entry.content} ${(entry.activation.keys || []).join(' ')} ${(entry.activation.secondaryKeys || []).join(' ')}`.toLocaleLowerCase().includes(query));
+  elements.reference_manager_count.textContent = `${filtered.length}/${book.entries.length} 条`;
+  if (!filtered.some(entry => entry.id === state.referenceManagerEntryId)) state.referenceManagerEntryId = filtered[0]?.id || '';
+  elements.reference_manager_entries.replaceChildren(...filtered.map(entry => {
+    const row = document.createElement('div');
+    row.className = `reference-entry-row${entry.id === state.referenceManagerEntryId ? ' is-active' : ''}`;
+    row.tabIndex = 0;
+    const copy = document.createElement('span');
+    const title = document.createElement('strong'); title.textContent = entry.name;
+    const meta = document.createElement('small'); meta.textContent = activationSummary(entry);
+    copy.append(title, meta);
+    const bookState = referenceBookState(book);
+    const enabled = bookState.entries?.[entry.id] ?? entry.sourceEnabled;
+    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = `reference-switch${enabled ? ' is-on' : ''}`;
+    toggle.setAttribute('aria-label', enabled ? '条目已启用' : '条目未启用');
+    toggle.addEventListener('click', event => { event.stopPropagation(); toggleReferenceEntry(book, entry); });
+    row.addEventListener('click', () => { state.referenceManagerEntryId = entry.id; renderReferenceManager(); });
+    row.addEventListener('keydown', event => { if (event.key === 'Enter') { state.referenceManagerEntryId = entry.id; renderReferenceManager(); } });
+    row.append(copy, toggle); return row;
+  }));
+  const entry = book.entries.find(item => item.id === state.referenceManagerEntryId);
+  if (!entry) {
+    elements.reference_manager_content.textContent = '没有符合搜索条件的条目。';
+    return;
+  }
+  const detail = document.createElement('div'); detail.className = 'reference-entry-detail';
+  const title = document.createElement('h3'); title.textContent = entry.name;
+  const meta = document.createElement('div'); meta.className = 'reference-entry-detail-meta';
+  [activationSummary(entry), entry.activation.secondaryKeys?.length ? `次关键词：${entry.activation.secondaryKeys.join('、')}` : '', entry.activation.matchWholeWords ? '整词匹配' : '', entry.activation.caseSensitive ? '区分大小写' : ''].filter(Boolean).forEach(text => { const chip = document.createElement('span'); chip.textContent = text; meta.append(chip); });
+  const content = document.createElement('pre'); content.textContent = entry.content;
+  detail.append(title, meta, content); elements.reference_manager_content.replaceChildren(detail);
 }
 
 async function saveConnection() {
@@ -854,6 +1229,7 @@ async function runGeneration(retryTurnId = '') {
         state.step.revision = event.stepRevision;
         state.generationRetryTurnId = '';
         renderTurns();
+        refreshArtifacts().catch(error => toast(`产物列表刷新失败：${error.message}`, true));
         if (conversationAutoFollow) scrollConversationToBottom();
         toast(retryTurnId ? '最新输入已重新生成。' : '本轮草案已生成。');
       } else if (event.type === 'cancelled') {
@@ -862,6 +1238,7 @@ async function runGeneration(retryTurnId = '') {
         if (event.stepRevision) state.step.revision = event.stepRevision;
         state.generationRetryTurnId = '';
         renderTurns();
+        refreshArtifacts().catch(error => toast(`产物列表刷新失败：${error.message}`, true));
         toast(event.message || '生成已停止。');
       } else if (event.type === 'failed') {
         terminal = true;
@@ -1057,7 +1434,7 @@ async function createProject() {
   try {
     await flushPendingPatch();
     const payload = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name: '未命名项目' }) });
-    applyState(payload);
+    await loadState(payload.project.id);
     toggleProjectMenu(false);
     toast(`已创建“${payload.project.name}”`);
     document.querySelector('[data-tab="settings"]').click();
@@ -1071,8 +1448,8 @@ async function activateProject(projectId) {
   if (projectId === state.project.id) { toggleProjectMenu(false); return; }
   try {
     await flushPendingPatch();
-    const payload = await api(`/api/projects/${encodeURIComponent(projectId)}/activate`, { method: 'POST' });
-    applyState(payload);
+    await api(`/api/projects/${encodeURIComponent(projectId)}/activate`, { method: 'POST' });
+    await loadState(projectId);
     toggleProjectMenu(false);
   } catch (error) { toast(error.message, true); }
 }
@@ -1085,7 +1462,7 @@ async function deleteProject(projectSummary) {
     if (projectSummary.id === state.project.id) await flushPendingPatch();
     const expectedRevision = projectSummary.id === state.project.id ? state.project.revision : projectSummary.revision;
     const payload = await api(`/api/projects/${encodeURIComponent(projectSummary.id)}?expectedRevision=${expectedRevision}`, { method: 'DELETE' });
-    applyState(payload);
+    await loadState(payload.project.id);
     toast('项目已移入回收目录。');
   } catch (error) { toast(error.message, true); }
 }
@@ -1186,14 +1563,44 @@ elements.fetch_models.addEventListener('click', fetchModels);
 elements.conversation_font_size.addEventListener('input', event => applyConversationFontSize(event.target.value));
 elements.conversation_font_decrease.addEventListener('click', () => changeConversationFontSize(-1));
 elements.conversation_font_increase.addEventListener('click', () => changeConversationFontSize(1));
+elements.future_artifacts_toggle.addEventListener('click', async () => {
+  if (state.generating) return;
+  try {
+    await flushPendingPatch();
+    await persistPatch({ includeFutureArtifacts: state.project.includeFutureArtifacts !== true });
+    toast(state.project.includeFutureArtifacts ? '已包含后序产物。' : '已恢复为只发送当前及之前的产物。');
+  } catch { /* persistPatch 已提示 */ }
+});
+document.querySelectorAll('[data-artifact-scope]').forEach(button => button.addEventListener('click', () => {
+  state.artifactScope = button.dataset.artifactScope;
+  renderArtifacts();
+}));
+elements.artifact_search.addEventListener('input', event => { state.artifactQuery = event.target.value; renderArtifacts(); });
+elements.create_artifact.addEventListener('click', openManualArtifact);
+elements.close_manual_artifact.addEventListener('click', closeManualArtifact);
+elements.cancel_manual_artifact.addEventListener('click', closeManualArtifact);
+elements.save_manual_artifact.addEventListener('click', saveManualArtifact);
+elements.import_worldbook_button.addEventListener('click', () => elements.worldbook_file.click());
+elements.worldbook_file.addEventListener('change', async event => {
+  await importReferenceWorldbook(event.currentTarget.files?.[0]);
+  event.currentTarget.value = '';
+});
+elements.close_reference_manager.addEventListener('click', closeReferenceManager);
+elements.reference_manager_search.addEventListener('input', renderReferenceManager);
 elements.prompt_preview_button.addEventListener('click', openPromptPreview);
 elements.copy_prompt_preview.addEventListener('click', copyPromptPreview);
 elements.close_prompt_preview.addEventListener('click', closePromptPreview);
 elements.modal_backdrop.addEventListener('click', () => {
-  if (!elements.prompt_preview_modal.hidden && elements.confirm_modal.hidden) closePromptPreview();
+  if (!elements.confirm_modal.hidden) return;
+  if (!elements.prompt_preview_modal.hidden) closePromptPreview();
+  else if (!elements.manual_artifact_modal.hidden) closeManualArtifact();
+  else if (!elements.reference_manager_modal.hidden) closeReferenceManager();
 });
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !elements.prompt_preview_modal.hidden && elements.confirm_modal.hidden) closePromptPreview();
+  if (event.key !== 'Escape' || !elements.confirm_modal.hidden) return;
+  if (!elements.prompt_preview_modal.hidden) closePromptPreview();
+  else if (!elements.manual_artifact_modal.hidden) closeManualArtifact();
+  else if (!elements.reference_manager_modal.hidden) closeReferenceManager();
 });
 elements.generate_button.addEventListener('click', generateCurrentStep);
 elements.stop_generation.addEventListener('click', stopGeneration);

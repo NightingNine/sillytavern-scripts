@@ -94,8 +94,13 @@ public static class Stage2SelfTest
             var generationId = Guid.NewGuid().ToString("D");
             var events = new List<GenerationEvent>();
             var userCommitted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var artifactStore = new ArtifactStore(root);
+            var referenceWorldbooks = new ReferenceWorldbookStore(root);
+            await referenceWorldbooks.InitializeAsync();
             var coordinator = new GenerationCoordinator(
                 projectStore,
+                artifactStore,
+                referenceWorldbooks,
                 resources,
                 connections,
                 new ModelGateway(new HttpClient(new CancellableModelHandler())),

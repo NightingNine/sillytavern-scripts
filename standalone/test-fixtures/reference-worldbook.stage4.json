@@ -1,0 +1,31 @@
+{
+  "name": "阶段四验收资料库",
+  "entries": {
+    "0": {
+      "uid": 0,
+      "comment": "常驻设定",
+      "content": "天空城使用潮汐历法记录时间。",
+      "constant": true,
+      "disable": false,
+      "order": 100
+    },
+    "1": {
+      "uid": 1,
+      "comment": "关键词设定",
+      "content": "白塔是天空城的核心交通枢纽。",
+      "key": ["白塔", "天空城"],
+      "constant": false,
+      "disable": false,
+      "order": 90
+    },
+    "2": {
+      "uid": 2,
+      "comment": "默认关闭设定",
+      "content": "这条内容不应参与提示词。",
+      "key": ["隐藏资料"],
+      "constant": false,
+      "disable": true,
+      "order": 80
+    }
+  }
+}

@@ -22,11 +22,17 @@ public static class Program
             var projectResult = await ProjectStoreSelfTest.RunAsync();
             if (projectResult != 0) return projectResult;
             var stage2Result = await Stage2SelfTest.RunAsync();
-            return stage2Result == 0 ? await Stage3SelfTest.RunAsync() : stage2Result;
+            if (stage2Result != 0) return stage2Result;
+            var stage3Result = await Stage3SelfTest.RunAsync();
+            return stage3Result == 0 ? await Stage4SelfTest.RunAsync() : stage3Result;
         }
 
-        using var singleInstance = new Mutex(true, MutexName, out var ownsInstance);
-        var runtimeDirectory = Path.Combine(Path.GetTempPath(), "AutoCardStudio");
+        // 自动验收可使用独立实例域，避免碰触用户已经运行的正式独立版。
+        var requestedInstanceScope = Environment.GetEnvironmentVariable("ACS_INSTANCE_SCOPE") ?? string.Empty;
+        var instanceScope = new string(requestedInstanceScope.Where(char.IsLetterOrDigit).Take(32).ToArray());
+        var scopedMutexName = instanceScope.Length == 0 ? MutexName : $"{MutexName}.{instanceScope}";
+        using var singleInstance = new Mutex(true, scopedMutexName, out var ownsInstance);
+        var runtimeDirectory = Path.Combine(Path.GetTempPath(), instanceScope.Length == 0 ? "AutoCardStudio" : $"AutoCardStudio-{instanceScope}");
         var instanceFile = Path.Combine(runtimeDirectory, "instance.json");
 
         if (!ownsInstance)
@@ -60,10 +66,14 @@ public static class Program
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
 
         var store = new ProjectStore(dataDirectory);
+        var artifactStore = new ArtifactStore(dataDirectory);
+        var referenceWorldbookStore = new ReferenceWorldbookStore(dataDirectory);
         var credentialVault = new WindowsCredentialVault();
         var resourceStore = new ResourceStore(dataDirectory);
         var connectionStore = new ConnectionStore(dataDirectory, credentialVault);
         builder.Services.AddSingleton(store);
+        builder.Services.AddSingleton(artifactStore);
+        builder.Services.AddSingleton(referenceWorldbookStore);
         builder.Services.AddSingleton(resourceStore);
         builder.Services.AddSingleton(connectionStore);
         builder.Services.AddSingleton(credentialVault);
@@ -72,6 +82,7 @@ public static class Program
 
         var app = builder.Build();
         await store.InitializeAsync();
+        await referenceWorldbookStore.InitializeAsync();
         await resourceStore.InitializeAsync();
         await connectionStore.InitializeAsync();
         var indexHtml = ReadEmbeddedWebAsset("index.html");
@@ -147,12 +158,26 @@ public static class Program
         app.MapGet("/api/health", () => Results.Ok(new
         {
             status = "ready",
-            version = "0.3.0-stage3",
+            version = "0.4.0-stage4",
             dataDirectory,
         }));
 
-        app.MapGet("/api/state", async (string? projectId, ProjectStore projectStore) =>
-            Results.Ok(await projectStore.GetStateAsync(projectId)));
+        app.MapGet("/api/state", async (
+            string? projectId,
+            ProjectStore projectStore,
+            ArtifactStore projectArtifacts,
+            ReferenceWorldbookStore worldbooks) =>
+        {
+            var state = await projectStore.GetStateAsync(projectId);
+            return Results.Ok(new
+            {
+                state.Index,
+                state.Project,
+                state.Step,
+                Artifacts = await projectArtifacts.GetStateAsync(state.Project.Id),
+                ReferenceWorldbooks = await worldbooks.GetStateAsync(state.Project.Id),
+            });
+        });
 
         app.MapGet("/api/resources", async (ResourceStore resources) => Results.Ok(await resources.GetStateAsync()));
 
@@ -172,6 +197,88 @@ public static class Program
             {
                 return Results.BadRequest(new { code = "invalid_regex", message = error.Message });
             }
+        });
+
+        app.MapPost("/api/projects/{projectId}/artifacts/manual", async (
+            string projectId, CreateManualArtifactRequest request, ArtifactStore artifacts) =>
+        {
+            try { return Results.Ok(await artifacts.CreateManualAsync(projectId, request)); }
+            catch (Exception error) when (IsArtifactMutationError(error)) { return ArtifactMutationError(error); }
+        });
+
+        app.MapPost("/api/projects/{projectId}/artifacts/capture", async (
+            string projectId, CaptureArtifactRequest request, ArtifactStore artifacts) =>
+        {
+            try
+            {
+                return Results.Ok(await artifacts.CaptureAsync(
+                    projectId, Math.Clamp(request.Step, 1, 29), request.Content,
+                    "manual-message", request.ExpectedRevision));
+            }
+            catch (Exception error) when (IsArtifactMutationError(error)) { return ArtifactMutationError(error); }
+        });
+
+        app.MapGet("/api/projects/{projectId}/artifacts", async (string projectId, ArtifactStore artifacts) =>
+            Results.Ok(await artifacts.GetStateAsync(projectId)));
+
+        app.MapPost("/api/projects/{projectId}/artifacts/{key}/versions/{versionId}/select", async (
+            string projectId, string key, string versionId, ArtifactRevisionRequest request, ArtifactStore artifacts) =>
+        {
+            try { return Results.Ok(await artifacts.SelectVersionAsync(projectId, key, versionId, request)); }
+            catch (Exception error) when (IsArtifactMutationError(error)) { return ArtifactMutationError(error); }
+        });
+
+        app.MapPatch("/api/projects/{projectId}/artifacts/versions/{versionId}", async (
+            string projectId, string versionId, EditArtifactVersionRequest request, ArtifactStore artifacts) =>
+        {
+            try { return Results.Ok(await artifacts.EditVersionAsync(projectId, versionId, request)); }
+            catch (Exception error) when (IsArtifactMutationError(error)) { return ArtifactMutationError(error); }
+        });
+
+        app.MapPatch("/api/projects/{projectId}/artifacts/{key}/context", async (
+            string projectId, string key, ArtifactContextRequest request, ArtifactStore artifacts) =>
+        {
+            try { return Results.Ok(await artifacts.SetContextModeAsync(projectId, key, request)); }
+            catch (Exception error) when (IsArtifactMutationError(error)) { return ArtifactMutationError(error); }
+        });
+
+        app.MapDelete("/api/projects/{projectId}/artifacts/{key}", async (
+            string projectId, string key, long expectedRevision, ArtifactStore artifacts) =>
+        {
+            try { return Results.Ok(await artifacts.DeleteGroupAsync(projectId, key, expectedRevision)); }
+            catch (Exception error) when (IsArtifactMutationError(error)) { return ArtifactMutationError(error); }
+        });
+
+        app.MapPost("/api/projects/{projectId}/reference-worldbooks/import", async (
+            string projectId, ImportFileRequest request, ReferenceWorldbookStore worldbooks) =>
+        {
+            try { return Results.Ok(await worldbooks.ImportAsync(projectId, request)); }
+            catch (Exception error) when (error is System.Text.Json.JsonException or InvalidDataException)
+            { return Results.BadRequest(new { code = "invalid_worldbook", message = error.Message }); }
+        });
+
+        app.MapGet("/api/projects/{projectId}/reference-worldbooks", async (
+            string projectId, ReferenceWorldbookStore worldbooks) => Results.Ok(await worldbooks.GetStateAsync(projectId)));
+
+        app.MapPatch("/api/projects/{projectId}/reference-worldbooks/{bookId}", async (
+            string projectId, string bookId, ReferenceToggleRequest request, ReferenceWorldbookStore worldbooks) =>
+        {
+            try { return Results.Ok(await worldbooks.SetBookEnabledAsync(projectId, bookId, request)); }
+            catch (Exception error) when (IsReferenceMutationError(error)) { return ReferenceMutationError(error); }
+        });
+
+        app.MapPatch("/api/projects/{projectId}/reference-worldbooks/{bookId}/entries/{entryId}", async (
+            string projectId, string bookId, string entryId, ReferenceToggleRequest request, ReferenceWorldbookStore worldbooks) =>
+        {
+            try { return Results.Ok(await worldbooks.SetEntryEnabledAsync(projectId, bookId, entryId, request)); }
+            catch (Exception error) when (IsReferenceMutationError(error)) { return ReferenceMutationError(error); }
+        });
+
+        app.MapDelete("/api/projects/{projectId}/reference-worldbooks/{bookId}", async (
+            string projectId, string bookId, long expectedLibraryRevision, ReferenceWorldbookStore worldbooks) =>
+        {
+            try { return Results.Ok(await worldbooks.DeleteAsync(projectId, bookId, expectedLibraryRevision)); }
+            catch (Exception error) when (IsReferenceMutationError(error)) { return ReferenceMutationError(error); }
         });
 
         app.MapGet("/api/connections", async (ConnectionStore connections) => Results.Ok(await connections.GetStateAsync()));
@@ -419,6 +526,27 @@ public static class Program
         }),
         KeyNotFoundException => Results.NotFound(new { code = "step_item_not_found", message = error.Message }),
         _ => Results.BadRequest(new { code = "step_mutation_invalid", message = error.Message }),
+    };
+
+    private static bool IsArtifactMutationError(Exception error) =>
+        error is ArtifactRevisionConflictException or InvalidDataException or InvalidOperationException or KeyNotFoundException;
+
+    private static IResult ArtifactMutationError(Exception error) => error switch
+    {
+        ArtifactRevisionConflictException conflict => Results.Conflict(new { code = "artifact_revision_conflict", message = "产物库已在其他页面变化，请重新载入。", currentRevision = conflict.CurrentRevision }),
+        KeyNotFoundException => Results.NotFound(new { code = "artifact_not_found", message = error.Message }),
+        _ => Results.BadRequest(new { code = "artifact_mutation_invalid", message = error.Message }),
+    };
+
+    private static bool IsReferenceMutationError(Exception error) =>
+        error is ReferenceSelectionConflictException or ReferenceLibraryConflictException or InvalidDataException or KeyNotFoundException;
+
+    private static IResult ReferenceMutationError(Exception error) => error switch
+    {
+        ReferenceSelectionConflictException conflict => Results.Conflict(new { code = "reference_revision_conflict", message = "附属世界书设置已变化，请重新载入。", currentRevision = conflict.CurrentRevision }),
+        ReferenceLibraryConflictException conflict => Results.Conflict(new { code = "reference_library_conflict", message = "全局附属世界书库已变化，请重新载入。", currentRevision = conflict.CurrentRevision }),
+        KeyNotFoundException => Results.NotFound(new { code = "reference_not_found", message = error.Message }),
+        _ => Results.BadRequest(new { code = "reference_mutation_invalid", message = error.Message }),
     };
 
     private static void OpenBrowser(string url)
