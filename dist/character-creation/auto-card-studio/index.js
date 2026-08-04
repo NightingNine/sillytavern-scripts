@@ -2037,8 +2037,8 @@ const PROMPT_INSPECTOR_CSS = `
 }
 
 .acs-shell.acs-proportional-layout .acs-brief-panel {
-  margin-right: 28px;
-  margin-left: 28px;
+  margin-right: 0;
+  margin-left: 0;
 }
 
 .acs-shell.acs-proportional-layout .acs-conversation {
