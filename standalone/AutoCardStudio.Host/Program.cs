@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using System.ComponentModel;
 using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 
@@ -16,7 +19,8 @@ public static class Program
     {
         if (args.Contains("--self-test", StringComparer.OrdinalIgnoreCase))
         {
-            return await ProjectStoreSelfTest.RunAsync();
+            var projectResult = await ProjectStoreSelfTest.RunAsync();
+            return projectResult == 0 ? await Stage2SelfTest.RunAsync() : projectResult;
         }
 
         using var singleInstance = new Mutex(true, MutexName, out var ownsInstance);
@@ -54,10 +58,20 @@ public static class Program
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
 
         var store = new ProjectStore(dataDirectory);
+        var credentialVault = new WindowsCredentialVault();
+        var resourceStore = new ResourceStore(dataDirectory);
+        var connectionStore = new ConnectionStore(dataDirectory, credentialVault);
         builder.Services.AddSingleton(store);
+        builder.Services.AddSingleton(resourceStore);
+        builder.Services.AddSingleton(connectionStore);
+        builder.Services.AddSingleton(credentialVault);
+        builder.Services.AddHttpClient<ModelGateway>(client => client.Timeout = Timeout.InfiniteTimeSpan);
+        builder.Services.AddSingleton<GenerationCoordinator>();
 
         var app = builder.Build();
         await store.InitializeAsync();
+        await resourceStore.InitializeAsync();
+        await connectionStore.InitializeAsync();
         var indexHtml = ReadEmbeddedWebAsset("index.html");
         var stylesCss = ReadEmbeddedWebAsset("styles.css");
         var appJavaScript = ReadEmbeddedWebAsset("app.js");
@@ -104,15 +118,101 @@ public static class Program
         app.MapGet("/styles.css", () => Results.File(stylesCss, "text/css; charset=utf-8"));
         app.MapGet("/app.js", () => Results.File(appJavaScript, "text/javascript; charset=utf-8"));
 
+        // 只在自动验收显式开启；正式运行不会暴露或使用这个可控模型端点。
+        if (Environment.GetEnvironmentVariable("ACS_ENABLE_MODEL_MOCK") == "1")
+        {
+            app.MapGet("/test-model/v1/models", () => Results.Ok(new { data = new[] { new { id = "auto-mock-model" } } }));
+            app.MapPost("/test-model/v1/chat/completions", async (HttpContext context) =>
+            {
+                var body = await JsonNode.ParseAsync(context.Request.Body, cancellationToken: context.RequestAborted) as JsonObject;
+                if (body?["stream"]?.GetValue<bool?>() == true)
+                {
+                    context.Response.ContentType = "text/event-stream";
+                    foreach (var delta in new[] { "独立版", "流式生成", "验收成功。" })
+                    {
+                        var chunk = JsonSerializer.Serialize(new { choices = new[] { new { delta = new { content = delta }, finish_reason = (string?)null } } });
+                        await context.Response.WriteAsync($"data: {chunk}\n\n", context.RequestAborted);
+                        await context.Response.Body.FlushAsync(context.RequestAborted);
+                        await Task.Delay(80, context.RequestAborted);
+                    }
+                    await context.Response.WriteAsync("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n", context.RequestAborted);
+                    return;
+                }
+                await context.Response.WriteAsJsonAsync(new { choices = new[] { new { message = new { content = "独立版非流式生成验收成功。" }, finish_reason = "stop" } } }, context.RequestAborted);
+            });
+        }
+
         app.MapGet("/api/health", () => Results.Ok(new
         {
             status = "ready",
-            version = "0.1.0-stage1",
+            version = "0.2.0-stage2",
             dataDirectory,
         }));
 
         app.MapGet("/api/state", async (string? projectId, ProjectStore projectStore) =>
             Results.Ok(await projectStore.GetStateAsync(projectId)));
+
+        app.MapGet("/api/resources", async (ResourceStore resources) => Results.Ok(await resources.GetStateAsync()));
+
+        app.MapPost("/api/resources/preset", async (ImportFileRequest request, ResourceStore resources) =>
+        {
+            try { return Results.Ok(await resources.ImportPresetAsync(request)); }
+            catch (Exception error) when (error is JsonException or InvalidDataException)
+            {
+                return Results.BadRequest(new { code = "invalid_preset", message = error.Message });
+            }
+        });
+
+        app.MapPost("/api/resources/regexes", async (ImportFileRequest request, ResourceStore resources) =>
+        {
+            try { return Results.Ok(await resources.ImportRegexesAsync(request)); }
+            catch (Exception error) when (error is JsonException or InvalidDataException)
+            {
+                return Results.BadRequest(new { code = "invalid_regex", message = error.Message });
+            }
+        });
+
+        app.MapGet("/api/connections", async (ConnectionStore connections) => Results.Ok(await connections.GetStateAsync()));
+
+        app.MapPost("/api/connections", async (UpsertConnectionRequest request, ConnectionStore connections) =>
+        {
+            try { return Results.Ok(await connections.UpsertAsync(request)); }
+            catch (ConnectionRevisionConflictException conflict)
+            {
+                return Results.Conflict(new { code = "connection_revision_conflict", message = "连接设置已在其他页面变化，请重新载入。", currentRevision = conflict.CurrentRevision });
+            }
+            catch (Exception error) when (error is InvalidDataException or Win32Exception or PlatformNotSupportedException)
+            {
+                return Results.BadRequest(new { code = "connection_invalid", message = error.Message });
+            }
+        });
+
+        app.MapPost("/api/connections/{profileId}/activate", async (string profileId, RevisionRequest request, ConnectionStore connections) =>
+        {
+            try { return Results.Ok(await connections.ActivateAsync(profileId, request.ExpectedRevision)); }
+            catch (ConnectionRevisionConflictException conflict)
+            {
+                return Results.Conflict(new { code = "connection_revision_conflict", message = "连接设置已变化，请重新载入。", currentRevision = conflict.CurrentRevision });
+            }
+        });
+
+        app.MapDelete("/api/connections/{profileId}", async (string profileId, long expectedRevision, ConnectionStore connections) =>
+        {
+            try { return Results.Ok(await connections.DeleteAsync(profileId, expectedRevision)); }
+            catch (ConnectionRevisionConflictException conflict)
+            {
+                return Results.Conflict(new { code = "connection_revision_conflict", message = "连接设置已变化，请重新载入。", currentRevision = conflict.CurrentRevision });
+            }
+        });
+
+        app.MapPost("/api/connections/{profileId}/models", async (string profileId, ConnectionStore connections, ModelGateway gateway, CancellationToken cancellationToken) =>
+        {
+            try { return Results.Ok(new { models = await gateway.GetModelsAsync(await connections.ResolveAsync(profileId), cancellationToken) }); }
+            catch (ModelGatewayException error)
+            {
+                return Results.Json(new { code = error.Code, message = error.Message, retryable = error.Retryable }, statusCode: error.HttpStatus ?? 502);
+            }
+        });
 
         app.MapPost("/api/projects", async (CreateProjectRequest request, ProjectStore projectStore) =>
             Results.Ok(await projectStore.CreateProjectAsync(request.Name)));
@@ -153,6 +253,34 @@ public static class Program
                 });
             }
         });
+
+        app.MapPost("/api/generations", async (GenerateStepRequest request, HttpContext context, GenerationCoordinator coordinator) =>
+        {
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            context.Response.ContentType = "text/event-stream; charset=utf-8";
+            context.Response.Headers.CacheControl = "no-cache";
+            context.Response.Headers.Append("X-Accel-Buffering", "no");
+            var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            await coordinator.RunAsync(request, async generationEvent =>
+            {
+                if (context.RequestAborted.IsCancellationRequested) return;
+                try
+                {
+                    var payload = JsonSerializer.Serialize(generationEvent, json);
+                    await context.Response.WriteAsync($"event: {generationEvent.Type}\ndata: {payload}\n\n", Encoding.UTF8, context.RequestAborted);
+                    await context.Response.Body.FlushAsync(context.RequestAborted);
+                }
+                catch (Exception error) when (context.RequestAborted.IsCancellationRequested && error is IOException or OperationCanceledException)
+                {
+                    // 页面离开时不再写回 SSE；RequestAborted 仍会取消上游模型请求。
+                }
+            }, context.RequestAborted);
+        });
+
+        app.MapPost("/api/generations/{generationId}/cancel", (string generationId, GenerationCoordinator coordinator) =>
+            coordinator.Cancel(generationId)
+                ? Results.Ok(new { status = "cancelling" })
+                : Results.NotFound(new { code = "generation_not_found", message = "生成任务已经结束。" }));
 
         app.MapPost("/api/shutdown", (IHostApplicationLifetime lifetime) =>
         {
@@ -246,4 +374,5 @@ public static class Program
     }
 
     private sealed record InstanceRecord(int ProcessId, string Url, string Token);
+    private sealed record RevisionRequest(long ExpectedRevision);
 }

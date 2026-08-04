@@ -1,6 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 namespace AutoCardStudio.Host;
 
 public sealed class ProjectStore
@@ -11,11 +8,7 @@ public sealed class ProjectStore
     private readonly string _trashRoot;
     private readonly string _indexPath;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    private readonly AtomicJsonFile _files = new();
 
     public ProjectStore(string dataRoot)
     {
@@ -33,19 +26,19 @@ public sealed class ProjectStore
             Directory.CreateDirectory(_projectsRoot);
             Directory.CreateDirectory(_trashRoot);
 
-            var index = await ReadRecoverableAsync<AppIndex>(_indexPath);
+            var index = await _files.ReadRecoverableAsync<AppIndex>(_indexPath);
             if (index is null)
             {
                 var project = await CreateProjectFilesAsync("未命名项目");
                 index = BuildIndex(project, [project]);
-                await WriteAtomicAsync(_indexPath, index);
+                await _files.WriteAtomicAsync(_indexPath, index);
                 return;
             }
 
             var projects = new List<StudioProject>();
             foreach (var summary in index.Projects)
             {
-                var project = await ReadRecoverableAsync<StudioProject>(ProjectPath(summary.Id));
+                var project = await _files.ReadRecoverableAsync<StudioProject>(ProjectPath(summary.Id));
                 if (project is not null) projects.Add(NormalizeProject(project));
             }
 
@@ -56,7 +49,7 @@ public sealed class ProjectStore
             }
 
             var active = projects.FirstOrDefault(project => project.Id == index.ActiveProjectId) ?? projects[0];
-            await WriteAtomicAsync(_indexPath, BuildIndex(active, projects));
+            await _files.WriteAtomicAsync(_indexPath, BuildIndex(active, projects));
         }
         finally
         {
@@ -72,7 +65,7 @@ public sealed class ProjectStore
             var index = await RequireIndexAsync();
             var targetId = string.IsNullOrWhiteSpace(projectId) ? index.ActiveProjectId : projectId;
             var project = await RequireProjectAsync(targetId);
-            return new StudioState(index, project);
+            return new StudioState(index, project, await RequireStepAsync(project.Id, project.CurrentStep));
         }
         finally
         {
@@ -91,8 +84,8 @@ public sealed class ProjectStore
             var projects = await LoadProjectsAsync(index);
             projects.Add(project);
             var nextIndex = BuildIndex(project, projects);
-            await WriteAtomicAsync(_indexPath, nextIndex);
-            return new StudioState(nextIndex, project);
+            await _files.WriteAtomicAsync(_indexPath, nextIndex);
+            return new StudioState(nextIndex, project, await RequireStepAsync(project.Id, project.CurrentStep));
         }
         finally
         {
@@ -124,11 +117,11 @@ public sealed class ProjectStore
                 UpdatedAt = now,
             };
 
-            await WriteAtomicAsync(ProjectPath(projectId), updated);
+            await _files.WriteAtomicAsync(ProjectPath(projectId), updated);
             projects = projects.Select(project => project.Id == projectId ? updated : project).ToList();
             var nextIndex = BuildIndex(updated, projects);
-            await WriteAtomicAsync(_indexPath, nextIndex);
-            return new StudioState(nextIndex, updated);
+            await _files.WriteAtomicAsync(_indexPath, nextIndex);
+            return new StudioState(nextIndex, updated, await RequireStepAsync(updated.Id, updated.CurrentStep));
         }
         finally
         {
@@ -145,8 +138,8 @@ public sealed class ProjectStore
             var project = await RequireProjectAsync(projectId);
             var projects = await LoadProjectsAsync(index);
             var nextIndex = BuildIndex(project, projects);
-            await WriteAtomicAsync(_indexPath, nextIndex);
-            return new StudioState(nextIndex, project);
+            await _files.WriteAtomicAsync(_indexPath, nextIndex);
+            return new StudioState(nextIndex, project, await RequireStepAsync(project.Id, project.CurrentStep));
         }
         finally
         {
@@ -176,8 +169,50 @@ public sealed class ProjectStore
 
             var active = projects.FirstOrDefault(item => item.Id == index.ActiveProjectId) ?? projects[0];
             var nextIndex = BuildIndex(active, projects);
-            await WriteAtomicAsync(_indexPath, nextIndex);
-            return new StudioState(nextIndex, active);
+            await _files.WriteAtomicAsync(_indexPath, nextIndex);
+            return new StudioState(nextIndex, active, await RequireStepAsync(active.Id, active.CurrentStep));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<GenerationSnapshot> GetGenerationSnapshotAsync(string projectId, int stepNumber)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var project = await RequireProjectAsync(projectId);
+            var step = await RequireStepAsync(projectId, stepNumber);
+            return new GenerationSnapshot(project, step);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<StepData> AppendTurnAsync(string projectId, int stepNumber, long expectedRevision, StepTurn turn)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            _ = await RequireProjectAsync(projectId);
+            var current = await RequireStepAsync(projectId, stepNumber);
+            if (current.Revision != expectedRevision) throw new StepRevisionConflictException(current.Revision);
+
+            var turns = current.Turns.ToList();
+            turns.Add(turn);
+            var updated = new StepData
+            {
+                Number = current.Number,
+                Revision = current.Revision + 1,
+                Status = "draft",
+                Turns = turns,
+            };
+            await _files.WriteAtomicAsync(StepPath(projectId, stepNumber), updated);
+            return updated;
         }
         finally
         {
@@ -191,23 +226,37 @@ public sealed class ProjectStore
         var project = new StudioProject(Guid.NewGuid().ToString("D"), name, string.Empty, 1, 1, now, now);
         Directory.CreateDirectory(ProjectDirectory(project.Id));
         Directory.CreateDirectory(StepsDirectory(project.Id));
-        await WriteAtomicAsync(ProjectPath(project.Id), project);
+        await _files.WriteAtomicAsync(ProjectPath(project.Id), project);
 
         for (var step = 1; step <= 29; step++)
         {
-            await WriteAtomicAsync(StepPath(project.Id, step), new StepData(step, []));
+            await _files.WriteAtomicAsync(StepPath(project.Id, step), new StepData { Number = step });
         }
 
         return project;
     }
 
     private async Task<AppIndex> RequireIndexAsync() =>
-        await ReadRecoverableAsync<AppIndex>(_indexPath) ?? throw new InvalidDataException("项目索引不可读取。");
+        await _files.ReadRecoverableAsync<AppIndex>(_indexPath) ?? throw new InvalidDataException("项目索引不可读取。");
 
     private async Task<StudioProject> RequireProjectAsync(string projectId)
     {
         if (!Guid.TryParse(projectId, out _)) throw new KeyNotFoundException("项目不存在。");
-        return await ReadRecoverableAsync<StudioProject>(ProjectPath(projectId)) ?? throw new KeyNotFoundException("项目不存在。");
+        return await _files.ReadRecoverableAsync<StudioProject>(ProjectPath(projectId)) ?? throw new KeyNotFoundException("项目不存在。");
+    }
+
+    private async Task<StepData> RequireStepAsync(string projectId, int stepNumber)
+    {
+        if (stepNumber is < 1 or > 29) throw new KeyNotFoundException("创作步骤不存在。");
+        var step = await _files.ReadRecoverableAsync<StepData>(StepPath(projectId, stepNumber))
+            ?? new StepData { Number = stepNumber };
+        return new StepData
+        {
+            Number = stepNumber,
+            Revision = Math.Max(1, step.Revision),
+            Status = step.Status is "draft" or "accepted" ? step.Status : "idle",
+            Turns = step.Turns ?? [],
+        };
     }
 
     private async Task<List<StudioProject>> LoadProjectsAsync(AppIndex index)
@@ -215,7 +264,7 @@ public sealed class ProjectStore
         var projects = new List<StudioProject>();
         foreach (var summary in index.Projects)
         {
-            var project = await ReadRecoverableAsync<StudioProject>(ProjectPath(summary.Id));
+            var project = await _files.ReadRecoverableAsync<StudioProject>(ProjectPath(summary.Id));
             if (project is not null) projects.Add(NormalizeProject(project));
         }
         return projects;
@@ -264,80 +313,37 @@ public sealed class ProjectStore
     private string StepsDirectory(string projectId) => Path.Combine(ProjectDirectory(projectId), "steps");
     private string StepPath(string projectId, int step) => Path.Combine(StepsDirectory(projectId), $"{step:00}.json");
 
-    private async Task<T?> ReadRecoverableAsync<T>(string path)
-    {
-        var current = await TryReadAsync<T>(path);
-        if (current is not null) return current;
-
-        var previousPath = $"{path}.previous";
-        var previous = await TryReadAsync<T>(previousPath);
-        if (previous is null) return default;
-
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.Copy(previousPath, path, true);
-        return previous;
-    }
-
-    private async Task<T?> TryReadAsync<T>(string path)
-    {
-        try
-        {
-            if (!File.Exists(path)) return default;
-            await using var stream = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<T>(stream, _json);
-        }
-        catch (JsonException)
-        {
-            return default;
-        }
-        catch (IOException)
-        {
-            return default;
-        }
-    }
-
-    private async Task WriteAtomicAsync<T>(string path, T value)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
-        var previousPath = $"{path}.previous";
-
-        try
-        {
-            await using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 32 * 1024, FileOptions.WriteThrough))
-            {
-                await JsonSerializer.SerializeAsync(stream, value, _json);
-                await stream.FlushAsync();
-                stream.Flush(true);
-            }
-
-            if (await TryReadAsync<T>(tempPath) is null) throw new InvalidDataException("写入后的资料校验失败。");
-
-            if (File.Exists(path))
-            {
-                File.Replace(tempPath, path, previousPath, true);
-            }
-            else
-            {
-                File.Move(tempPath, path);
-            }
-        }
-        finally
-        {
-            if (File.Exists(tempPath)) File.Delete(tempPath);
-        }
-    }
 }
 
 public sealed record AppIndex(int SchemaVersion, string ActiveProjectId, IReadOnlyList<ProjectSummary> Projects);
 public sealed record ProjectSummary(string Id, string Name, int CurrentStep, long Revision, DateTimeOffset UpdatedAt);
 public sealed record StudioProject(string Id, string Name, string Brief, int CurrentStep, long Revision, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
-public sealed record StepData(int Number, IReadOnlyList<object> Conversations);
-public sealed record StudioState(AppIndex Index, StudioProject Project);
+public sealed class StepData
+{
+    public int Number { get; init; }
+    public long Revision { get; init; } = 1;
+    public string Status { get; init; } = "idle";
+    public IReadOnlyList<StepTurn> Turns { get; init; } = [];
+}
+
+public sealed record StepTurn(
+    string Id,
+    string Role,
+    string Content,
+    DateTimeOffset CreatedAt,
+    string? RawContent = null,
+    string State = "committed");
+public sealed record StudioState(AppIndex Index, StudioProject Project, StepData Step);
+public sealed record GenerationSnapshot(StudioProject Project, StepData Step);
 public sealed record CreateProjectRequest(string? Name);
 public sealed record UpdateProjectRequest(long ExpectedRevision, string? Name = null, string? Brief = null, int? CurrentStep = null);
 
 public sealed class RevisionConflictException(long currentRevision) : Exception
+{
+    public long CurrentRevision { get; } = currentRevision;
+}
+
+public sealed class StepRevisionConflictException(long currentRevision) : Exception
 {
     public long CurrentRevision { get; } = currentRevision;
 }
@@ -377,4 +383,3 @@ public static class ProjectStoreSelfTest
         }
     }
 }
-

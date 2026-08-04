@@ -58,8 +58,14 @@
           <p id="step-goal" class="step-goal"></p>
         </header>
 
+        <section class="project-overview" aria-label="创作母题">
+          <label for="project-brief">创作母题</label>
+          <textarea id="project-brief" rows="2" maxlength="20000" placeholder="描述世界、主控角色、核心体验、边界与参考作品。"></textarea>
+          <span id="save-status" class="save-status">资料会自动保存在本机</span>
+        </section>
+
         <section class="conversation">
-          <div class="empty-state">
+          <div id="empty-state" class="empty-state">
             <span class="empty-orbit" aria-hidden="true"><i></i></span>
             <span id="station-label" class="empty-kicker">STATION 01 · 创作航标</span>
             <h2 id="guide-title">先定下这段体验的方向</h2>
@@ -69,16 +75,18 @@
               <ol id="guide-prompts"></ol>
             </div>
           </div>
+          <div id="turn-list" class="turn-list"></div>
         </section>
 
         <section class="composer" aria-label="本轮补充">
-          <label id="brief-label" for="project-brief">创作母题 · 交互范式和美学纲领</label>
-          <textarea id="project-brief" rows="3" maxlength="20000" placeholder="描述你想创作的世界、主控角色、核心体验、边界与参考作品。无需一次写完，后续可以持续补充。"></textarea>
+          <label id="brief-label" for="user-input">本轮补充 · 交互范式和美学纲领</label>
+          <textarea id="user-input" rows="3" maxlength="20000" placeholder="可以留空直接生成；也可以补充偏好、修改方向或要求 A.U.T.O 接续既有内容。"></textarea>
           <div class="composer-footer">
-            <span id="save-status" class="save-status">资料会自动保存在本机</span>
-            <div class="future-actions" aria-label="后续阶段功能">
-              <button type="button" disabled>提示词</button>
-              <button type="button" disabled class="primary">生成阶段草案</button>
+            <span id="generation-hint" class="save-status">请先导入预设并配置模型连接</span>
+            <div class="future-actions" aria-label="生成操作">
+              <button type="button" disabled title="提示词预览将在完整对话阶段接通">提示词</button>
+              <button id="stop-generation" type="button" class="danger" hidden>停止</button>
+              <button id="generate-button" type="button" class="primary">生成阶段草案</button>
               <button type="button" disabled class="confirm">确认并前往下一站 →</button>
             </div>
           </div>
@@ -99,10 +107,48 @@
           </div>
         </section>
         <section class="tab-panel" data-panel="settings" hidden>
-          <div class="panel-heading"><strong>界面与数据</strong><span>阶段 1</span></div>
+          <div class="panel-heading"><strong>模型与资源</strong><span>阶段 2</span></div>
           <label class="field-label" for="project-name">项目名称</label>
           <input id="project-name" class="text-field" type="text" maxlength="80">
-          <div class="info-card"><i>●</i><div><strong>本地安全保存</strong><p>项目按步骤写入程序旁的 data 文件夹，旧页面不会静默覆盖新资料。</p></div></div>
+
+          <section class="settings-card">
+            <header><div><strong>创作资源</strong><small id="preset-summary">尚未导入 A.U.T.O 预设</small></div><span id="regex-summary">0 条正则</span></header>
+            <div class="button-row">
+              <button id="import-preset-button" type="button">导入 / 替换预设</button>
+              <button id="import-regex-button" type="button">单独导入正则</button>
+            </div>
+            <input id="preset-file" type="file" accept="application/json,.json" hidden>
+            <input id="regex-file" type="file" accept="application/json,.json" hidden>
+            <p>只读取 `prompt_order` 实际引用的条目；原始文件会保存在 data/imports。</p>
+          </section>
+
+          <section class="settings-card">
+            <header><div><strong>模型连接</strong><small>所有项目共用，密钥只进 Windows 凭据管理器</small></div><span id="connection-secret-state">未配置</span></header>
+            <label class="field-label" for="connection-profile">连接预设</label>
+            <select id="connection-profile" class="text-field"><option value="">＋ 新建连接</option></select>
+            <div class="two-columns">
+              <label><span>连接名称</span><input id="connection-name" class="text-field" type="text" maxlength="60" placeholder="例如：Claude 创作"></label>
+              <label><span>接口类型</span><select id="connection-provider" class="text-field"><option value="openai">OpenAI / 兼容接口</option><option value="anthropic">Anthropic Claude</option><option value="gemini">Google Gemini</option></select></label>
+            </div>
+            <label class="field-label" for="connection-url">接口地址（官方接口可留空）</label>
+            <input id="connection-url" class="text-field" type="url" spellcheck="false" placeholder="例如：https://api.example.com/v1">
+            <label class="field-label" for="connection-key">API 密钥</label>
+            <input id="connection-key" class="text-field" type="password" autocomplete="new-password" spellcheck="false" placeholder="留空则保留已保存的密钥">
+            <label class="field-label" for="connection-model">模型名称</label>
+            <div class="model-row"><input id="connection-model" class="text-field" list="model-options" type="text" spellcheck="false" placeholder="例如：gpt-5-mini"><button id="fetch-models" type="button">获取模型</button></div>
+            <datalist id="model-options"></datalist>
+            <div class="two-columns">
+              <label><span>输出方式</span><select id="connection-output" class="text-field"><option value="stream">流式输出</option><option value="complete">非流式输出</option></select></label>
+              <label><span>请求超时（秒）</span><input id="connection-timeout" class="text-field" type="number" min="10" max="1800" value="180"></label>
+              <label><span>最大上下文 Token</span><input id="parameter-context" class="text-field" type="number" min="1024" value="2000000"></label>
+              <label><span>最大回复 Token</span><input id="parameter-completion" class="text-field" type="number" min="1" placeholder="跟随预设"></label>
+              <label><span>温度</span><input id="parameter-temperature" class="text-field" type="number" min="0" max="2" step="0.1"></label>
+              <label><span>Top P</span><input id="parameter-top-p" class="text-field" type="number" min="0" max="1" step="0.05"></label>
+            </div>
+            <div class="button-row"><button id="save-connection" type="button" class="primary-action">保存并使用</button><button id="delete-connection" type="button" class="danger-action">删除连接</button></div>
+          </section>
+
+          <div class="info-card"><i>●</i><div><strong>密钥与项目分离</strong><p>项目、预设和导出文件都不会包含 API 密钥；更换 Windows 用户后需要重新填写。</p></div></div>
         </section>
         <section class="tab-panel" data-panel="publish" hidden>
           <div class="panel-heading"><strong>角色卡交付</strong><span>后续阶段</span></div>
@@ -122,4 +168,3 @@
   <script type="module" src="/app.js"></script>
 </body>
 </html>
-

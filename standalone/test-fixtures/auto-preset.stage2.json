@@ -1,0 +1,45 @@
+{
+  "name": "A.U.T.O 阶段二验收预设",
+  "openai_max_context": 100000,
+  "openai_max_tokens": 2048,
+  "temperature": 0.7,
+  "prompts": [
+    {"identifier":"9376366e-bf35-446f-babe-438959ccc452","name":"Step1 交互范式和美学纲领","role":"system","content":"你是 A.U.T.O 角色卡创作助手。根据项目母题与用户要求完成当前步骤，清晰说明设计结果。"},
+    {"identifier":"94e2bf01-18df-4be8-9377-aa12d53e654a","name":"Step2","role":"system","content":"执行 Step 2。"},
+    {"identifier":"487bb55b-da3f-4ee7-8f6d-0c23b5591bc2","name":"Step3","role":"system","content":"执行 Step 3。"},
+    {"identifier":"ac469228-bd1a-444b-a61e-fa91bea00042","name":"Step4","role":"system","content":"执行 Step 4。"},
+    {"identifier":"91be7e14-4169-4e4e-b0b2-c4a32c8809f0","name":"Step5","role":"system","content":"执行 Step 5。"},
+    {"identifier":"e9b91a84-50d3-40db-b642-084797782bc6","name":"Step6","role":"system","content":"执行 Step 6。"},
+    {"identifier":"bb9bb9b7-3b3d-4b1a-8eb9-0a23ed3d799d","name":"Step7","role":"system","content":"执行 Step 7。"},
+    {"identifier":"2eeba189-911a-4d15-bf46-7caba49581b7","name":"Step8","role":"system","content":"执行 Step 8。"},
+    {"identifier":"835fe974-b281-4077-9ef1-10ad92ce65ba","name":"Step9","role":"system","content":"执行 Step 9。"},
+    {"identifier":"07688972-a290-4b22-a210-3f9df7ef0781","name":"Step10","role":"system","content":"执行 Step 10。"},
+    {"identifier":"430d57cf-d2ea-46ce-b83d-624ca2300f2b","name":"Step11","role":"system","content":"执行 Step 11。"},
+    {"identifier":"6ab76630-4988-4dcb-a1b7-2e2635ec7a00","name":"Step12","role":"system","content":"执行 Step 12。"},
+    {"identifier":"c6a34ba6-393f-48c7-993d-86c47de6a35c","name":"Step13","role":"system","content":"执行 Step 13。"},
+    {"identifier":"324e85a9-0fc1-4e8b-85cf-1ff9851f5b03","name":"Step14","role":"system","content":"执行 Step 14。"},
+    {"identifier":"35ea2ccc-99c5-4731-a25a-0693614b07fa","name":"Step15","role":"system","content":"执行 Step 15。"},
+    {"identifier":"d491235e-9535-48b0-8b15-6c0e777114fb","name":"Step16","role":"system","content":"执行 Step 16。"},
+    {"identifier":"60b1db7c-30d4-4a86-bd41-67e13c5084e0","name":"Step17","role":"system","content":"执行 Step 17。"},
+    {"identifier":"dace3da4-0f0d-4c81-8e7c-02db7e716acf","name":"Step18","role":"system","content":"执行 Step 18。"},
+    {"identifier":"5255b750-60b7-4f53-ad3b-3a950452d0f1","name":"Step19","role":"system","content":"执行 Step 19。"},
+    {"identifier":"d8f77e8f-ab6c-486f-a422-c136d7d5cb95","name":"Step20","role":"system","content":"执行 Step 20。"},
+    {"identifier":"db7539c5-8920-4899-bbdc-9c0d910beb43","name":"Step21","role":"system","content":"执行 Step 21。"},
+    {"identifier":"5472b214-c260-4ce8-97c2-7e9831cce93d","name":"Step22","role":"system","content":"执行 Step 22。"},
+    {"identifier":"d6d362c4-5556-4bd0-a08c-067afb3424b1","name":"Step23","role":"system","content":"执行 Step 23。"},
+    {"identifier":"268aa2ec-491c-4232-827d-8dbe291d4917","name":"Step24","role":"system","content":"执行 Step 24。"},
+    {"identifier":"829abf27-660e-4df4-8925-d7041bfd2868","name":"Step25","role":"system","content":"执行 Step 25。"},
+    {"identifier":"3a430168-7280-44ed-ab33-a0e8e4bbaf35","name":"Step26","role":"system","content":"执行 Step 26。"},
+    {"identifier":"ca6d2266-d37f-4596-bd2b-b61ac0f7ba49","name":"Step27","role":"system","content":"执行 Step 27。"},
+    {"identifier":"4c520657-a4b7-460f-95cf-96c1931c4cdc","name":"Step28","role":"system","content":"执行 Step 28。"},
+    {"identifier":"0b166044-370f-428d-ba4c-35531287b921","name":"Step29","role":"system","content":"执行 Step 29。"},
+    {"identifier":"bdc8f3a0-37a3-415a-b01d-b91359b79104","name":"世界书重组","role":"system","content":"执行世界书重组。"},
+    {"identifier":"unused-pool-entry","name":"资源池遗留条目","role":"system","content":"不应被导入。"}
+  ],
+  "prompt_order": [
+    {"character_id":100001,"order":[
+      {"identifier":"9376366e-bf35-446f-babe-438959ccc452","enabled":true},{"identifier":"94e2bf01-18df-4be8-9377-aa12d53e654a","enabled":true},{"identifier":"487bb55b-da3f-4ee7-8f6d-0c23b5591bc2","enabled":true},{"identifier":"ac469228-bd1a-444b-a61e-fa91bea00042","enabled":true},{"identifier":"91be7e14-4169-4e4e-b0b2-c4a32c8809f0","enabled":true},{"identifier":"e9b91a84-50d3-40db-b642-084797782bc6","enabled":true},{"identifier":"bb9bb9b7-3b3d-4b1a-8eb9-0a23ed3d799d","enabled":true},{"identifier":"2eeba189-911a-4d15-bf46-7caba49581b7","enabled":true},{"identifier":"835fe974-b281-4077-9ef1-10ad92ce65ba","enabled":true},{"identifier":"07688972-a290-4b22-a210-3f9df7ef0781","enabled":true},{"identifier":"430d57cf-d2ea-46ce-b83d-624ca2300f2b","enabled":true},{"identifier":"6ab76630-4988-4dcb-a1b7-2e2635ec7a00","enabled":true},{"identifier":"c6a34ba6-393f-48c7-993d-86c47de6a35c","enabled":true},{"identifier":"324e85a9-0fc1-4e8b-85cf-1ff9851f5b03","enabled":true},{"identifier":"35ea2ccc-99c5-4731-a25a-0693614b07fa","enabled":true},{"identifier":"d491235e-9535-48b0-8b15-6c0e777114fb","enabled":true},{"identifier":"60b1db7c-30d4-4a86-bd41-67e13c5084e0","enabled":true},{"identifier":"dace3da4-0f0d-4c81-8e7c-02db7e716acf","enabled":true},{"identifier":"5255b750-60b7-4f53-ad3b-3a950452d0f1","enabled":true},{"identifier":"d8f77e8f-ab6c-486f-a422-c136d7d5cb95","enabled":true},{"identifier":"db7539c5-8920-4899-bbdc-9c0d910beb43","enabled":true},{"identifier":"5472b214-c260-4ce8-97c2-7e9831cce93d","enabled":true},{"identifier":"d6d362c4-5556-4bd0-a08c-067afb3424b1","enabled":true},{"identifier":"268aa2ec-491c-4232-827d-8dbe291d4917","enabled":true},{"identifier":"829abf27-660e-4df4-8925-d7041bfd2868","enabled":true},{"identifier":"3a430168-7280-44ed-ab33-a0e8e4bbaf35","enabled":true},{"identifier":"ca6d2266-d37f-4596-bd2b-b61ac0f7ba49","enabled":true},{"identifier":"4c520657-a4b7-460f-95cf-96c1931c4cdc","enabled":true},{"identifier":"0b166044-370f-428d-ba4c-35531287b921","enabled":true},{"identifier":"bdc8f3a0-37a3-415a-b01d-b91359b79104","enabled":true}
+    ]}
+  ],
+  "extensions": {"regex_scripts":[{"id":"fixture-regex","scriptName":"验收正则","disabled":false,"findRegex":"/DO_NOT_SHOW/g","replaceString":"","trimStrings":[],"placement":[2],"markdownOnly":false,"promptOnly":false}]}
+}
