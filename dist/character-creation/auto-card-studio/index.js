@@ -3085,6 +3085,7 @@ const STEP_TUTORIAL_NOTES = Object.freeze([
     ['世界书任务', '为需要新增或改写聊天世界书条目的副 AI 任务编写专用提示词。', '严格限定参考条目、事实来源、写回标签和允许修改的范围。', '一个或多个世界书任务提示词。', '副 AI 会读取它被允许看到的条目；同一条目中的条件内容可能无法再被细分隔离。'],
     ['变量任务', '为一个或一组变量编写独立更新提示词，使变量更新可以拆分运行。', '要求只依据已发生剧情、校验字段类型，并输出最小合法变更。', '一个或多个变量更新任务提示词。', '专用变量任务按独立间隔运行，不进入普通周期；需要周期位置时应改用普通任务更新变量。'],
     ['交付结构', '设计最终世界书条目与完整 AutoTask 配置，控制主 AI 和每个副任务分别能看见什么。', '规划条目/XML、关键词、位置、激活方式，并为任务指定参考条目、提示词、输出条目、捕获 XML、更新模式、同名禁用与 API。', '条目规划与 AutoTask 配置。', '这是自动重组前的设计稿；条目边界首先服务权限隔离、读取与维护。'],
+    ['交付重组', '把已完成的正式产物转换成可校验、可执行的世界书结构。', '先点击分析生成带 blockId 的结构报告，再让 AI 依据报告输出 reorg_plan；每个块必须且只能使用一次。', '世界书重组方案。', '产物发生增删后必须重新分析；发布只执行当前报告对应的有效方案。'],
     ['启动场景', '生成独立开局，用第一幕启动前面设计的世界、角色、变量和核心体验。', '确定时间地点、即时矛盾和玩家可知信息；无变量时只写开场，有变量时再给出完整且一致的初始树。', '正式开场白与变量初始值。', '它是单独开局而非通用设定；不同开局可以重复生成并保留版本。'],
 ].map(([stage, purpose, workflow, deliverable, caution]) => ({ stage, purpose, workflow, deliverable, caution })));
 
@@ -3225,7 +3226,7 @@ const PHASES = [
     { id: 'summary', label: '汇总层', range: [22, 22], icon: 'fa-layer-group' },
     { id: 'output', label: '输出设计层', range: [23, 24], icon: 'fa-display' },
     { id: 'autotask', label: 'AUTOTASK 配置', range: [25, 28], icon: 'fa-gears' },
-    { id: 'delivery', label: '启动与交付', range: [29, 29], icon: 'fa-rocket' },
+    { id: 'delivery', label: '启动与交付', range: [29, 30], icon: 'fa-rocket' },
 ];
 
 const LEGACY_PHASE_REPLACEMENTS = Object.freeze({
@@ -5107,6 +5108,19 @@ const MOBILE_POLISH_CSS = `
 }
 `;
 
+const REORG_ANALYSIS_CSS = `
+.acs-reorg-analysis { margin:12px 28px 0; padding:14px 16px; border:1px solid rgba(183,163,207,.34); border-radius:13px; background:rgba(183,163,207,.07); }
+.acs-reorg-analysis-head { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.acs-reorg-analysis-copy { min-width:0; }
+.acs-reorg-analysis-copy strong { display:block; color:var(--acs-text); font-size:12px; }
+.acs-reorg-analysis-copy small { display:block; margin-top:4px; color:var(--acs-muted); font-size:9px; line-height:1.5; }
+.acs-reorg-analysis-actions { display:flex; flex:0 0 auto; gap:8px; }
+.acs-reorg-analysis details { margin-top:11px; padding-top:10px; border-top:1px solid var(--acs-line-soft); }
+.acs-reorg-analysis summary { color:var(--acs-violet); cursor:pointer; font-size:9px; font-weight:700; }
+.acs-reorg-analysis pre { max-height:260px; margin:9px 0 0; overflow:auto; white-space:pre-wrap; color:var(--acs-text-soft); font:9px/1.65 var(--acs-mono); }
+@media (max-width:860px) { .acs-reorg-analysis { margin:10px 12px 0; padding:11px; } .acs-reorg-analysis-head { align-items:stretch; flex-direction:column; } .acs-reorg-analysis-actions .acs-button { width:100%; } }
+`;
+
 const TOUR_STEPS = Object.freeze([
     {
         selector: '.acs-brand',
@@ -5114,7 +5128,7 @@ const TOUR_STEPS = Object.freeze([
         scene: 'welcome',
         eyebrow: 'ORIENTATION 01',
         title: '先看懂 A.U.T.O 怎样制卡',
-        description: '创作台把 A.U.T.O 预设变成 29 个可对话、可返工的步骤：从概念、实体内容、状态机和描写，到变量、汇总、输出、AutoTask，最后生成开场并发布。',
+        description: '创作台把 A.U.T.O 预设变成 30 个可对话、可返工的步骤：从概念、实体内容、状态机和描写，到变量、汇总、输出、AutoTask、世界书重组，最后生成开场并发布。',
         points: ['你负责提出方向、检查结果和决定取舍；AI 负责按当前步骤产出正式区块。', '引导会切换页面和展开区域，但不会生成内容、删除数据或发布角色卡。'],
         actionNote: '完成引导后，界面会恢复到开始前的状态。',
     },
@@ -5125,7 +5139,7 @@ const TOUR_STEPS = Object.freeze([
         scene: 'resources',
         eyebrow: 'RESOURCES 02',
         title: '第一步不是生成，而是导入资源',
-        description: '在设置页导入完整的 A.U.T.O 预设。创作台会从中识别 29 个步骤、其他辅助提示词，以及预设内置的正则。也可以另行导入正则包。',
+        description: '在设置页导入完整的 A.U.T.O 预设。创作台会从中识别 30 个步骤、其他辅助提示词，以及预设内置的正则。也可以另行导入正则包。',
         points: ['这些资源只属于创作台，不绑定 SillyTavern 当前预设，也不读取全局、预设或角色正则。', '缺少完整预设时仍可查看项目，但不能正式调用 AI 生成。'],
         actionNote: '已自动切换到设置页的资源导入区域。',
     },
@@ -5136,7 +5150,7 @@ const TOUR_STEPS = Object.freeze([
         scene: 'resource-drawer',
         eyebrow: 'CONTROL 03',
         title: '逐项决定哪些辅助条目生效',
-        description: '设置页右侧的小页签会打开“预设与正则条目”。这里显示 29 个步骤之外的辅助提示词，以及创作台用于整理 AI 回复的正则。',
+        description: '设置页右侧的小页签会打开“预设与正则条目”。这里显示 30 个步骤之外的辅助提示词，以及创作台用于整理 AI 回复的正则。',
         points: ['开关只影响创作台的发送与显示，不会改动原始导入文件。', '如果某段回复没有正确隐藏，先在正则页检查对应条目是否已启用。'],
         actionNote: '已自动打开右侧资源抽屉。',
     },
@@ -5250,7 +5264,7 @@ const TOUR_STEPS = Object.freeze([
         scene: 'publish',
         eyebrow: 'HANDOFF 14',
         title: '最后从正式产物创建角色卡与世界书',
-        description: '发布时先勾选本次要交付的产物。创作台会自动执行原 Step 29 的世界书重组，校验没有遗漏后，再创建世界书并绑定角色卡。',
+        description: '先在 Step 29 分析正式产物并生成重组方案。发布时勾选与报告一致的产物，创作台校验没有遗漏后，再创建世界书并绑定角色卡。',
         points: ['若选择输出格式，会先询问是否载入配套局部正则，再单独确认是否创建角色卡。', '同名角色卡或世界书会更新；原有头像与无关扩展数据继续保留。'],
         actionNote: '已切换到发布页；引导不会执行真实发布。',
     },
@@ -5295,6 +5309,7 @@ const STEPS = [
     ['3a430168-7280-44ed-ab33-a0e8e4bbaf35', '世界书提示词', '为副 AI 编写读取和维护世界书内容的任务提示词。'],
     ['ca6d2266-d37f-4596-bd2b-b61ac0f7ba49', '变量提示词', '编写遵循 MVU 语法的变量更新任务提示词。'],
     ['4c520657-a4b7-460f-95cf-96c1931c4cdc', '配置与条目设计', '规划最终世界书条目、激活策略、位置与读取关系。'],
+    ['bdc8f3a0-37a3-415a-b01d-b91359b79104', '世界书重组', '分析当前正式产物，并生成发布时使用的世界书重组方案。'],
     ['0b166044-370f-428d-ba4c-35531287b921', '开场白和变量初始值', '用已完成的世界设定生成正式开场，并给出完整变量初始树。'],
 ].map(([promptId, name, goal], index) => ({
     number: index + 1,
@@ -5324,7 +5339,7 @@ const STEP_REQUIREMENTS = Object.freeze([
     'required', 'recommended', 'advanced', 'required', 'required', 'recommended', 'recommended', 'recommended', 'recommended',
     'advanced', 'advanced', 'advanced', 'required', 'advanced', 'recommended',
     'advanced', 'advanced', 'advanced', 'advanced', 'advanced', 'advanced', 'advanced', 'advanced',
-    'required', 'advanced', 'advanced', 'advanced', 'advanced', 'required',
+    'required', 'advanced', 'advanced', 'advanced', 'advanced', 'advanced', 'required',
 ]);
 
 function getStepRequirement(stepNumber) {
@@ -5503,6 +5518,12 @@ const STEP_GUIDES = [
         placeholder: '例如：核心规则常驻；角色画像按名字触发；关系更新任务只读角色原点与近期摘要，捕获指定 XML 后覆盖聊天世界书同名条目。',
     },
     {
+        title: '先分析，再生成可执行的重组方案',
+        description: '先点击会话窗上方的“分析当前产物”，把所有正式世界书产物解析为带稳定 blockId 的结构报告；然后由 AI 生成重组方案。',
+        prompts: ['报告中是否包含所有准备发布的正式产物？', '每个 blockId 是否在 mappings 中恰好出现一次？', '条目名称、激活策略、位置、顺序与关键词是否符合 Step 28 的交付设计？'],
+        placeholder: '可补充重组偏好，例如哪些内容必须常驻、哪些按关键词触发、哪些条目需要合并；生成前请先完成上方分析。',
+    },
+    {
         title: '用开场把整个世界启动起来',
         description: '生成一份可单独使用的正式开局，而不是新的通用设定。没有变量时只写开场；使用变量时必须同时给出与开场事实完全一致的完整初始树。',
         prompts: ['这份开局发生在何时何地，玩家第一句话前正在面对什么？', '哪个人物、动作或事件能立刻建立 Step 1 的核心体验？', '是否使用变量；若使用，完整初始值是否与人物、地点和事件事实一致？'],
@@ -5575,8 +5596,8 @@ const STEP_ARTIFACT_RULES = Object.freeze({
     26: { prefixes: ['SYS_task_'] },
     27: { prefixes: ['SYS_task_'] },
     28: { tags: ['SOURCE_entry_plan'], fences: ['autotask_config'] },
-    29: { fences: ['opening'] },
-    30: { fences: ['reorg_plan'] },
+    29: { fences: ['reorg_plan'] },
+    30: { fences: ['opening'] },
 });
 
 // 产物分类独立于左侧四阶段：更贴合创作者查找设定的方式。
@@ -5586,7 +5607,7 @@ const ARTIFACT_CATEGORY_STEPS = Object.freeze({
     world: [4, 7, 8, 9],
     narrative: [10, 11, 12, 13, 14, 15],
     variables: [16, 17, 18, 19, 20, 21, 22],
-    production: [23, 24, 25, 26, 27, 28, 29],
+    production: [23, 24, 25, 26, 27, 28, 29, 30],
 });
 
 const ARTIFACT_EXACT_DISPLAY_NAMES = Object.freeze({
@@ -5752,8 +5773,10 @@ function normalizeArtifactVault(raw, projectId) {
     if (!raw || typeof raw !== 'object') return clean;
     const versions = Array.isArray(raw.versions) ? raw.versions : [];
     clean.versions = versions.flatMap(item => {
-        const step = Number(item?.step);
+        let step = Number(item?.step);
         const identity = String(item?.identity || item?.tag || '').trim();
+        // 隐藏重组步骤期间，开场白曾存放在 Step29；恢复流程后迁回 Step30。
+        if (step === 29 && identity === 'opening') step = 30;
         const content = normalizeFinalArtifactUserMacros(String(item?.content || '').trim(), step);
         if (!STEPS.some(candidate => candidate.number === step) || !identity || !content) return [];
         return [{
@@ -6881,9 +6904,12 @@ function normalizeProject(saved) {
         steps: { ...clean.steps, ...(saved.steps || {}) },
         autoReorg: { ...clean.autoReorg, ...(saved.autoReorg || {}) },
     };
-    // v0.6.x 的 Step30 是开场白；新版隐藏重组步骤后迁移为 Step29。
-    if (saved.steps?.[30]) normalized.steps[29] = saved.steps[30];
-    delete normalized.steps[30];
+    // v0.6.39–0.6.41 曾隐藏重组步骤，并把开场白暂存为 Step29；恢复 30 步后迁回 Step30。
+    if (!saved.steps?.[30] && saved.steps?.[29]) {
+        normalized.steps[30] = saved.steps[29];
+        normalized.steps[29] = clean.steps[29];
+        if (Number(saved.currentStep) === 29) normalized.currentStep = 30;
+    }
     for (const step of STEPS) {
         normalized.steps[step.number] = normalizeStepState(normalized.steps[step.number], step.number);
     }
@@ -8259,6 +8285,7 @@ function renderCurrentStep() {
     shell.querySelector('#acs-user-input-label').textContent = `本轮补充 · ${step.name}`;
     shell.querySelector('#acs-user-input').placeholder = guide.placeholder;
     renderConversationManager();
+    renderReorgAnalysisPanel();
 
     const stateChip = shell.querySelector('#acs-step-state');
     stateChip.classList.remove('is-draft', 'is-complete');
@@ -8359,6 +8386,7 @@ function renderCurrentStep() {
     shell.querySelector('#acs-accept-step').disabled = !latestAssistantResponse(step.number) || isGenerating;
     generateButton.disabled = isGenerating || Boolean(dependencyMessage);
     generateButton.title = dependencyMessage || '使用 A.U.T.O 预设生成本阶段草案';
+    generateButton.lastChild.textContent = step.number === 29 ? ' 生成重组方案' : ' 生成阶段草案';
     shell.querySelector('#acs-generation-hint').textContent = dependencyMessage || (state.turns?.length
         ? conversationHidden
             ? `当前步骤会话不发送，${project.includeFutureArtifacts ? '包含后序正式产物' : '不含后序产物'} · ${connectionDisplayName()}`
@@ -10226,6 +10254,7 @@ function generationDependencyMessage() {
     if (!environment.checked) return '';
     if (!helper) return '未检测到酒馆助手，暂时不能调用 AI。';
     if (!studioResources.preset) return '尚未向创作台导入 A.U.T.O 预设。';
+    if (project?.currentStep === 29 && !currentReorgAnalysis()) return '请先点击“分析当前产物”生成结构报告。';
     return '';
 }
 
@@ -10778,14 +10807,14 @@ function selectedReorgEntryPlan() {
     return selectedArtifactForGroup(group)?.content || '';
 }
 
-function buildReorgProjectContext(artifacts) {
+function buildReorgProjectContext(artifacts, report = '') {
     const entryPlan = selectedReorgEntryPlan();
     return [
         '<STUDIO_REORG_CONTEXT>',
         `项目名称: ${project.name}`,
         `发布目标世界书: ${project.output.worldbookName || defaultOutputWorldbookName()}`,
         '',
-        buildReorgStructureReport(artifacts),
+        report || buildReorgStructureReport(artifacts),
         '',
         '# 当前条目规划表（SOURCE_entry_plan）',
         entryPlan || '尚未生成 SOURCE_entry_plan；请仅依据结构报告完整安排本次所选内容块。',
@@ -10795,7 +10824,11 @@ function buildReorgProjectContext(artifacts) {
 }
 
 function buildProjectContext(currentStep, preset, options = {}) {
-    if (options.reorgOnly) return buildReorgProjectContext(options.reorgArtifacts || []);
+    if (options.reorgOnly) return buildReorgProjectContext(options.reorgArtifacts || [], options.reorgReport || '');
+    if (currentStep.promptId === REORG_PROMPT_ID) {
+        const analysis = currentReorgAnalysis();
+        return buildReorgProjectContext(analysis?.artifacts || [], analysis?.report || '');
+    }
     const sections = [
         '<STUDIO_PROJECT_CONTEXT>',
         `项目名称: ${project.name}`,
@@ -11402,6 +11435,11 @@ function prepareGeneration() {
     }
 
     const step = STEPS[project.currentStep - 1];
+    if (step.number === 29 && !currentReorgAnalysis()) {
+        notify('warning', '请先点击会话窗上方的“分析当前产物”，再生成重组方案。');
+        shell.querySelector('#acs-analyze-reorg')?.focus();
+        return null;
+    }
     const state = project.steps[step.number];
     return { step, state };
 }
@@ -11561,11 +11599,28 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
             step: targetStepNumber,
             createdAt: new Date().toISOString(),
         });
+        // 重组方案必须先通过完整性校验，避免无效方案进入正式产物库。
+        let reorgPlanResult = null;
+        if (step.number === 29) {
+            const analysis = currentReorgAnalysis();
+            if (!analysis) throw new Error('当前结构报告已过期，请重新分析产物');
+            reorgPlanResult = reorgPlanFromResponse(response, analysis.artifacts);
+        }
         // AI 回复只在完成时提取一次；入库后产物与对话彻底分离，后续互不回写。
         const capturedArtifacts = appendArtifactsToVault(artifactVaultFor(project.id), response, step.number, {
             createdAt: new Date().toISOString(),
             source: 'generated',
         });
+        if (reorgPlanResult) {
+            project.autoReorg = {
+                ...project.autoReorg,
+                response,
+                plan: reorgPlanResult.plan,
+                schemaVersion: REORG_PLAN_SCHEMA_VERSION,
+                selectionSignature: analysis.signature,
+                updatedAt: new Date().toISOString(),
+            };
+        }
         if (capturedArtifacts) await persistArtifactVault(project.id);
         state.status = 'draft';
         state.updatedAt = new Date().toISOString();
@@ -12171,6 +12226,82 @@ function reorgSelectionSignature(artifacts = []) {
     return JSON.stringify(identities);
 }
 
+function currentReorgArtifacts() {
+    // “正式产物”与发布弹窗默认勾选规则一致：只分析已经确认的世界书产物。
+    return collectDeliveryArtifacts().filter(item => item?.target?.kind === 'worldbook' && item.accepted);
+}
+
+function currentReorgAnalysis() {
+    const artifacts = currentReorgArtifacts();
+    const signature = reorgSelectionSignature(artifacts);
+    if (!artifacts.length || !project.autoReorg?.report || project.autoReorg.selectionSignature !== signature) return null;
+    return { artifacts, signature, report: project.autoReorg.report };
+}
+
+function analyzeCurrentReorgArtifacts() {
+    const artifacts = currentReorgArtifacts();
+    if (!artifacts.length) {
+        notify('warning', '当前还没有可重组的世界书产物，请先完成前面的创作步骤。');
+        return;
+    }
+    const report = buildReorgStructureReport(artifacts);
+    project.autoReorg = {
+        response: '',
+        plan: null,
+        report,
+        schemaVersion: REORG_PLAN_SCHEMA_VERSION,
+        selectionSignature: reorgSelectionSignature(artifacts),
+        analyzedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+    saveProject();
+    renderAll();
+    notify('success', `已分析 ${artifacts.length} 项世界书产物；现在可以让 AI 生成重组方案。`);
+}
+
+function renderReorgAnalysisPanel() {
+    const panel = shell?.querySelector('#acs-reorg-analysis');
+    if (!panel) return;
+    const active = project?.currentStep === 29;
+    panel.hidden = !active;
+    if (!active) return;
+    const analysis = currentReorgAnalysis();
+    const artifacts = currentReorgArtifacts();
+    const status = panel.querySelector('#acs-reorg-analysis-status');
+    const report = panel.querySelector('#acs-reorg-analysis-report');
+    const details = panel.querySelector('details');
+    status.textContent = analysis
+        ? `报告有效 · ${artifacts.length} 项产物 · 生成新报告会清除旧方案`
+        : artifacts.length
+            ? `待分析 · 已发现 ${artifacts.length} 项世界书产物`
+            : '待分析 · 尚无可重组的世界书产物';
+    report.textContent = analysis?.report || '';
+    details.hidden = !analysis;
+    panel.querySelector('#acs-analyze-reorg').disabled = isGenerating || !artifacts.length;
+}
+
+function installReorgAnalysisUI() {
+    const conversation = shell?.querySelector('.acs-conversation');
+    if (!conversation || shell.querySelector('#acs-reorg-analysis')) return;
+    const panel = document.createElement('section');
+    panel.id = 'acs-reorg-analysis';
+    panel.className = 'acs-reorg-analysis';
+    panel.hidden = true;
+    panel.innerHTML = `
+      <div class="acs-reorg-analysis-head">
+        <div class="acs-reorg-analysis-copy">
+          <strong>世界书结构分析</strong>
+          <small id="acs-reorg-analysis-status">待分析</small>
+        </div>
+        <div class="acs-reorg-analysis-actions">
+          <button id="acs-analyze-reorg" class="acs-button acs-button-secondary acs-button-compact" type="button"><i class="fa-solid fa-magnifying-glass-chart" aria-hidden="true"></i> 分析当前产物</button>
+        </div>
+      </div>
+      <details hidden><summary>查看结构报告</summary><pre id="acs-reorg-analysis-report"></pre></details>`;
+    conversation.before(panel);
+    panel.querySelector('#acs-analyze-reorg').addEventListener('click', analyzeCurrentReorgArtifacts);
+}
+
 function cachedReorgMatchesSelection(selectedArtifacts) {
     const cachedSignature = project.autoReorg?.selectionSignature;
     if (!cachedSignature) return false;
@@ -12567,7 +12698,7 @@ function isCompleteReorgBuild(build, selectedArtifacts) {
 }
 
 function reorgPlanFromResponse(response, selectedArtifacts) {
-    const block = extractArtifactBlocks(response, 30).find(item => item.tag === 'reorg_plan');
+    const block = extractArtifactBlocks(response, 29).find(item => item.tag === 'reorg_plan');
     if (!block) throw new Error('A.U.T.O 没有返回 reorg_plan 代码块');
     const plan = parseJsonArtifact(block.content);
     const validation = validateReorgPlan(plan, selectedArtifacts);
@@ -12580,7 +12711,7 @@ function reorgPlanFromResponse(response, selectedArtifacts) {
 }
 
 async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' } = {}) {
-    const step = { number: 30, promptId: REORG_PROMPT_ID, name: '自动世界书重组' };
+    const step = { number: 29, promptId: REORG_PROMPT_ID, name: '世界书重组' };
     if (!studioResources.preset) throw new Error('尚未向创作台导入 A.U.T.O 预设，无法自动重组');
     const connectionError = customConnectionError();
     if (connectionError) throw new Error(connectionError.message);
@@ -12610,7 +12741,7 @@ async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' }
         custom_api: presetGenerationOptions(preset),
     }, '发布前世界书重组');
     const rawResponse = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-    const response = normalizeFinalArtifactUserMacros(rawResponse, 30);
+    const response = normalizeFinalArtifactUserMacros(rawResponse, 29);
     const planResult = reorgPlanFromResponse(response, selectedArtifacts);
 
     // 重组是发布阶段的内部过程，不占用左侧创作步骤。
@@ -12678,47 +12809,14 @@ async function ensureDeliveryReorg(selectedArtifacts) {
         return { applied: true, entries: [], usedArtifacts: 0, omittedArtifacts: 0, unresolvedBlockIds: [] };
     }
 
-    // 只有产物身份与交付位置完全一致时才复用。旧缓存没有结构指纹，会在首次发布时自动重建。
-    let build = null;
-    if (cachedReorgMatchesSelection(selectedWorldbook)) {
-        build = applyReorgPlan(selectedWorldbook, deliveryArtifacts, latestReorgPlanResult());
-        if (isCompleteReorgBuild(build, selectedWorldbook)) return build;
+    if (!cachedReorgMatchesSelection(selectedWorldbook)) {
+        throw new Error('本次勾选的产物与 Step 29 的分析报告不一致，请返回“世界书重组”重新分析并生成方案');
     }
-
-    notify('info', '正在根据本次勾选的产物自动执行世界书重组…');
-    let generatedPlan = null;
-    let generationError = null;
-    try {
-        generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook);
-        build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
-    } catch (error) {
-        generationError = error;
-        console.warn('[A.U.T.O Card Studio] 首轮世界书重组方案不可用，将自动修正一次。', error);
-    }
+    const build = applyReorgPlan(selectedWorldbook, deliveryArtifacts, latestReorgPlanResult());
     if (!isCompleteReorgBuild(build, selectedWorldbook)) {
-        const retryReasons = [];
-        if (generationError) retryReasons.push(String(generationError?.message || generationError));
-        if (build && !build.applied) retryReasons.push('方案没有生成可用映射');
-        if (build?.validationErrors?.length) retryReasons.push(build.validationErrors.slice(0, 4).join('；'));
-        if (build?.omittedArtifacts) retryReasons.push(`遗漏 ${build.omittedArtifacts} 项产物`);
-        if (build?.unresolvedBlockIds?.length) retryReasons.push(`${build.unresolvedBlockIds.length} 个 blockId 无法匹配`);
-        notify('info', '重组方案未通过完整性校验，正在自动修正一次…');
-        try {
-            generatedPlan = await generateDeliveryReorgPlan(selectedWorldbook, {
-                retryReason: (retryReasons.join('，') || '方案不完整').slice(0, 1200),
-            });
-            build = applyReorgPlan(selectedWorldbook, selectedWorldbook, generatedPlan);
-        } catch (error) {
-            // 修正请求失败时保留首轮可用部分，随后由本地兜底补齐，避免再次中断发布。
-            console.warn('[A.U.T.O Card Studio] 世界书重组自动修正请求失败，将使用安全补全。', error);
-        }
+        const reason = build?.validationErrors?.slice(0, 4).join('；') || '方案存在遗漏或无法匹配的 blockId';
+        throw new Error(`Step 29 重组方案未通过发布校验：${reason}`);
     }
-
-    if (!isCompleteReorgBuild(build, selectedWorldbook)) {
-        build = recoverIncompleteReorgBuild(build, selectedWorldbook);
-        notify('warning', `重组方案仍不可用，已通过本地安全方案完整交付 ${build.recoveredArtifacts || 0} 项产物。`);
-    }
-    renderAll();
     return build;
 }
 
@@ -12844,7 +12942,7 @@ function extractOpeningMessageFromContent(response) {
 }
 
 function extractOpeningMessage() {
-    return extractOpeningMessageFromContent(effectiveStepArtifacts(29));
+    return extractOpeningMessageFromContent(effectiveStepArtifacts(30));
 }
 
 function defaultOutputWorldbookName() {
@@ -12865,12 +12963,12 @@ function renderDeliveryReorgStatus() {
     element.className = 'acs-delivery-reorg-status';
     if (result.status === 'ready') {
         element.classList.add('is-active');
-        element.textContent = `已有自动重组方案：发布时会校验 ${result.plan.mappings.length} 项映射，过期则自动重建`;
+        element.textContent = `已有 Step 29 重组方案：发布时会校验 ${result.plan.mappings.length} 项映射`;
     } else if (result.status === 'invalid') {
         element.classList.add('is-warning');
-        element.textContent = `现有自动重组方案无法解析，确认创建时将重新生成：${result.error}`;
+        element.textContent = `Step 29 重组方案无法解析，请返回该步骤重新生成：${result.error}`;
     } else {
-        element.textContent = '确认创建时将根据本次勾选的产物自动生成重组方案';
+        element.textContent = '尚无重组方案：请先完成 Step 29“世界书重组”';
     }
 }
 
@@ -12974,15 +13072,14 @@ async function confirmProjectDelivery() {
 
     const button = shell.querySelector('#acs-confirm-delivery');
     button.disabled = true;
-    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在自动重组';
+    button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在校验重组方案';
     try {
         let worldbookBuild;
         try {
             worldbookBuild = await ensureDeliveryReorg(selectedArtifacts);
         } catch (error) {
-            // 单独标记重组请求，避免用户把模型渠道错误误认为角色卡写入失败。
-            console.error('[A.U.T.O Card Studio] 世界书重组请求失败', error);
-            throw new Error(`世界书重组请求失败：${error?.message || error}`);
+            console.error('[A.U.T.O Card Studio] 世界书重组方案校验失败', error);
+            throw new Error(`世界书重组方案校验失败：${error?.message || error}`);
         }
         button.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在创建';
         let existing = {};
@@ -14944,7 +15041,7 @@ function ensureStudioStyle() {
     if (document.querySelector(`#${SCRIPT_STYLE_ID}`)) return;
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
-    style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${MULTI_CONVERSATION_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}\n${SETTINGS_LAYOUT_CSS}\n${REFERENCE_ASSET_CSS}\n${MOBILE_POLISH_CSS}`;
+    style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${MULTI_CONVERSATION_CSS}\n${REORG_ANALYSIS_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}\n${SETTINGS_LAYOUT_CSS}\n${REFERENCE_ASSET_CSS}\n${MOBILE_POLISH_CSS}`;
     document.head.append(style);
 }
 
@@ -14971,6 +15068,7 @@ async function ensureStudioLoaded() {
     shell.dataset.acsRuntimeInstance = RUNTIME_INSTANCE_ID;
     document.body.append(shell);
     installStepHelpUI();
+    installReorgAnalysisUI();
     installResourceManagerUI();
     installProjectLibraryUI();
     installStudioToolsUI();
