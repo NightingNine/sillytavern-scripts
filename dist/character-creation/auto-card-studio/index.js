@@ -571,6 +571,9 @@ const COMPACT_STAGE_HEADER_CSS = `
 }
 
 .acs-brief-panel {
+  /* 母题作为标题栏下方抽屉，横向贴满工作区并与标题无缝衔接。 */
+  margin: 0 0 16px;
+  border-radius: 0 0 14px 14px;
   max-height: min(42vh, 320px);
   overflow: auto;
   opacity: 1;
