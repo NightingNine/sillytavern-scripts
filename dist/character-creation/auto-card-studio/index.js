@@ -12355,9 +12355,9 @@ function buildReorgStructureReport(artifacts) {
     const model = createReorgSourceModel(artifacts || collectDeliveryArtifacts());
     const typeLabels = {
         xml_tag: 'XML标签',
-        unclosed_tag: '未闭合标签 ⚠',
-        json: 'JSON ⚠',
-        text: '纯文本 ⚠',
+        unclosed_tag: '未闭合标签',
+        json: 'JSON',
+        text: '纯文本',
     };
     const blocks = model.entries.flatMap(entry => entry.blocks);
     const xmlCount = blocks.filter(block => block.type === 'xml_tag').length;
@@ -12370,10 +12370,12 @@ function buildReorgStructureReport(artifacts) {
     ];
 
     for (const entry of model.entries) {
-        lines.push('', `## ${entry.name}`, `UID: ${entry.uid} | 状态: ${worldbookEntryEnabled(entry.name) ? '启用' : '禁用'}`);
+        // 图标只负责创作台里的产物状态提示，不属于结构报告语义，避免干扰 AI 识别条目名称。
+        const reportEntryName = String(entry.name || '').replace(/^(?:🕹️|🧩|🗑️|🔇|🔢)\s*/u, '');
+        lines.push('', `## ${reportEntryName}`, `UID: ${entry.uid} | 状态: ${worldbookEntryEnabled(entry.name) ? '启用' : '禁用'}`);
         for (const block of entry.blocks) {
             lines.push(
-                `[${block.blockId}] ${typeLabels[block.type] || '纯文本 ⚠'}`,
+                `[${block.blockId}] ${typeLabels[block.type] || '纯文本'}`,
                 `  标签名: ${block.tagName}`,
                 `  来源: Step ${block.artifact.step} · ${block.artifact.displayName}`,
                 `  字符数: ${String(block.artifact.content || '').length}`,
@@ -12672,6 +12674,168 @@ function reorgWorldbookEntry(mapping, resolvedBlocks, index) {
     };
 }
 
+function normalizeReorgPlan(plan, selectedArtifacts) {
+    if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return { plan, warnings: [] };
+    const warnings = [];
+    const model = createReorgSourceModel(selectedArtifacts);
+    const expectedBlockIds = new Set(model.blockById.keys());
+    const usedBlockIds = new Set();
+    const normalized = {
+        ...plan,
+        sourceWorldbook: reorgSourceWorldbookName(),
+        targetWorldbook: String(plan.targetWorldbook || project.output.worldbookName || defaultOutputWorldbookName()).trim(),
+        blockActions: [],
+        mappings: [],
+        discardedBlockIds: [],
+    };
+
+    if (plan.sourceWorldbook !== normalized.sourceWorldbook) {
+        warnings.push('sourceWorldbook 已按本次结构报告自动校正');
+    }
+    const numberValue = value => {
+        if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+        if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
+        return value;
+    };
+    const booleanValue = value => {
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+        return value;
+    };
+
+    for (const action of (Array.isArray(plan.blockActions) ? plan.blockActions : [])) {
+        if (!action || typeof action !== 'object' || !expectedBlockIds.has(action.blockId)) {
+            warnings.push(`已忽略无效的 blockAction（${String(action?.blockId || '缺少 blockId')}）`);
+            continue;
+        }
+        if (!['wrap', 'rename'].includes(action.action)) {
+            warnings.push(`已忽略 ${action.blockId} 的未知动作 ${String(action.action || '空')}`);
+            continue;
+        }
+        const sourceBlock = model.blockById.get(action.blockId);
+        const validWrap = action.action === 'wrap'
+            && ['text', 'json'].includes(sourceBlock.type)
+            && typeof action.params?.wrapTagName === 'string'
+            && action.params.wrapTagName.trim();
+        const validRename = action.action === 'rename'
+            && ['xml_tag', 'unclosed_tag'].includes(sourceBlock.type)
+            && typeof action.params?.newTagName === 'string'
+            && action.params.newTagName.trim();
+        if (!validWrap && !validRename) {
+            warnings.push(`已忽略 ${action.blockId} 上不适用或参数不完整的 ${action.action} 动作`);
+            continue;
+        }
+        if (normalized.blockActions.some(item => item.blockId === action.blockId)) continue;
+        normalized.blockActions.push(action);
+    }
+
+    for (const [index, mapping] of (Array.isArray(plan.mappings) ? plan.mappings : []).entries()) {
+        if (!mapping || typeof mapping !== 'object' || Array.isArray(mapping)) {
+            warnings.push(`已忽略无效映射 mappings[${index}]`);
+            continue;
+        }
+        const blockIds = [];
+        for (const blockId of (Array.isArray(mapping.blockIds) ? mapping.blockIds : [])) {
+            if (typeof blockId !== 'string' || !expectedBlockIds.has(blockId)) {
+                warnings.push(`已忽略 mappings[${index}] 中不存在的 blockId（${String(blockId)}）`);
+                continue;
+            }
+            if (usedBlockIds.has(blockId)) {
+                warnings.push(`已移除 mappings[${index}] 中重复引用的 ${blockId}`);
+                continue;
+            }
+            usedBlockIds.add(blockId);
+            blockIds.push(blockId);
+        }
+        // 原重组器把空 mapping 视为可修复项；这里直接移除，避免整份方案被阻断。
+        if (!blockIds.length) {
+            warnings.push(`已移除没有有效内容块的 mappings[${index}]`);
+            continue;
+        }
+        const attributes = mapping.attributes && typeof mapping.attributes === 'object' && !Array.isArray(mapping.attributes)
+            ? mapping.attributes
+            : {};
+        const rawOverrides = attributes.overrides && typeof attributes.overrides === 'object' && !Array.isArray(attributes.overrides)
+            ? attributes.overrides
+            : {};
+        const normalizedOverrides = {
+            ...rawOverrides,
+            enabled: booleanValue(rawOverrides.enabled),
+            keys: typeof rawOverrides.keys === 'string'
+                ? rawOverrides.keys.split(/[,，]/u).map(item => item.trim()).filter(Boolean)
+                : rawOverrides.keys,
+            keysSecondary: typeof rawOverrides.keysSecondary === 'string'
+                ? rawOverrides.keysSecondary.split(/[,，]/u).map(item => item.trim()).filter(Boolean)
+                : rawOverrides.keysSecondary,
+            depth: numberValue(rawOverrides.depth),
+            order: numberValue(rawOverrides.order),
+            sticky: numberValue(rawOverrides.sticky),
+            cooldown: numberValue(rawOverrides.cooldown),
+            delay: numberValue(rawOverrides.delay),
+        };
+        const enumRules = [
+            ['secondaryLogic', REORG_SECONDARY_LOGICS],
+            ['positionType', REORG_POSITION_TYPES],
+            ['role', REORG_ROLES],
+            ['strategyType', REORG_STRATEGIES],
+        ];
+        for (const [key, allowed] of enumRules) {
+            if (normalizedOverrides[key] !== undefined && !allowed.has(normalizedOverrides[key])) {
+                warnings.push(`已忽略 mappings[${index}] 中无效的 ${key}（${String(normalizedOverrides[key])}）`);
+                delete normalizedOverrides[key];
+            }
+        }
+        for (const key of ['keys', 'keysSecondary']) {
+            if (normalizedOverrides[key] !== undefined && !Array.isArray(normalizedOverrides[key])) {
+                warnings.push(`已忽略 mappings[${index}] 中格式错误的 ${key}`);
+                delete normalizedOverrides[key];
+            }
+        }
+        for (const key of ['enabled']) {
+            if (normalizedOverrides[key] !== undefined && typeof normalizedOverrides[key] !== 'boolean') {
+                warnings.push(`已忽略 mappings[${index}] 中格式错误的 ${key}`);
+                delete normalizedOverrides[key];
+            }
+        }
+        for (const key of ['depth', 'order', 'sticky', 'cooldown', 'delay']) {
+            if (normalizedOverrides[key] !== undefined && normalizedOverrides[key] !== null && !Number.isFinite(normalizedOverrides[key])) {
+                warnings.push(`已忽略 mappings[${index}] 中格式错误的 ${key}`);
+                delete normalizedOverrides[key];
+            }
+        }
+        normalized.mappings.push({
+            ...mapping,
+            targetEntryName: String(mapping.targetEntryName || `重组条目 ${index + 1}`).trim(),
+            blockIds,
+            attributes: {
+                ...attributes,
+                overrides: normalizedOverrides,
+            },
+        });
+    }
+
+    const discarded = new Set();
+    for (const blockId of (Array.isArray(plan.discardedBlockIds) ? plan.discardedBlockIds : [])) {
+        if (typeof blockId !== 'string' || !expectedBlockIds.has(blockId) || usedBlockIds.has(blockId)) {
+            warnings.push(`已忽略无效或冲突的废弃项（${String(blockId)}）`);
+            continue;
+        }
+        discarded.add(blockId);
+    }
+
+    // 如果模型给出的映射全部不可执行，回退为报告中的原分组，避免一次小格式错误导致无限失败或空世界书。
+    if (!normalized.mappings.length && expectedBlockIds.size && !discarded.size) {
+        normalized.mappings = model.entries.map(entry => ({
+            targetEntryName: String(entry.name || `重组条目 ${entry.uid + 1}`).replace(/^(?:🕹️|🧩|🗑️|🔇|🔢)\s*/u, ''),
+            blockIds: entry.blocks.map(block => block.blockId),
+            attributes: { template: 'blue', overrides: { enabled: worldbookEntryEnabled(entry.name) } },
+        }));
+        warnings.push('方案没有可执行映射，已按结构报告原分组安全重建');
+    }
+    normalized.discardedBlockIds = [...discarded];
+    return { plan: normalized, warnings };
+}
+
 function filterReorgPlanForArtifacts(plan, selectedArtifacts) {
     const selectedBlockIds = new Set(createReorgSourceModel(selectedArtifacts).blockById.keys());
     return {
@@ -12802,16 +12966,37 @@ function isCompleteReorgBuild(build, selectedArtifacts) {
 }
 
 function reorgPlanFromResponse(response, selectedArtifacts) {
-    const block = extractArtifactBlocks(response, 29).find(item => item.tag === 'reorg_plan');
-    if (!block) throw new Error('A.U.T.O 没有返回 reorg_plan 代码块');
-    const plan = parseJsonArtifact(block.content);
-    const validation = validateReorgPlan(plan, selectedArtifacts);
+    let block = extractArtifactBlocks(response, 29).find(item => item.tag === 'reorg_plan');
+    // 部分模型会把正确 JSON 放进普通 json 围栏；内容可识别时无需要求用户重新生成。
+    if (!block) {
+        block = extractFencedBlocks(response).find(item => {
+            try {
+                const candidate = parseJsonArtifact(item.content);
+                return candidate && typeof candidate === 'object' && ('mappings' in candidate || 'sourceWorldbook' in candidate);
+            } catch {
+                return false;
+            }
+        });
+    }
+    if (!block) throw new Error('A.U.T.O 没有返回可识别的 reorg_plan JSON');
+    const parsedPlan = parseJsonArtifact(block.content);
+    const normalized = normalizeReorgPlan(parsedPlan, selectedArtifacts);
+    const validation = validateReorgPlan(normalized.plan, selectedArtifacts);
     if (!validation.valid) {
         const error = new Error(`重组方案未通过校验：${validation.errors.slice(0, 4).join('；')}`);
         error.reorgValidation = validation;
         throw error;
     }
-    return { status: 'ready', plan, artifact: block, validationWarnings: validation.warnings };
+    const validationWarnings = [...normalized.warnings, ...validation.warnings];
+    if (validationWarnings.length) {
+        console.warn('[A.U.T.O Card Studio] 世界书重组方案已自动修复。', validationWarnings);
+    }
+    return {
+        status: 'ready',
+        plan: normalized.plan,
+        artifact: block,
+        validationWarnings,
+    };
 }
 
 async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' } = {}) {
