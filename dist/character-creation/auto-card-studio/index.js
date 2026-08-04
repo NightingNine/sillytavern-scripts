@@ -2446,7 +2446,7 @@ const REFERENCE_ASSET_CSS = `
 .acs-manual-artifact-form label > span b { color: var(--acs-gold); font-size: 8px; }
 .acs-manual-artifact-form input,
 .acs-manual-artifact-form select,
-.acs-reference-worldbook-picker-body select {
+.acs-reference-worldbook-picker-search {
   min-height: 40px;
   padding: 9px 11px;
   border: 1px solid var(--acs-line);
@@ -4920,6 +4920,85 @@ const MOBILE_POLISH_CSS = `
   --acs-mobile-control-height: clamp(40px, 11vw, 46px);
   --acs-mobile-body-size: clamp(11px, 3.15vw, 13px);
 }
+.acs-reference-worldbook-picker-combobox { display: grid; min-height: 0; gap: 8px; }
+.acs-reference-worldbook-picker-search-wrap { position: relative; display: block; }
+.acs-reference-worldbook-picker-search-wrap > i {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: var(--acs-muted);
+  font-size: 10px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.acs-reference-worldbook-picker-search {
+  width: 100%;
+  padding-left: 34px;
+  outline: 0;
+}
+.acs-reference-worldbook-picker-search:focus {
+  border-color: rgba(183,163,207,.58);
+  box-shadow: 0 0 0 3px rgba(183,163,207,.1);
+}
+.acs-reference-worldbook-source-options {
+  display: grid;
+  max-height: min(340px,45vh);
+  padding: 5px;
+  overflow: auto;
+  gap: 3px;
+  border: 1px solid var(--acs-line-soft);
+  border-radius: 11px;
+  background: #292722;
+  scrollbar-color: var(--acs-line) transparent;
+  scrollbar-width: thin;
+}
+.acs-reference-worldbook-source-option {
+  display: grid;
+  grid-template-columns: 26px minmax(0,1fr) 18px;
+  min-height: 42px;
+  padding: 7px 9px;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--acs-text-soft);
+  cursor: pointer;
+  font: 600 11px/1.35 var(--acs-body);
+  text-align: left;
+}
+.acs-reference-worldbook-source-option > i:first-child {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: rgba(183,163,207,.1);
+  color: var(--acs-violet);
+  font-size: 9px;
+  place-items: center;
+}
+.acs-reference-worldbook-source-option > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.acs-reference-worldbook-source-option:hover,
+.acs-reference-worldbook-source-option:focus-visible,
+.acs-reference-worldbook-source-option.is-selected {
+  border-color: rgba(183,163,207,.34);
+  outline: 0;
+  background: rgba(183,163,207,.1);
+  color: var(--acs-text);
+}
+.acs-reference-worldbook-source-option > i:last-child { color: var(--acs-violet); font-size: 9px; }
+.acs-reference-worldbook-source-empty {
+  margin: 0;
+  padding: 20px 12px;
+  color: var(--acs-muted);
+  font-size: 10px;
+  text-align: center;
+}
 
 .acs-shell.acs-mobile-layout .acs-inspector {
   width: min(100vw, 430px);
@@ -6260,21 +6339,55 @@ function openReferenceWorldbookPicker() {
         return;
     }
     const overlay = shell.querySelector('#acs-reference-worldbook-picker');
-    const select = overlay.querySelector('#acs-reference-worldbook-source');
-    select.replaceChildren(...names.map(name => {
-        const option = document.createElement('option');
-        option.value = name;
-        option.textContent = name;
-        return option;
-    }));
+    referenceWorldbookPickerNames = names;
+    referenceWorldbookPickerSelection = names[0];
+    const search = overlay.querySelector('#acs-reference-worldbook-search');
+    search.value = '';
+    renderReferenceWorldbookPickerOptions();
     overlay.hidden = false;
     overlay.setAttribute('aria-hidden', 'false');
-    select.focus({ preventScroll: true });
+    search.focus({ preventScroll: true });
+}
+
+let referenceWorldbookPickerNames = [];
+let referenceWorldbookPickerSelection = '';
+
+function renderReferenceWorldbookPickerOptions(query = '') {
+    const list = shell?.querySelector('#acs-reference-worldbook-source-options');
+    if (!list) return;
+    const needle = String(query).trim().toLocaleLowerCase('zh-CN');
+    const matches = referenceWorldbookPickerNames.filter(name => !needle || name.toLocaleLowerCase('zh-CN').includes(needle));
+    list.replaceChildren();
+    if (!matches.length) {
+        const empty = document.createElement('p');
+        empty.className = 'acs-reference-worldbook-source-empty';
+        empty.textContent = '没有匹配的世界书';
+        list.append(empty);
+        return;
+    }
+    for (const name of matches) {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = `acs-reference-worldbook-source-option${name === referenceWorldbookPickerSelection ? ' is-selected' : ''}`;
+        option.dataset.referenceWorldbookSource = name;
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', String(name === referenceWorldbookPickerSelection));
+        const mark = document.createElement('i');
+        mark.className = 'fa-solid fa-book-bookmark';
+        mark.setAttribute('aria-hidden', 'true');
+        const copy = document.createElement('span');
+        copy.textContent = name;
+        const check = document.createElement('i');
+        check.className = name === referenceWorldbookPickerSelection ? 'fa-solid fa-check' : '';
+        check.setAttribute('aria-hidden', 'true');
+        option.append(mark, copy, check);
+        list.append(option);
+    }
 }
 
 async function importSelectedReferenceWorldbook() {
     const overlay = shell.querySelector('#acs-reference-worldbook-picker');
-    const sourceName = overlay.querySelector('#acs-reference-worldbook-source').value;
+    const sourceName = referenceWorldbookPickerSelection;
     if (!sourceName) return;
     const button = overlay.querySelector('#acs-import-selected-reference-worldbook');
     button.disabled = true;
@@ -13980,7 +14093,14 @@ function installResourceManagerUI() {
           <button type="button" data-reference-picker-close aria-label="关闭"><i class="fa-solid fa-xmark"></i></button>
         </header>
         <div class="acs-reference-worldbook-picker-body">
-          <label><span>源世界书</span><select id="acs-reference-worldbook-source"></select></label>
+          <div class="acs-reference-worldbook-picker-combobox">
+            <label for="acs-reference-worldbook-search"><span>源世界书</span></label>
+            <label class="acs-reference-worldbook-picker-search-wrap">
+              <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+              <input id="acs-reference-worldbook-search" class="acs-reference-worldbook-picker-search" type="search" placeholder="搜索世界书名称" autocomplete="off" aria-controls="acs-reference-worldbook-source-options">
+            </label>
+            <div id="acs-reference-worldbook-source-options" class="acs-reference-worldbook-source-options" role="listbox" aria-label="SillyTavern 世界书"></div>
+          </div>
           <p><i class="fa-solid fa-camera" aria-hidden="true"></i> 将保存独立快照。源内容变化后，需要在资源卡上手动“重新同步”。</p>
         </div>
         <footer>
@@ -14054,6 +14174,33 @@ function installResourceManagerUI() {
             event.stopPropagation();
             closeReferenceWorldbookPicker();
         }
+    });
+    referencePicker.querySelector('#acs-reference-worldbook-search').addEventListener('input', event => {
+        renderReferenceWorldbookPickerOptions(event.currentTarget.value);
+    });
+    referencePicker.querySelector('#acs-reference-worldbook-search').addEventListener('keydown', event => {
+        if (event.key !== 'ArrowDown') return;
+        const first = referencePicker.querySelector('.acs-reference-worldbook-source-option');
+        if (!first) return;
+        event.preventDefault();
+        first.focus();
+    });
+    referencePicker.querySelector('#acs-reference-worldbook-source-options').addEventListener('click', event => {
+        const option = event.target.closest('[data-reference-worldbook-source]');
+        if (!option) return;
+        referenceWorldbookPickerSelection = option.dataset.referenceWorldbookSource;
+        renderReferenceWorldbookPickerOptions(referencePicker.querySelector('#acs-reference-worldbook-search').value);
+    });
+    referencePicker.querySelector('#acs-reference-worldbook-source-options').addEventListener('keydown', event => {
+        if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+        const option = event.target.closest('[data-reference-worldbook-source]');
+        if (!option) return;
+        const options = [...referencePicker.querySelectorAll('.acs-reference-worldbook-source-option')];
+        const index = options.indexOf(option);
+        const next = event.key === 'ArrowDown' ? options[index + 1] : options[index - 1];
+        if (!next) return;
+        event.preventDefault();
+        next.focus();
     });
     referencePicker.querySelector('#acs-import-selected-reference-worldbook').addEventListener('click', () => {
         void importSelectedReferenceWorldbook();
@@ -14354,7 +14501,6 @@ function bindStudioEvents() {
         const button = event.target.closest('[data-step]');
         if (button) {
             selectStep(Number(button.dataset.step));
-            if (shell.classList.contains('acs-mobile-layout')) setMobilePanel(null);
         }
     });
     shell.querySelector('#acs-toggle-overview').addEventListener('click', toggleOverview);
