@@ -625,9 +625,6 @@ const COMPACT_STAGE_HEADER_CSS = `
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .acs-brief-panel { transition: none; }
-}
 `;
 
 const CONNECTION_PROFILE_CSS = `
