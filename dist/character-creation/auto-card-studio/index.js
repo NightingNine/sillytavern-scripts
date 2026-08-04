@@ -3042,6 +3042,14 @@ const LEGACY_CONVERSATION_STORE_NAME = 'step-conversations';
 const RESOURCE_DOCK_POSITION_KEY = 'auto-card-studio:resource-dock-position:v1';
 const CONVERSATION_FONT_SIZE_KEY = 'auto-card-studio:conversation-font-size:v1';
 const WORKSPACE_WIDTHS_KEY = 'auto-card-studio:workspace-widths:v1';
+// 云仓库凭证独立保存，不进入项目、角色卡或导出档案。
+const CLOUD_STORAGE_KEY = 'auto-card-studio:cloud:v1';
+const CLOUD_REGISTRY_PATH = 'registry.json';
+const CLOUD_SCHEMA_VERSION = 1;
+const GITHUB_API_VERSION = '2026-03-10';
+// GitHub App 创建完成后由正式构建写入；保留可覆盖输入便于测试与私有部署。
+const DEFAULT_GITHUB_APP_CLIENT_ID = '';
+const DEFAULT_GITHUB_APP_SLUG = '';
 const DEFAULT_CONVERSATION_FONT_SIZE = 15;
 const MIN_CONVERSATION_FONT_SIZE = 12;
 const MAX_CONVERSATION_FONT_SIZE = 20;
@@ -15859,6 +15867,328 @@ function ensureStudioStyle() {
     document.head.append(style);
 }
 
+const CLOUD_REPOSITORY_CSS = `
+.acs-cloud-button{position:relative}.acs-cloud-button.is-connected::after{content:"";position:absolute;right:7px;bottom:7px;width:7px;height:7px;border:2px solid #282621;border-radius:50%;background:#80b985}
+.acs-cloud-overlay{position:absolute;inset:0;z-index:95;display:grid;place-items:center;padding:clamp(12px,3vw,34px);background:#080706b8;backdrop-filter:blur(5px)}
+.acs-cloud-dialog{width:min(1060px,100%);height:min(760px,calc(100vh - 48px));display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;border:1px solid #7d6759;border-radius:22px;background:#292721;color:#eee7df;box-shadow:0 30px 90px #000b}
+.acs-cloud-head{display:flex;align-items:center;justify-content:space-between;padding:22px 26px 18px;border-bottom:1px solid #4a453d}.acs-cloud-head p{margin:0 0 4px;color:#dc8a69;font:700 11px/1.2 ui-monospace,monospace;letter-spacing:.18em}.acs-cloud-head h2{margin:0;font-size:24px}.acs-cloud-close{width:40px;height:40px;border:1px solid #625c53;border-radius:12px;background:#332f29;color:#ddd5cc}
+.acs-cloud-tabs{display:flex;gap:6px;padding:12px 22px 0}.acs-cloud-tab{padding:10px 16px;border:0;border-bottom:2px solid transparent;background:transparent;color:#aaa39a}.acs-cloud-tab.is-active{border-color:#df7958;color:#fff}
+.acs-cloud-body{min-height:0;overflow:auto;padding:22px 26px 28px}.acs-cloud-panel[hidden]{display:none}.acs-cloud-empty{display:grid;place-items:center;min-height:280px;text-align:center;color:#aaa39a}.acs-cloud-empty i{display:block;margin-bottom:14px;color:#856f9f;font-size:34px}
+.acs-cloud-status{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;padding:15px 16px;margin-bottom:18px;border:1px solid #504b43;border-radius:14px;background:#302d27}.acs-cloud-status>i{color:#a88bc7;font-size:22px}.acs-cloud-status strong,.acs-cloud-status small{display:block}.acs-cloud-status small{margin-top:3px;color:#9e978e}
+.acs-cloud-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.acs-cloud-field{display:grid;gap:7px}.acs-cloud-field>span{color:#afa79d;font-size:12px;font-weight:700}.acs-cloud-field input,.acs-cloud-field select{width:100%;min-height:44px;padding:0 13px;border:1px solid #554f47;border-radius:10px;background:#34312b;color:#eee7df}.acs-cloud-field-wide{grid-column:1/-1}.acs-cloud-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.acs-cloud-note{padding:12px 14px;border-left:3px solid #9c7cb7;background:#332e35;color:#bbb2c2;font-size:12px;line-height:1.6}
+.acs-cloud-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.acs-cloud-card{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px;border:1px solid #504a42;border-radius:14px;background:#302d27}.acs-cloud-card-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:#413642;color:#c6a6d9}.acs-cloud-card strong,.acs-cloud-card small{display:block}.acs-cloud-card small{margin-top:4px;color:#9c958b}.acs-cloud-card-actions{display:flex;gap:7px}.acs-cloud-mini{width:36px;height:36px;border:1px solid #5c554b;border-radius:10px;background:#3a362f;color:#e0d8ce}.acs-cloud-mini:hover{border-color:#d27b5c;color:#fff}
+.acs-cloud-device{padding:18px;border:1px solid #6d5a78;border-radius:14px;background:#332d36;text-align:center}.acs-cloud-code{margin:12px 0;color:#f0c692;font:800 25px/1 ui-monospace,monospace;letter-spacing:.12em}
+@media(max-width:720px){.acs-cloud-overlay{padding:0}.acs-cloud-dialog{height:100%;border-radius:0}.acs-cloud-head{padding:16px}.acs-cloud-tabs{padding:8px 12px 0;overflow:auto}.acs-cloud-tab{padding:9px 11px;white-space:nowrap}.acs-cloud-body{padding:16px}.acs-cloud-grid,.acs-cloud-cards{grid-template-columns:1fr}.acs-cloud-status{grid-template-columns:auto 1fr}.acs-cloud-status>.acs-button{grid-column:1/-1;width:100%}}
+`;
+
+function loadCloudSettings() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(CLOUD_STORAGE_KEY) || '{}');
+        return {
+            clientId: String(saved.clientId || DEFAULT_GITHUB_APP_CLIENT_ID),
+            appSlug: String(saved.appSlug || DEFAULT_GITHUB_APP_SLUG),
+            owner: String(saved.owner || ''),
+            repo: String(saved.repo || 'auto-card-cloud'),
+            branch: String(saved.branch || 'main'),
+            accessToken: String(saved.accessToken || ''),
+            refreshToken: String(saved.refreshToken || ''),
+            expiresAt: Number(saved.expiresAt) || 0,
+            refreshExpiresAt: Number(saved.refreshExpiresAt) || 0,
+            login: String(saved.login || ''),
+        };
+    } catch {
+        return { clientId: DEFAULT_GITHUB_APP_CLIENT_ID, appSlug: DEFAULT_GITHUB_APP_SLUG, owner: '', repo: 'auto-card-cloud', branch: 'main', accessToken: '', refreshToken: '', expiresAt: 0, refreshExpiresAt: 0, login: '' };
+    }
+}
+
+let cloudSettings = loadCloudSettings();
+let cloudRegistry = null;
+
+function cloudEscapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    })[character]);
+}
+
+function saveCloudSettings() {
+    localStorage.setItem(CLOUD_STORAGE_KEY, JSON.stringify(cloudSettings));
+}
+
+function cloudBase64(text) {
+    const bytes = new TextEncoder().encode(String(text));
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+}
+
+function cloudDecodeBase64(value) {
+    const binary = atob(String(value || '').replace(/\s/g, ''));
+    return new TextDecoder().decode(Uint8Array.from(binary, character => character.charCodeAt(0)));
+}
+
+async function cloudFetch(url, options = {}, authenticated = true) {
+    const headers = new Headers(options.headers || {});
+    headers.set('Accept', 'application/vnd.github+json');
+    headers.set('X-GitHub-Api-Version', GITHUB_API_VERSION);
+    if (authenticated) {
+        await refreshCloudTokenIfNeeded();
+        if (!cloudSettings.accessToken) throw new Error('请先连接 GitHub。');
+        headers.set('Authorization', `Bearer ${cloudSettings.accessToken}`);
+    }
+    const response = await fetch(url, { ...options, headers });
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || `GitHub 请求失败（${response.status}）`);
+    }
+    return response;
+}
+
+async function refreshCloudTokenIfNeeded() {
+    if (!cloudSettings.accessToken || Date.now() < cloudSettings.expiresAt - 5 * 60 * 1000) return;
+    if (!cloudSettings.refreshToken || Date.now() >= cloudSettings.refreshExpiresAt) {
+        cloudSettings.accessToken = '';
+        saveCloudSettings();
+        throw new Error('GitHub 登录已过期，请重新连接。');
+    }
+    const body = new URLSearchParams({ client_id: cloudSettings.clientId, grant_type: 'refresh_token', refresh_token: cloudSettings.refreshToken });
+    const response = await fetch('https://github.com/login/oauth/access_token', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error_description || data.error || 'GitHub 登录续期失败。');
+    updateCloudTokens(data);
+}
+
+function updateCloudTokens(data) {
+    cloudSettings.accessToken = String(data.access_token || '');
+    cloudSettings.refreshToken = String(data.refresh_token || cloudSettings.refreshToken || '');
+    cloudSettings.expiresAt = Date.now() + Number(data.expires_in || 28800) * 1000;
+    cloudSettings.refreshExpiresAt = Date.now() + Number(data.refresh_token_expires_in || 15897600) * 1000;
+    saveCloudSettings();
+}
+
+async function beginCloudDeviceLogin() {
+    if (!cloudSettings.clientId) throw new Error('当前构建尚未配置 GitHub App Client ID。');
+    const body = new URLSearchParams({ client_id: cloudSettings.clientId });
+    const response = await fetch('https://github.com/login/device/code', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    const data = await response.json();
+    if (!response.ok || data.error) throw new Error(data.error_description || data.error || '无法发起 GitHub 登录。');
+    const panel = shell.querySelector('#acs-cloud-connect-panel');
+    panel.querySelector('#acs-cloud-device-box').hidden = false;
+    panel.querySelector('#acs-cloud-user-code').textContent = data.user_code;
+    hostWindow.open(data.verification_uri || 'https://github.com/login/device', '_blank', 'noopener,noreferrer');
+    const deadline = Date.now() + Number(data.expires_in || 900) * 1000;
+    const interval = Math.max(5, Number(data.interval || 5));
+    while (Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, interval * 1000));
+        const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+            method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ client_id: cloudSettings.clientId, device_code: data.device_code, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }),
+        });
+        const token = await tokenResponse.json();
+        if (token.error === 'authorization_pending' || token.error === 'slow_down') continue;
+        if (token.error) throw new Error(token.error_description || token.error);
+        updateCloudTokens(token);
+        const user = await (await cloudFetch('https://api.github.com/user')).json();
+        cloudSettings.login = String(user.login || '');
+        if (!cloudSettings.owner) cloudSettings.owner = cloudSettings.login;
+        saveCloudSettings();
+        await renderCloudRepository();
+        notify('success', `已连接 GitHub：${cloudSettings.login}`);
+        return;
+    }
+    throw new Error('GitHub 授权等待超时，请重试。');
+}
+
+function cloudRepoApi(path = '') {
+    if (!cloudSettings.owner || !cloudSettings.repo) throw new Error('请先填写仓库所有者和仓库名。');
+    return `https://api.github.com/repos/${encodeURIComponent(cloudSettings.owner)}/${encodeURIComponent(cloudSettings.repo)}/contents/${path}`;
+}
+
+async function readCloudFile(path, optional = false) {
+    try {
+        const response = await cloudFetch(`${cloudRepoApi(path)}?ref=${encodeURIComponent(cloudSettings.branch || 'main')}`);
+        const data = await response.json();
+        return { text: cloudDecodeBase64(data.content), sha: data.sha };
+    } catch (error) {
+        if (optional && /404|Not Found/iu.test(String(error.message))) return null;
+        throw error;
+    }
+}
+
+async function writeCloudFile(path, text, message, knownSha = '') {
+    let sha = knownSha;
+    if (!sha) sha = (await readCloudFile(path, true))?.sha || '';
+    const payload = { message, content: cloudBase64(text), branch: cloudSettings.branch || 'main' };
+    if (sha) payload.sha = sha;
+    const response = await cloudFetch(cloudRepoApi(path), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    return response.json();
+}
+
+function emptyCloudRegistry() {
+    return { schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: new Date().toISOString(), cards: [] };
+}
+
+async function loadCloudRegistry(force = false) {
+    if (cloudRegistry && !force) return cloudRegistry;
+    const file = await readCloudFile(CLOUD_REGISTRY_PATH, true);
+    if (!file) return cloudRegistry = emptyCloudRegistry();
+    const parsed = JSON.parse(file.text);
+    if (!Array.isArray(parsed.cards)) throw new Error('云仓库 registry.json 格式无效。');
+    cloudRegistry = { ...emptyCloudRegistry(), ...parsed, _sha: file.sha };
+    return cloudRegistry;
+}
+
+function cloudCardId(character) {
+    return String(character?.extensions?.auto_card_studio?.cloud?.cardId || globalThis.crypto?.randomUUID?.() || `card-${Date.now()}`);
+}
+
+async function uploadCharacterToCloud(characterName) {
+    const character = await helper.getCharacter(characterName);
+    if (!character) throw new Error(`找不到角色卡“${characterName}”。`);
+    const registry = await loadCloudRegistry(true);
+    const id = cloudCardId(character);
+    const existing = registry.cards.find(item => item.id === id);
+    const localRevision = String(character?.extensions?.auto_card_studio?.cloud?.revision || '');
+    if (existing?.revision && localRevision && existing.revision !== localRevision) {
+        const overwrite = await showStudioConfirm({
+            title: '云端版本已经更新',
+            message: `“${characterName}”的云端版本已在其他设备修改。\n取消后可先从云端导入为新角色进行比较；继续会以本机版本覆盖云端。`,
+            confirmLabel: '仍用本机覆盖',
+            cancelLabel: '取消上传',
+        });
+        if (!overwrite) return false;
+    }
+    const now = new Date().toISOString();
+    const cloud = { cardId: id, repository: `${cloudSettings.owner}/${cloudSettings.repo}`, revision: localRevision, updatedAt: now };
+    character.extensions = { ...(character.extensions || {}), auto_card_studio: { ...(character.extensions?.auto_card_studio || {}), cloud } };
+    const path = `cards/${id}/character.json`;
+    const result = await writeCloudFile(path, JSON.stringify(character, null, 2), `同步角色卡：${characterName}`);
+    const record = { id, name: characterName, path, archived: false, updatedAt: now, revision: result.content?.sha || '' };
+    if (existing) Object.assign(existing, record); else registry.cards.push(record);
+    registry.updatedAt = now;
+    await writeCloudFile(CLOUD_REGISTRY_PATH, JSON.stringify({ schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: registry.updatedAt, cards: registry.cards }, null, 2), `更新云仓库索引：${characterName}`, registry._sha);
+    cloudRegistry = null;
+    character.extensions.auto_card_studio.cloud.revision = record.revision;
+    await helper.createOrReplaceCharacter(characterName, character, { render: 'immediate' });
+    return true;
+}
+
+async function importCloudCharacter(record) {
+    const file = await readCloudFile(record.path);
+    const raw = JSON.parse(file.text);
+    const normalized = normalizeImportedCharacter(raw, record.name);
+    const existing = new Set(helper.getCharacterNames?.() || []);
+    let name = normalized.name || record.name || '云端角色卡';
+    const base = name;
+    let suffix = 2;
+    while (existing.has(name)) name = `${base}（云端 ${suffix++}）`;
+    let worldbook = normalized.worldbook;
+    if (normalized.embeddedWorldbookEntries.length) {
+        worldbook = `${name} · 云端世界书`;
+        await helper.createOrReplaceWorldbook(worldbook, normalized.embeddedWorldbookEntries, { render: 'immediate' });
+    }
+    const source = raw?.data && typeof raw.data === 'object' ? raw.data : raw;
+    const extensions = {
+        ...normalized.extensions,
+        auto_card_studio: {
+            ...(normalized.extensions?.auto_card_studio || {}),
+            cloud: {
+                ...(normalized.extensions?.auto_card_studio?.cloud || {}),
+                cardId: record.id,
+                repository: `${cloudSettings.owner}/${cloudSettings.repo}`,
+                revision: record.revision || '',
+                updatedAt: record.updatedAt || new Date().toISOString(),
+            },
+        },
+    };
+    const character = { ...source, ...normalized, name, worldbook, extensions };
+    await helper.createOrReplaceCharacter(name, character, { render: 'immediate' });
+    notify('success', `已从云仓库导入“${name}”。`);
+}
+
+async function archiveCloudCharacter(record) {
+    const registry = await loadCloudRegistry(true);
+    const target = registry.cards.find(item => item.id === record.id);
+    if (!target) return;
+    target.archived = true;
+    target.updatedAt = new Date().toISOString();
+    registry.updatedAt = target.updatedAt;
+    await writeCloudFile(CLOUD_REGISTRY_PATH, JSON.stringify({ schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: registry.updatedAt, cards: registry.cards }, null, 2), `归档角色卡：${target.name}`, registry._sha);
+    cloudRegistry = null;
+}
+
+function openCloudRepository() {
+    const overlay = shell.querySelector('#acs-cloud-overlay');
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    renderCloudRepository().catch(error => notify('error', error.message));
+}
+
+function closeCloudRepository() {
+    const overlay = shell.querySelector('#acs-cloud-overlay');
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+}
+
+async function renderCloudRepository() {
+    const connected = Boolean(cloudSettings.accessToken);
+    shell.querySelector('#acs-cloud-launch')?.classList.toggle('is-connected', connected);
+    shell.querySelector('#acs-cloud-login').textContent = connected ? `已连接 ${cloudSettings.login || 'GitHub'}` : '尚未连接 GitHub';
+    shell.querySelector('#acs-cloud-login-detail').textContent = connected
+        ? `${cloudSettings.owner || '未选择所有者'} / ${cloudSettings.repo || '未选择仓库'}`
+        : '凭证仅保存在当前浏览器';
+    for (const [id, value] of [['acs-cloud-client-id', cloudSettings.clientId], ['acs-cloud-app-slug', cloudSettings.appSlug], ['acs-cloud-owner', cloudSettings.owner], ['acs-cloud-repo', cloudSettings.repo], ['acs-cloud-branch', cloudSettings.branch]]) {
+        const input = shell.querySelector(`#${id}`); if (input && document.activeElement !== input) input.value = value;
+    }
+    const localList = shell.querySelector('#acs-cloud-local-list');
+    const names = helper?.getCharacterNames?.() || [];
+    localList.innerHTML = names.length ? names.map(name => `<article class="acs-cloud-card"><span class="acs-cloud-card-icon"><i class="fa-solid fa-user-astronaut"></i></span><span><strong>${cloudEscapeHtml(name)}</strong><small>本地角色卡</small></span><span class="acs-cloud-card-actions"><button class="acs-cloud-mini" type="button" data-cloud-upload="${cloudEscapeHtml(name)}" title="同步到云端"><i class="fa-solid fa-cloud-arrow-up"></i></button></span></article>`).join('') : '<div class="acs-cloud-empty"><p><i class="fa-solid fa-box-open"></i>暂无可上传的本地角色卡</p></div>';
+    const remoteList = shell.querySelector('#acs-cloud-remote-list');
+    if (!connected || !cloudSettings.owner || !cloudSettings.repo) {
+        remoteList.innerHTML = '<div class="acs-cloud-empty"><p><i class="fa-solid fa-cloud"></i>连接 GitHub 并选择仓库后显示云端角色卡</p></div>';
+        return;
+    }
+    const registry = await loadCloudRegistry(true);
+    const cards = registry.cards.filter(item => !item.archived);
+    remoteList.innerHTML = cards.length ? cards.map(item => `<article class="acs-cloud-card"><span class="acs-cloud-card-icon"><i class="fa-solid fa-id-card"></i></span><span><strong>${cloudEscapeHtml(item.name)}</strong><small>${new Date(item.updatedAt).toLocaleString('zh-CN')}</small></span><span class="acs-cloud-card-actions"><button class="acs-cloud-mini" type="button" data-cloud-pull="${cloudEscapeHtml(item.id)}" title="导入为新角色"><i class="fa-solid fa-cloud-arrow-down"></i></button><button class="acs-cloud-mini" type="button" data-cloud-archive="${cloudEscapeHtml(item.id)}" title="归档"><i class="fa-solid fa-box-archive"></i></button></span></article>`).join('') : '<div class="acs-cloud-empty"><p><i class="fa-solid fa-cloud"></i>云仓库还没有角色卡</p></div>';
+}
+
+function installCloudRepositoryUI() {
+    if (shell.querySelector('#acs-cloud-overlay')) return;
+    if (!document.querySelector('#acs-cloud-repository-style')) {
+        const style = document.createElement('style'); style.id = 'acs-cloud-repository-style'; style.textContent = CLOUD_REPOSITORY_CSS; document.head.append(style);
+    }
+    const button = document.createElement('button');
+    button.id = 'acs-cloud-launch'; button.className = 'acs-icon-button acs-cloud-button'; button.type = 'button'; button.title = '云仓库';
+    button.innerHTML = '<i class="fa-solid fa-cloud" aria-hidden="true"></i><span class="acs-visually-hidden">云仓库</span>';
+    shell.querySelector('.acs-topbar-actions')?.prepend(button);
+    const overlay = document.createElement('div');
+    overlay.id = 'acs-cloud-overlay'; overlay.className = 'acs-cloud-overlay'; overlay.hidden = true; overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML = `<section class="acs-cloud-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-cloud-title"><header class="acs-cloud-head"><div><p>CARD CLOUD</p><h2 id="acs-cloud-title">角色卡云仓库</h2></div><button class="acs-cloud-close" type="button" data-cloud-close aria-label="关闭"><i class="fa-solid fa-xmark"></i></button></header><nav class="acs-cloud-tabs"><button class="acs-cloud-tab is-active" type="button" data-cloud-tab="remote">云端角色卡</button><button class="acs-cloud-tab" type="button" data-cloud-tab="local">上传本地卡</button><button class="acs-cloud-tab" type="button" data-cloud-tab="connect">连接设置</button></nav><div class="acs-cloud-body">
+      <section class="acs-cloud-panel" data-cloud-panel="remote"><div id="acs-cloud-remote-list" class="acs-cloud-cards"></div></section>
+      <section class="acs-cloud-panel" data-cloud-panel="local" hidden><div id="acs-cloud-local-list" class="acs-cloud-cards"></div></section>
+      <section id="acs-cloud-connect-panel" class="acs-cloud-panel" data-cloud-panel="connect" hidden><div class="acs-cloud-status"><i class="fa-brands fa-github"></i><span><strong id="acs-cloud-login">尚未连接 GitHub</strong><small id="acs-cloud-login-detail">凭证仅保存在当前浏览器</small></span><button id="acs-cloud-connect" class="acs-button acs-button-primary" type="button">连接 GitHub</button></div><div id="acs-cloud-device-box" class="acs-cloud-device" hidden><span>请在 GitHub 页面输入代码</span><div id="acs-cloud-user-code" class="acs-cloud-code"></div><small>授权完成后此窗口会自动继续。</small></div><div class="acs-cloud-grid"><label class="acs-cloud-field acs-cloud-field-wide"><span>GitHub App Client ID</span><input id="acs-cloud-client-id" spellcheck="false" placeholder="正式版会内置；测试时可手动填写"></label><label class="acs-cloud-field acs-cloud-field-wide"><span>GitHub App 标识</span><input id="acs-cloud-app-slug" spellcheck="false" placeholder="用于打开安装页面"></label><label class="acs-cloud-field"><span>仓库所有者</span><input id="acs-cloud-owner" spellcheck="false" placeholder="GitHub 用户名"></label><label class="acs-cloud-field"><span>私有仓库名</span><input id="acs-cloud-repo" spellcheck="false" value="auto-card-cloud"></label><label class="acs-cloud-field"><span>分支</span><input id="acs-cloud-branch" spellcheck="false" value="main"></label></div><div class="acs-cloud-actions"><button id="acs-cloud-save-settings" class="acs-button acs-button-primary" type="button"><i class="fa-solid fa-floppy-disk"></i>保存并检查</button><button id="acs-cloud-create-repo" class="acs-button" type="button"><i class="fa-solid fa-plus"></i>创建私有仓库</button><button id="acs-cloud-install-app" class="acs-button" type="button"><i class="fa-brands fa-github"></i>安装 GitHub App</button><button id="acs-cloud-disconnect" class="acs-button" type="button">退出连接</button></div><p class="acs-cloud-note">只同步最终角色卡。项目、对话、草稿、模型密钥不会上传；删除默认改为归档，仍可通过 Git 历史恢复。</p></section>
+    </div></section>`;
+    shell.append(overlay);
+    button.addEventListener('click', openCloudRepository);
+    overlay.addEventListener('click', async event => {
+        if (event.target.closest('[data-cloud-close]')) return closeCloudRepository();
+        const tab = event.target.closest('[data-cloud-tab]');
+        if (tab) { for (const item of overlay.querySelectorAll('[data-cloud-tab]')) item.classList.toggle('is-active', item === tab); for (const panel of overlay.querySelectorAll('[data-cloud-panel]')) panel.hidden = panel.dataset.cloudPanel !== tab.dataset.cloudTab; return; }
+        const upload = event.target.closest('[data-cloud-upload]');
+        if (upload) { upload.disabled = true; try { const synced = await uploadCharacterToCloud(upload.dataset.cloudUpload); if (synced) { notify('success', `已同步“${upload.dataset.cloudUpload}”。`); await renderCloudRepository(); } } catch (error) { notify('error', error.message); } finally { upload.disabled = false; } return; }
+        const pull = event.target.closest('[data-cloud-pull]');
+        if (pull) { const item = (await loadCloudRegistry()).cards.find(card => card.id === pull.dataset.cloudPull); if (item) await importCloudCharacter(item); return; }
+        const archive = event.target.closest('[data-cloud-archive]');
+        if (archive) { const item = (await loadCloudRegistry()).cards.find(card => card.id === archive.dataset.cloudArchive); if (item && await showStudioConfirm({ title: '归档云端角色卡？', message: `“${item.name}”会从默认列表隐藏，但 Git 历史仍可恢复。`, confirmLabel: '归档' })) { await archiveCloudCharacter(item); await renderCloudRepository(); } }
+    });
+    overlay.querySelector('#acs-cloud-connect').addEventListener('click', () => beginCloudDeviceLogin().catch(error => notify('error', error.message)));
+    overlay.querySelector('#acs-cloud-save-settings').addEventListener('click', async () => { for (const [key, id] of [['clientId','acs-cloud-client-id'],['appSlug','acs-cloud-app-slug'],['owner','acs-cloud-owner'],['repo','acs-cloud-repo'],['branch','acs-cloud-branch']]) cloudSettings[key] = overlay.querySelector(`#${id}`).value.trim(); saveCloudSettings(); cloudRegistry = null; try { if (cloudSettings.accessToken) await loadCloudRegistry(true); notify('success', '云仓库设置已保存。'); await renderCloudRepository(); } catch (error) { notify('error', `仓库检查失败：${error.message}`); } });
+    overlay.querySelector('#acs-cloud-create-repo').addEventListener('click', () => hostWindow.open(`https://github.com/new?name=${encodeURIComponent(cloudSettings.repo || 'auto-card-cloud')}&description=${encodeURIComponent('A.U.T.O 角色卡私人云仓库')}&visibility=private`, '_blank', 'noopener,noreferrer'));
+    overlay.querySelector('#acs-cloud-install-app').addEventListener('click', () => { if (!cloudSettings.appSlug) return notify('warning', '请先填写 GitHub App 标识。'); hostWindow.open(`https://github.com/apps/${encodeURIComponent(cloudSettings.appSlug)}/installations/new`, '_blank', 'noopener,noreferrer'); });
+    overlay.querySelector('#acs-cloud-disconnect').addEventListener('click', () => { cloudSettings = { ...loadCloudSettings(), accessToken: '', refreshToken: '', expiresAt: 0, refreshExpiresAt: 0, login: '' }; saveCloudSettings(); cloudRegistry = null; renderCloudRepository(); });
+    renderCloudRepository().catch(() => undefined);
+}
+
 async function ensureStudioLoaded() {
     if (shell?.isConnected) return;
 
@@ -15887,6 +16217,7 @@ async function ensureStudioLoaded() {
     installProjectLibraryUI();
     installStudioToolsUI();
     installRuntimeDataUI();
+    installCloudRepositoryUI();
     installConversationNavigation();
     installWorkspaceResizers();
     installDeliveryUI();
