@@ -2950,12 +2950,27 @@ const REFERENCE_ASSET_CSS = `
     border-radius: 0;
   }
   .acs-manual-artifact-head,.acs-reference-worldbook-picker-dialog > header {
-    padding-top: max(18px,env(safe-area-inset-top,0px));
+    padding-top: max(14px,env(safe-area-inset-top,0px));
     padding-right: 17px;
     padding-left: 17px;
   }
-  .acs-manual-artifact-form { padding: 14px 13px; }
-  .acs-manual-artifact-content-field textarea { min-height: 100%; resize: none; }
+  .acs-manual-artifact-head h2 { margin-top: 5px; font-size: 19px; }
+  .acs-manual-artifact-form {
+    grid-template-rows: repeat(4, auto);
+    align-content: start;
+    gap: 12px;
+    padding: 14px 13px 18px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .acs-manual-artifact-content-field { min-height: 0; }
+  .acs-manual-artifact-content-field textarea {
+    height: clamp(180px,34dvh,310px);
+    min-height: 180px;
+    resize: none;
+  }
+  .acs-manual-artifact-form .acs-select-trigger { min-height: 42px; }
+  .acs-manual-artifact-form .acs-select-options { max-height: min(320px,38dvh); }
   .acs-manual-artifact-actions,.acs-reference-worldbook-picker-dialog > footer {
     padding-bottom: max(13px,env(safe-area-inset-bottom,0px));
   }
@@ -7531,7 +7546,8 @@ function toggleStyledSelect(widget, force) {
 }
 
 function installStyledSelects() {
-    for (const select of shell.querySelectorAll('#acs-custom-source, #acs-connection-profile, #acs-worldbook-select, #acs-person')) {
+    // 创作台内所有 select 统一使用自绘菜单，禁止遗漏到系统原生下拉层。
+    for (const select of shell.querySelectorAll('select')) {
         if (select.nextElementSibling?.classList.contains('acs-styled-select')) continue;
         select.classList.add('acs-native-select');
         select.tabIndex = -1;
@@ -9039,6 +9055,7 @@ function openManualArtifactDialog(artifactId = '') {
     }));
     stepSelect.value = String(stored?.step || project.currentStep);
     stepSelect.disabled = Boolean(stored);
+    syncStyledSelect(stepSelect);
     overlay.querySelector('#acs-manual-artifact-name').value = stored?.displayName || '';
     overlay.querySelector('#acs-manual-artifact-content').value = stored?.content || '';
     overlay.querySelector('#acs-save-manual-artifact span').textContent = stored ? '保存修改' : '存入产物库';
