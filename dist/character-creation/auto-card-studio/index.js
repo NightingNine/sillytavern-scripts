@@ -12306,6 +12306,11 @@ function worldbookEntryEnabled(name) {
     return String(name).startsWith('🕹️') || String(name).startsWith('🧩');
 }
 
+function deliveryTargetDisplayName(name) {
+    // 分类图标继续保留在内部名称中用于发布规则，界面只显示干净的条目名称。
+    return String(name || '').replace(/^(?:🕹️|🧩|🗑️|🔇|🔢)\s*/u, '');
+}
+
 function buildDefaultOutputWorldbook(selectedArtifacts) {
     const grouped = new Map();
     for (const artifact of selectedArtifacts.filter(item => item.target.kind === 'worldbook')) {
@@ -12517,7 +12522,7 @@ function buildReorgStructureReport(artifacts) {
 
     for (const entry of model.entries) {
         // 图标只负责创作台里的产物状态提示，不属于结构报告语义，避免干扰 AI 识别条目名称。
-        const reportEntryName = String(entry.name || '').replace(/^(?:🕹️|🧩|🗑️|🔇|🔢)\s*/u, '');
+        const reportEntryName = deliveryTargetDisplayName(entry.name);
         lines.push('', `## ${reportEntryName}`, `UID: ${entry.uid} | 状态: ${worldbookEntryEnabled(entry.name) ? '启用' : '禁用'}`);
         for (const block of entry.blocks) {
             lines.push(
@@ -12972,7 +12977,7 @@ function normalizeReorgPlan(plan, selectedArtifacts) {
     // 如果模型给出的映射全部不可执行，回退为报告中的原分组，避免一次小格式错误导致无限失败或空世界书。
     if (!normalized.mappings.length && expectedBlockIds.size && !discarded.size) {
         normalized.mappings = model.entries.map(entry => ({
-            targetEntryName: String(entry.name || `重组条目 ${entry.uid + 1}`).replace(/^(?:🕹️|🧩|🗑️|🔇|🔢)\s*/u, ''),
+            targetEntryName: deliveryTargetDisplayName(entry.name || `重组条目 ${entry.uid + 1}`),
             blockIds: entry.blocks.map(block => block.blockId),
             attributes: { template: 'blue', overrides: { enabled: worldbookEntryEnabled(entry.name) } },
         }));
@@ -13443,7 +13448,8 @@ function renderDeliveryArtifacts() {
         const name = document.createElement('strong');
         name.textContent = artifact.displayName;
         const destination = document.createElement('small');
-        destination.textContent = isReleaseBasis ? artifact.target.name : `写入：${artifact.target.name}`;
+        const targetDisplayName = deliveryTargetDisplayName(artifact.target.name);
+        destination.textContent = isReleaseBasis ? targetDisplayName : `写入：${targetDisplayName}`;
         copy.append(name, destination);
         const meta = document.createElement('span');
         meta.className = 'acs-delivery-item-meta';
