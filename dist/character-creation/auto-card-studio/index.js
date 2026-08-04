@@ -3543,7 +3543,8 @@ const DELIVERY_DIALOG_CSS = `
 `;
 
 const CONFIRM_DIALOG_CSS = `
-.acs-confirm-overlay { position:absolute; inset:0; z-index:60; display:grid; padding:18px; place-items:center; background:rgba(18,16,14,.74); backdrop-filter:blur(9px); }
+/* 通用确认框必须高于角色选择、世界书管理等业务弹窗，避免异步流程等待不可见的确认结果。 */
+.acs-confirm-overlay { position:absolute; inset:0; z-index:90; display:grid; padding:18px; place-items:center; background:rgba(18,16,14,.74); backdrop-filter:blur(9px); }
 .acs-confirm-dialog { width:min(430px,calc(100vw - 32px)); overflow:hidden; border:1px solid rgba(217,119,87,.38); border-radius:17px; background:#302e29; box-shadow:0 28px 80px rgba(10,9,8,.62); animation:acs-confirm-in 160ms ease-out; }
 .acs-confirm-body { display:grid; grid-template-columns:38px minmax(0,1fr); gap:13px; padding:21px 21px 18px; }
 .acs-confirm-icon { display:grid; width:38px; height:38px; place-items:center; border:1px solid rgba(217,119,87,.3); border-radius:11px; background:rgba(217,119,87,.1); color:var(--acs-cyan); }
