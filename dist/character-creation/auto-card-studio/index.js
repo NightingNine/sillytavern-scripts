@@ -11617,11 +11617,14 @@ function acceptCurrentStep() {
     shell.querySelector('#acs-user-input').focus();
 }
 
+// 标签名继续遵守原有字符范围，仅额外允许酒馆中两种稳定角色宏。
+const ARTIFACT_XML_TAG_NAME_SOURCE = String.raw`[A-Za-z](?:[A-Za-z0-9_:\-\u4e00-\u9fff]|\{\{(?:user|char)\}\})*`;
+
 function extractXmlBlocks(text) {
     const source = String(text || '');
     const blocks = [];
     const stacks = new Map();
-    const pattern = /<(\/)?([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)(?:\s[^>]*)?>/g;
+    const pattern = new RegExp(`<(/)?(${ARTIFACT_XML_TAG_NAME_SOURCE})(?:\\s[^>]*)?>`, 'g');
     let match;
     while ((match = pattern.exec(source)) !== null) {
         const closing = Boolean(match[1]);
@@ -11697,7 +11700,7 @@ function artifactTagMatchesRule(tag, rules) {
 function extractRecoverableFencedXmlBlocks(text, rules, existingBlocks) {
     if (!rules.recoverableXmlFences?.length) return [];
     const recovered = [];
-    const openingPattern = /^<([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)(?:\s[^>]*)?>/;
+    const openingPattern = new RegExp(`^<(${ARTIFACT_XML_TAG_NAME_SOURCE})(?:\\s[^>]*)?>`);
     for (const fence of extractFencedBlocks(text)) {
         if (!rules.recoverableXmlFences.includes(fence.language)) continue;
         const match = fence.content.match(openingPattern);
