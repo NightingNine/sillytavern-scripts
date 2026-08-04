@@ -2381,7 +2381,8 @@ const REFERENCE_ASSET_CSS = `
   font: 700 7px/1 var(--acs-body);
 }
 .acs-manual-artifact-overlay,
-.acs-reference-worldbook-picker {
+.acs-reference-worldbook-picker,
+.acs-character-project-picker {
   position: absolute;
   inset: 0;
   z-index: 72;
@@ -2392,7 +2393,8 @@ const REFERENCE_ASSET_CSS = `
   backdrop-filter: blur(10px);
 }
 .acs-manual-artifact-dialog,
-.acs-reference-worldbook-picker-dialog {
+.acs-reference-worldbook-picker-dialog,
+.acs-character-project-picker-dialog {
   display: grid;
   width: min(760px,94vw);
   max-height: min(820px,90vh);
@@ -2404,7 +2406,8 @@ const REFERENCE_ASSET_CSS = `
   grid-template-rows: auto minmax(0,1fr) auto;
 }
 .acs-manual-artifact-head,
-.acs-reference-worldbook-picker-dialog > header {
+.acs-reference-worldbook-picker-dialog > header,
+.acs-character-project-picker-dialog > header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -2416,15 +2419,19 @@ const REFERENCE_ASSET_CSS = `
 .acs-manual-artifact-head p,
 .acs-manual-artifact-head h2,
 .acs-reference-worldbook-picker-dialog header p,
-.acs-reference-worldbook-picker-dialog header h2 { margin: 0; }
+.acs-reference-worldbook-picker-dialog header h2,
+.acs-character-project-picker-dialog header p,
+.acs-character-project-picker-dialog header h2 { margin: 0; }
 .acs-manual-artifact-head p,
-.acs-reference-worldbook-picker-dialog header p {
+.acs-reference-worldbook-picker-dialog header p,
+.acs-character-project-picker-dialog header p {
   color: var(--acs-gold);
   font: 700 8px/1 var(--acs-mono);
   letter-spacing: .15em;
 }
 .acs-manual-artifact-head h2,
-.acs-reference-worldbook-picker-dialog header h2 {
+.acs-reference-worldbook-picker-dialog header h2,
+.acs-character-project-picker-dialog header h2 {
   margin-top: 7px;
   color: var(--acs-text);
   font: 700 21px/1.25 var(--acs-body);
@@ -2478,7 +2485,8 @@ const REFERENCE_ASSET_CSS = `
 .acs-manual-artifact-form > p i,
 .acs-reference-worldbook-picker-body > p i { margin-right: 5px; color: var(--acs-gold); }
 .acs-manual-artifact-actions,
-.acs-reference-worldbook-picker-dialog > footer {
+.acs-reference-worldbook-picker-dialog > footer,
+.acs-character-project-picker-dialog > footer {
   display: flex;
   justify-content: center;
   gap: 8px;
@@ -2487,7 +2495,8 @@ const REFERENCE_ASSET_CSS = `
   background: #292722;
 }
 .acs-manual-artifact-actions .acs-button,
-.acs-reference-worldbook-picker-dialog footer .acs-button {
+.acs-reference-worldbook-picker-dialog footer .acs-button,
+.acs-character-project-picker-dialog footer .acs-button {
   flex: 0 1 154px;
   width: 154px;
   min-width: 0;
@@ -2926,7 +2935,8 @@ const REFERENCE_ASSET_CSS = `
 .acs-reference-worldbook-picker-dialog { width: min(520px,94vw); border-color: rgba(183,163,207,.38); }
 .acs-reference-worldbook-picker-dialog > header { background: linear-gradient(120deg,rgba(183,163,207,.1),transparent 58%); }
 .acs-reference-worldbook-picker-dialog header p { color: var(--acs-violet); }
-.acs-reference-worldbook-picker-dialog header button {
+.acs-reference-worldbook-picker-dialog header button,
+.acs-character-project-picker-dialog header button {
   display: grid;
   width: 34px;
   height: 34px;
@@ -2940,8 +2950,8 @@ const REFERENCE_ASSET_CSS = `
 .acs-reference-worldbook-picker-body { display: grid; gap: 12px; padding: 20px 22px; }
 .acs-reference-worldbook-picker-body > p i { color: var(--acs-violet); }
 @media (max-width: 560px) {
-  .acs-manual-artifact-overlay,.acs-reference-worldbook-picker { padding: 0; }
-  .acs-manual-artifact-dialog,.acs-reference-worldbook-picker-dialog {
+  .acs-manual-artifact-overlay,.acs-reference-worldbook-picker,.acs-character-project-picker { padding: 0; }
+  .acs-manual-artifact-dialog,.acs-reference-worldbook-picker-dialog,.acs-character-project-picker-dialog {
     width: 100%;
     height: 100vh;
     height: 100dvh;
@@ -2949,7 +2959,7 @@ const REFERENCE_ASSET_CSS = `
     border: 0;
     border-radius: 0;
   }
-  .acs-manual-artifact-head,.acs-reference-worldbook-picker-dialog > header {
+  .acs-manual-artifact-head,.acs-reference-worldbook-picker-dialog > header,.acs-character-project-picker-dialog > header {
     padding-top: max(14px,env(safe-area-inset-top,0px));
     padding-right: 17px;
     padding-left: 17px;
@@ -2971,7 +2981,7 @@ const REFERENCE_ASSET_CSS = `
   }
   .acs-manual-artifact-form .acs-select-trigger { min-height: 42px; }
   .acs-manual-artifact-form .acs-select-options { max-height: min(320px,38dvh); }
-  .acs-manual-artifact-actions,.acs-reference-worldbook-picker-dialog > footer {
+  .acs-manual-artifact-actions,.acs-reference-worldbook-picker-dialog > footer,.acs-character-project-picker-dialog > footer {
     padding-bottom: max(13px,env(safe-area-inset-bottom,0px));
   }
   .acs-reference-worldbook-picker-body { align-content: start; padding: 18px 15px; }
@@ -3024,6 +3034,7 @@ const ARTIFACT_DATABASE_NAME = 'auto-card-studio-artifacts';
 const ARTIFACT_DATABASE_VERSION = 1;
 const ARTIFACT_STORE_NAME = 'project-vaults';
 const ARTIFACT_VAULT_VERSION = 2;
+const CHARACTER_PROJECT_SNAPSHOT_VERSION = 1;
 // v0.6.29 及更早版本的分步骤保护库。新版只在首次迁移时读取，暂不主动删除，便于降级恢复。
 const LEGACY_CONVERSATION_DATABASE_NAME = 'auto-card-studio-conversations';
 const LEGACY_CONVERSATION_DATABASE_VERSION = 1;
@@ -3459,6 +3470,35 @@ const DELIVERY_DIALOG_CSS = `
 
 .acs-delivery-item.is-draft .acs-delivery-item-meta span:first-child {
   color: var(--acs-gold);
+}
+
+.acs-character-project-picker-dialog { width:min(620px,94vw); border-color:rgba(183,163,207,.38); }
+.acs-character-project-picker-dialog > header { background:linear-gradient(120deg,rgba(183,163,207,.1),transparent 58%); }
+.acs-character-project-picker-dialog header p { color:var(--acs-violet); }
+.acs-character-project-picker-body { display:grid; min-height:0; overflow:hidden; gap:12px; padding:17px 20px; }
+.acs-character-project-picker-search-wrap { position:relative; display:block; }
+.acs-character-project-picker-search-wrap i { position:absolute; top:50%; left:12px; color:var(--acs-muted); transform:translateY(-50%); pointer-events:none; }
+.acs-character-project-picker-search { width:100%; min-height:42px; padding:9px 12px 9px 34px; border:1px solid var(--acs-line); border-radius:10px; background:#292722; color:var(--acs-text); font:500 11px/1.4 var(--acs-body); }
+.acs-character-project-options { display:grid; min-height:120px; max-height:min(360px,46vh); overflow:auto; gap:6px; padding-right:3px; scrollbar-width:none; }
+.acs-character-project-options::-webkit-scrollbar { display:none; }
+.acs-character-project-option { display:grid; grid-template-columns:34px minmax(0,1fr) auto; align-items:center; gap:10px; min-height:48px; padding:8px 10px; border:1px solid var(--acs-line-soft); border-radius:10px; background:#34312d; color:var(--acs-text-soft); text-align:left; }
+.acs-character-project-option:hover,.acs-character-project-option.is-selected { border-color:rgba(183,163,207,.48); background:rgba(183,163,207,.1); }
+.acs-character-project-option > i { display:grid; width:30px; height:30px; place-items:center; border-radius:8px; background:rgba(183,163,207,.12); color:var(--acs-violet); }
+.acs-character-project-option span { overflow:hidden; font-size:11px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+.acs-character-project-option small { color:var(--acs-muted); font-size:8px; }
+.acs-character-project-empty { display:grid; min-height:120px; place-items:center; color:var(--acs-muted); font-size:10px; }
+.acs-character-project-file { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:12px; border-top:1px solid var(--acs-line-soft); }
+.acs-character-project-file p { margin:0; color:var(--acs-muted); font-size:9px; line-height:1.45; }
+.acs-character-project-file .acs-button { flex:0 0 auto; width:auto; min-height:38px; margin:0; }
+@media (max-width:560px) {
+  .acs-character-project-picker { padding:0; }
+  .acs-character-project-picker-dialog { width:100%; height:100vh; height:100dvh; max-height:none; border:0; border-radius:0; }
+  .acs-character-project-picker-dialog > header { padding-top:max(14px,env(safe-area-inset-top,0px)); padding-right:17px; padding-left:17px; }
+  .acs-character-project-picker-dialog > footer { padding-bottom:max(13px,env(safe-area-inset-bottom,0px)); }
+  .acs-character-project-picker-body { align-content:start; padding:14px 13px; }
+  .acs-character-project-options { max-height:none; }
+  .acs-character-project-file { align-items:stretch; flex-direction:column; }
+  .acs-character-project-file .acs-button { width:100%; }
 }
 
 .acs-delivery-item.is-release-basis {
@@ -5717,6 +5757,7 @@ let deliveryArtifacts = [];
 let confirmDialogResolver = null;
 let updateDialogResolver = null;
 let resourceEditorPrompt = null;
+let characterProjectImportSelection = '';
 let resourceDockDragged = false;
 let conversationRenameId = '';
 let conversationCreateFormOpen = false;
@@ -9846,6 +9887,60 @@ function installWorkspaceResizers() {
     restoreWorkspaceWidths();
 }
 
+function closeCharacterProjectPicker() {
+    const overlay = shell?.querySelector('#acs-character-project-picker');
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    characterProjectImportSelection = '';
+}
+
+function renderCharacterProjectOptions() {
+    const list = shell?.querySelector('#acs-character-project-options');
+    if (!list) return;
+    const query = String(shell.querySelector('#acs-character-project-search')?.value || '').trim().toLowerCase();
+    const names = (helper?.getCharacterNames?.() || [])
+        .map(value => String(value))
+        .filter(name => !query || name.toLowerCase().includes(query))
+        .sort((left, right) => left.localeCompare(right, 'zh-CN'));
+    list.replaceChildren();
+    if (!names.length) {
+        const empty = document.createElement('div');
+        empty.className = 'acs-character-project-empty';
+        empty.textContent = query ? '没有匹配的角色卡' : '酒馆中还没有角色卡';
+        list.append(empty);
+    }
+    for (const name of names) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `acs-character-project-option${name === characterProjectImportSelection ? ' is-selected' : ''}`;
+        button.dataset.characterProjectName = name;
+        button.setAttribute('role', 'option');
+        button.setAttribute('aria-selected', String(name === characterProjectImportSelection));
+        button.innerHTML = '<i class="fa-solid fa-address-card" aria-hidden="true"></i><span></span><small>酒馆角色</small>';
+        button.querySelector('span').textContent = name;
+        list.append(button);
+    }
+    const confirmButton = shell.querySelector('#acs-import-selected-character-project');
+    if (confirmButton) confirmButton.disabled = !characterProjectImportSelection;
+}
+
+function openCharacterProjectPicker() {
+    if (isGenerating) {
+        notify('warning', '请先停止当前生成，再导入角色卡。');
+        return;
+    }
+    const overlay = shell?.querySelector('#acs-character-project-picker');
+    if (!overlay) return;
+    characterProjectImportSelection = '';
+    const search = overlay.querySelector('#acs-character-project-search');
+    search.value = '';
+    renderCharacterProjectOptions();
+    overlay.hidden = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    search.focus({ preventScroll: true });
+}
+
 function installStudioToolsUI() {
     if (!shell.querySelector('#acs-import-project-button')) {
         const importButton = document.createElement('button');
@@ -9863,6 +9958,55 @@ function installStudioToolsUI() {
         importInput.accept = 'application/json,.json,.auto-card-studio.json';
         importInput.hidden = true;
         shell.append(importInput);
+    }
+
+    if (!shell.querySelector('#acs-import-character-project-button')) {
+        const cardButton = document.createElement('button');
+        cardButton.id = 'acs-import-character-project-button';
+        cardButton.className = 'acs-icon-button';
+        cardButton.type = 'button';
+        cardButton.title = '从角色卡继续创作';
+        cardButton.setAttribute('aria-label', '从角色卡继续创作');
+        cardButton.innerHTML = '<i class="fa-solid fa-address-card" aria-hidden="true"></i><span class="acs-visually-hidden">从角色卡继续创作</span>';
+        shell.querySelector('#acs-import-project-button').after(cardButton);
+
+        const cardInput = document.createElement('input');
+        cardInput.id = 'acs-import-character-project-file';
+        cardInput.type = 'file';
+        cardInput.accept = 'application/json,image/png,.json,.png';
+        cardInput.hidden = true;
+        shell.append(cardInput);
+    }
+
+    if (!shell.querySelector('#acs-character-project-picker')) {
+        const picker = document.createElement('div');
+        picker.id = 'acs-character-project-picker';
+        picker.className = 'acs-character-project-picker';
+        picker.hidden = true;
+        picker.setAttribute('aria-hidden', 'true');
+        picker.innerHTML = `
+          <section class="acs-character-project-picker-dialog" role="dialog" aria-modal="true" aria-labelledby="acs-character-project-picker-title">
+            <header>
+              <div><p>CONTINUE PROJECT</p><h2 id="acs-character-project-picker-title">从角色卡继续创作</h2></div>
+              <button type="button" data-character-project-close aria-label="关闭"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="acs-character-project-picker-body">
+              <label class="acs-character-project-picker-search-wrap">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input id="acs-character-project-search" class="acs-character-project-picker-search" type="search" placeholder="搜索酒馆中的角色卡" autocomplete="off" aria-controls="acs-character-project-options">
+              </label>
+              <div id="acs-character-project-options" class="acs-character-project-options" role="listbox" aria-label="SillyTavern 角色卡"></div>
+              <div class="acs-character-project-file">
+                <p>也可以读取本地 SillyTavern JSON 或 PNG 角色卡。</p>
+                <button id="acs-choose-character-project-file" class="acs-button acs-button-secondary" type="button"><i class="fa-solid fa-file-arrow-up"></i>选择文件</button>
+              </div>
+            </div>
+            <footer>
+              <button class="acs-button" type="button" data-character-project-close>取消</button>
+              <button id="acs-import-selected-character-project" class="acs-button acs-button-publish" type="button" disabled><i class="fa-solid fa-folder-plus"></i>创建续作项目</button>
+            </footer>
+          </section>`;
+        shell.append(picker);
     }
 
     const composerButtons = shell.querySelector('.acs-composer-actions > div');
@@ -12148,6 +12292,7 @@ function collectDeliveryArtifacts() {
             versionId: artifact.id,
             content: artifact.content,
             displayName,
+            source: artifact.source,
             target,
         }];
     });
@@ -13410,6 +13555,12 @@ async function confirmProjectDelivery() {
             existingExtensions.regex_scripts,
             includeOutputFormatBundle,
         );
+        const continuationSnapshot = buildCharacterProjectSnapshot(
+            selectedArtifacts,
+            worldbookBuild,
+            characterName,
+            worldbookName,
+        );
         await helper.createOrReplaceWorldbook(worldbookName, worldbookBuild.entries, { render: 'immediate' });
         const character = {
             ...existing,
@@ -13422,6 +13573,7 @@ async function confirmProjectDelivery() {
             worldbook: worldbookName,
             extensions: {
                 ...existingExtensions,
+                auto_card_studio: continuationSnapshot,
                 regex_scripts: regexScripts,
                 tavern_helper: existingExtensions.tavern_helper || { scripts: [], variables: {} },
             },
@@ -13507,6 +13659,301 @@ function projectDataSummary(targetProject, targetVault = artifactVaultFor(target
 
 function projectSummaryText(summary) {
     return `已有内容：${summary.completedSteps} 个步骤 · ${summary.turns} 条对话 · ${summary.artifacts} 个正式产物 · 创作母题 ${summary.briefCharacters} 字`;
+}
+
+function buildCharacterProjectSnapshot(selectedArtifacts, worldbookBuild, characterName, worldbookName) {
+    const keptWorldbookIds = new Set(worldbookBuild?.usedArtifactIds || []);
+    const artifacts = selectedArtifacts.filter(artifact => {
+        if (artifact.target.kind === 'reorg_plan') return false;
+        if (artifact.target.kind !== 'worldbook') return true;
+        return keptWorldbookIds.has(artifact.id);
+    }).map(artifact => ({
+        step: artifact.step,
+        identity: artifact.tag,
+        content: artifact.content,
+        displayName: artifact.displayName,
+        accepted: artifact.accepted === true,
+        source: artifact.source === 'manual' ? 'manual' : 'card-resume',
+    }));
+    return {
+        schemaVersion: CHARACTER_PROJECT_SNAPSHOT_VERSION,
+        kind: 'auto-card-studio-continuation',
+        studioVersion: AUTO_CARD_STUDIO_VERSION,
+        createdAt: new Date().toISOString(),
+        project: {
+            name: project.name,
+            brief: project.brief,
+            currentStep: project.currentStep,
+            preferences: { ...project.preferences },
+            output: { characterName, worldbookName },
+            stepStatuses: Object.fromEntries(STEPS.map(step => [step.number, project.steps?.[step.number]?.status || 'idle'])),
+        },
+        artifacts,
+    };
+}
+
+function continuationProjectFromSnapshot(snapshot, fallbackName = '导入的角色卡') {
+    if (!snapshot || snapshot.kind !== 'auto-card-studio-continuation'
+        || Number(snapshot.schemaVersion) !== CHARACTER_PROJECT_SNAPSHOT_VERSION
+        || !Array.isArray(snapshot.artifacts)) return null;
+    const imported = createDefaultProject();
+    imported.name = String(snapshot.project?.name || fallbackName || '导入的角色卡');
+    imported.brief = String(snapshot.project?.brief || '');
+    imported.currentStep = Math.max(1, Math.min(STEPS.length, Number(snapshot.project?.currentStep) || 1));
+    imported.preferences = { ...imported.preferences, ...(snapshot.project?.preferences || {}) };
+    imported.output = { ...imported.output, ...(snapshot.project?.output || {}) };
+    for (const step of STEPS) {
+        const status = snapshot.project?.stepStatuses?.[step.number];
+        if (['idle', 'draft', 'accepted'].includes(status)) imported.steps[step.number].status = status;
+    }
+    const vault = createArtifactVault(imported.id);
+    const now = new Date().toISOString();
+    for (const item of snapshot.artifacts) {
+        const step = Number(item?.step);
+        const identity = String(item?.identity || '').trim();
+        const content = String(item?.content || '').trim();
+        if (!STEPS.some(candidate => candidate.number === step) || !identity || !content) continue;
+        const version = {
+            id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            step,
+            identity,
+            content,
+            displayName: String(item.displayName || '').trim(),
+            createdAt: now,
+            updatedAt: now,
+            source: item.source === 'manual' ? 'manual' : 'card-resume',
+        };
+        vault.versions.push(version);
+        vault.selectedVersionIds[artifactContextKey(step, identity)] = version.id;
+        imported.steps[step].status = item.accepted === true ? 'accepted' : 'draft';
+        imported.steps[step].updatedAt = now;
+    }
+    vault.updatedAt = now;
+    imported.autoReorg = { response: '', plan: null, schemaVersion: null, updatedAt: null };
+    imported.createdAt = now;
+    imported.updatedAt = now;
+    return { project: imported, vault, exact: true };
+}
+
+function worldbookEntriesFromCharacterBook(characterBook) {
+    const entries = characterBook?.entries;
+    const list = Array.isArray(entries) ? entries : entries && typeof entries === 'object' ? Object.values(entries) : [];
+    return list.flatMap((entry, index) => {
+        const content = String(entry?.content || '').trim();
+        if (!content) return [];
+        return [{
+            uid: entry.uid ?? entry.id ?? index,
+            name: String(entry.name || entry.comment || `世界书条目 ${index + 1}`),
+            content,
+        }];
+    });
+}
+
+function normalizeImportedCharacter(raw, fallbackName = '') {
+    const data = raw?.data && typeof raw.data === 'object' ? raw.data : raw;
+    if (!data || typeof data !== 'object') throw new Error('角色卡数据不是有效的 JSON 对象。');
+    const extensions = data.extensions && typeof data.extensions === 'object' ? data.extensions : {};
+    const firstMessage = String(data.first_mes || data.first_message || data.first_messages?.[0] || '');
+    return {
+        name: String(data.name || raw?.name || fallbackName || '导入的角色卡').replace(/\.(?:json|png)$/iu, ''),
+        creator: String(data.creator || raw?.creator || ''),
+        creator_notes: String(data.creator_notes || raw?.creator_notes || ''),
+        description: String(data.description || raw?.description || ''),
+        first_messages: firstMessage ? [firstMessage] : [],
+        worldbook: String(extensions.world || data.worldbook || raw?.worldbook || ''),
+        extensions,
+        embeddedWorldbookEntries: worldbookEntriesFromCharacterBook(data.character_book || raw?.character_book),
+    };
+}
+
+function partialContinuationFromCharacter(character, worldbookEntries = []) {
+    const marker = `${character.creator_notes || ''}\n${character.description || ''}`;
+    if (!/由\s*A\.U\.T\.O\s*角色卡创作台生成/iu.test(marker)) return null;
+    const imported = createDefaultProject();
+    imported.name = character.name || '导入的角色卡';
+    imported.brief = character.description || character.creator_notes || '';
+    imported.currentStep = 29;
+    imported.preferences.creatorRole = character.creator || imported.preferences.creatorRole;
+    imported.output = { characterName: character.name || '', worldbookName: character.worldbook || '' };
+    const vault = createArtifactVault(imported.id);
+    const now = new Date().toISOString();
+    const addArtifact = ({ step, identity, content, displayName, source = 'card-resume' }) => {
+        if (!String(content || '').trim()) return;
+        const version = {
+            id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            step,
+            identity,
+            content: String(content).trim(),
+            displayName: String(displayName || '').trim(),
+            createdAt: now,
+            updatedAt: now,
+            source,
+        };
+        vault.versions.push(version);
+        vault.selectedVersionIds[artifactContextKey(step, identity)] = version.id;
+        imported.steps[step].status = 'accepted';
+        imported.steps[step].updatedAt = now;
+    };
+    for (const [index, entry] of worldbookEntries.entries()) {
+        addArtifact({
+            step: 28,
+            identity: `manual:card-entry-${entry.uid ?? index}`,
+            content: entry.content,
+            displayName: entry.name || `世界书条目 ${index + 1}`,
+            source: 'manual',
+        });
+    }
+    if (character.first_messages?.[0]) {
+        addArtifact({ step: 30, identity: 'opening', content: character.first_messages[0], displayName: '正式开场白' });
+    }
+    const statusRegex = (character.extensions?.regex_scripts || []).find(script => (
+        /显示状态栏/u.test(String(script?.script_name || script?.scriptName || ''))
+    ));
+    if (statusRegex) {
+        addArtifact({ step: 23, identity: 'STATUSBAR_HTML', content: statusRegex.replace_string || statusRegex.replaceString, displayName: '状态栏界面' });
+        addArtifact({ step: 23, identity: 'STATUSBAR_REGEX', content: statusRegex.find_regex || statusRegex.findRegex, displayName: '状态栏匹配表达式' });
+    }
+    vault.updatedAt = now;
+    imported.createdAt = now;
+    imported.updatedAt = now;
+    return { project: imported, vault, exact: false };
+}
+
+async function activateImportedContinuation(imported, vault, sourceLabel) {
+    flushPendingProjectEdits();
+    const existingNames = new Set(projectLibrary.projects.map(item => item.name));
+    const baseName = imported.name || '导入的角色卡';
+    let candidate = baseName;
+    let suffix = 1;
+    while (existingNames.has(candidate)) candidate = `${baseName}（续作${suffix++ > 1 ? ` ${suffix - 1}` : ''}）`;
+    imported.name = candidate;
+    imported.id = createDefaultProject().id;
+    vault.projectId = imported.id;
+    imported.updatedAt = new Date().toISOString();
+    artifactVaults.set(imported.id, vault);
+    setConversationMenuOpen(false);
+    project = imported;
+    projectLibrary.projects.push(project);
+    projectLibrary.activeProjectId = project.id;
+    syncEnvironmentToProject();
+    if (artifactPanelExpanded) toggleArtifactPanel(false);
+    saveProject();
+    await projectDatabaseWriteChain.catch(() => undefined);
+    await persistArtifactVault(project.id);
+    renderEnvironmentSelectors();
+    renderAll();
+    toggleProjectMenu(false);
+    notify('success', `已从${sourceLabel}创建续作项目“${project.name}”。`);
+}
+
+function decodeBase64Json(value) {
+    const binary = atob(String(value || '').trim());
+    const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+}
+
+async function parseCharacterCardFile(file) {
+    if (file.size > 50 * 1024 * 1024) throw new Error('角色卡文件超过 50 MB，无法导入。');
+    if (/\.json$/iu.test(file.name) || file.type === 'application/json') {
+        return normalizeImportedCharacter(JSON.parse(await file.text()), file.name);
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (signature.some((value, index) => bytes[index] !== value)) throw new Error('只支持 SillyTavern 角色卡 JSON 或 PNG。');
+    const decoder = new TextDecoder('latin1');
+    const payloads = [];
+    for (let offset = 8; offset + 12 <= bytes.length;) {
+        const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 8);
+        const length = view.getUint32(0, false);
+        const type = decoder.decode(bytes.subarray(offset + 4, offset + 8));
+        const dataStart = offset + 8;
+        const dataEnd = dataStart + length;
+        if (dataEnd + 4 > bytes.length) throw new Error('PNG 数据块不完整，无法安全解析。');
+        const data = bytes.subarray(dataStart, dataEnd);
+        if (type === 'tEXt') {
+            const separator = data.indexOf(0);
+            const keyword = separator >= 0 ? decoder.decode(data.subarray(0, separator)) : '';
+            if (['chara', 'ccv3'].includes(keyword)) payloads.push({ keyword, value: decoder.decode(data.subarray(separator + 1)) });
+        }
+        offset = dataEnd + 4;
+        if (type === 'IEND') break;
+    }
+    if (!payloads.length) throw new Error('PNG 中没有找到 chara 或 ccv3 角色卡数据。');
+    const decoded = payloads.map(payload => ({ keyword: payload.keyword, raw: decodeBase64Json(payload.value) }));
+    const preferred = decoded.find(item => item.keyword === 'ccv3') || decoded[0];
+    if (decoded.length > 1) {
+        const duplicateKeywords = decoded.map(item => item.keyword)
+            .filter((keyword, index, all) => all.indexOf(keyword) !== index);
+        if (duplicateKeywords.length) throw new Error(`PNG 中存在重复的 ${duplicateKeywords[0]} 角色卡数据，已停止导入。`);
+        const semantics = decoded.map(item => {
+            const normalized = normalizeImportedCharacter(item.raw, file.name);
+            return JSON.stringify({
+                name: normalized.name,
+                creator_notes: normalized.creator_notes,
+                description: normalized.description,
+                first_messages: normalized.first_messages,
+                worldbook: normalized.worldbook,
+                snapshot: normalized.extensions?.auto_card_studio || null,
+                embeddedWorldbookEntries: normalized.embeddedWorldbookEntries,
+            });
+        });
+        if (semantics.some(value => value !== semantics[0])) {
+            throw new Error('PNG 中的 chara 与 ccv3 角色卡内容不一致，已停止导入以避免数据错乱。');
+        }
+    }
+    return normalizeImportedCharacter(preferred.raw, file.name);
+}
+
+async function importContinuationCharacter(character, suppliedWorldbookEntries = [], sourceLabel = '角色卡') {
+    if (isGenerating) throw new Error('请先停止当前生成，再导入角色卡。');
+    const snapshot = character.extensions?.auto_card_studio;
+    let result = continuationProjectFromSnapshot(snapshot, character.name);
+    let worldbookEntries = suppliedWorldbookEntries;
+    if (!result) {
+        if (!worldbookEntries.length && character.worldbook && typeof helper?.getWorldbook === 'function') {
+            const names = helper.getWorldbookNames?.() || [];
+            if (names.includes(character.worldbook)) worldbookEntries = await helper.getWorldbook(character.worldbook);
+        }
+        result = partialContinuationFromCharacter(character, worldbookEntries);
+    }
+    if (!result) throw new Error('这不是由 A.U.T.O 角色卡创作台生成的角色卡。');
+    const summary = projectDataSummary(result.project, result.vault);
+    const confirmed = await showStudioConfirm({
+        title: result.exact ? '导入可继续创作项目？' : '导入旧版角色卡？',
+        message: result.exact
+            ? `将创建新项目“${result.project.name}”。\n恢复 ${summary.artifacts} 项当前产物，不包含对话、历史版本和废弃项。`
+            : `该卡没有续作快照，将从现有世界书、开场白和状态栏正则部分恢复。\n恢复 ${summary.artifacts} 项当前内容，不包含原步骤对话和历史版本。`,
+        confirmLabel: '创建续作项目',
+    });
+    if (!confirmed) return false;
+    await activateImportedContinuation(result.project, result.vault, sourceLabel);
+    return true;
+}
+
+async function importInstalledCharacterProject(characterName) {
+    const character = await helper.getCharacter(characterName);
+    const normalized = normalizeImportedCharacter({ ...character, name: characterName }, characterName);
+    let entries = [];
+    if (normalized.worldbook && (helper.getWorldbookNames?.() || []).includes(normalized.worldbook)) {
+        entries = await helper.getWorldbook(normalized.worldbook);
+    }
+    return importContinuationCharacter(normalized, entries, `酒馆角色“${characterName}”`);
+}
+
+async function importCharacterProjectFile(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+        const character = await parseCharacterCardFile(file);
+        await importContinuationCharacter(character, character.embeddedWorldbookEntries, `文件“${file.name}”`);
+        closeCharacterProjectPicker();
+    } catch (error) {
+        console.error('[A.U.T.O Card Studio] 角色卡续作导入失败。', error);
+        notify('error', error?.message || '角色卡导入失败，请检查文件。');
+    } finally {
+        input.value = '';
+    }
 }
 
 function referenceWorldbookBundleForProject(projectData = project) {
@@ -15006,6 +15453,39 @@ function bindStudioEvents() {
         shell.querySelector('#acs-import-project').click();
     });
     shell.querySelector('#acs-import-project').addEventListener('change', importProjectJson);
+    shell.querySelector('#acs-import-character-project-button').addEventListener('click', openCharacterProjectPicker);
+    shell.querySelector('#acs-character-project-search').addEventListener('input', renderCharacterProjectOptions);
+    shell.querySelector('#acs-character-project-options').addEventListener('click', event => {
+        const option = event.target.closest('[data-character-project-name]');
+        if (!option) return;
+        characterProjectImportSelection = option.dataset.characterProjectName;
+        renderCharacterProjectOptions();
+    });
+    shell.querySelector('#acs-import-selected-character-project').addEventListener('click', async event => {
+        if (!characterProjectImportSelection) return;
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+            const imported = await importInstalledCharacterProject(characterProjectImportSelection);
+            if (imported) closeCharacterProjectPicker();
+        } catch (error) {
+            console.error('[A.U.T.O Card Studio] 酒馆角色续作导入失败。', error);
+            notify('error', error?.message || '角色卡导入失败。');
+        } finally {
+            button.disabled = false;
+        }
+    });
+    shell.querySelector('#acs-choose-character-project-file').addEventListener('click', () => {
+        shell.querySelector('#acs-import-character-project-file').click();
+    });
+    shell.querySelector('#acs-import-character-project-file').addEventListener('change', importCharacterProjectFile);
+    for (const close of shell.querySelectorAll('[data-character-project-close]')) close.addEventListener('click', closeCharacterProjectPicker);
+    shell.querySelector('#acs-character-project-picker').addEventListener('click', event => {
+        if (event.target === event.currentTarget) closeCharacterProjectPicker();
+    });
+    shell.querySelector('#acs-character-project-picker').addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeCharacterProjectPicker();
+    });
     shell.querySelector('#acs-check-update').addEventListener('click', checkForUpdatesManually);
     shell.querySelector('#acs-tour-launch').addEventListener('click', startTour);
     shell.querySelector('#acs-tour-skip').addEventListener('click', () => closeTour(false));
