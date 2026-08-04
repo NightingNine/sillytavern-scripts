@@ -4912,6 +4912,120 @@ const MOBILE_POLISH_CSS = `
 .acs-shell.acs-mobile-layout #acs-accept-step::before { content: '下一站'; }
 .acs-shell.acs-mobile-layout #acs-accept-step { grid-column: auto; }
 .acs-shell.acs-mobile-layout #acs-stop-generation:not([hidden]) + #acs-generate { display: none; }
+
+/* 手机端不缩放整张画布：尺寸在可读、可触控的范围内随视口连续收敛。 */
+.acs-shell.acs-mobile-layout {
+  --acs-mobile-gutter: clamp(8px, 2.8vw, 13px);
+  --acs-mobile-gap: clamp(7px, 2.2vw, 11px);
+  --acs-mobile-control-height: clamp(40px, 11vw, 46px);
+  --acs-mobile-body-size: clamp(11px, 3.15vw, 13px);
+}
+
+.acs-shell.acs-mobile-layout .acs-inspector {
+  width: min(100vw, 430px);
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+.acs-shell.acs-mobile-layout .acs-tab-panel {
+  min-width: 0;
+  padding-right: var(--acs-mobile-gutter);
+  padding-left: var(--acs-mobile-gutter);
+}
+
+.acs-shell.acs-mobile-layout .acs-connection-section,
+.acs-shell.acs-mobile-layout .acs-settings-card,
+.acs-shell.acs-mobile-layout .acs-settings-fold,
+.acs-shell.acs-mobile-layout .acs-custom-connection,
+.acs-shell.acs-mobile-layout .acs-field-stack,
+.acs-shell.acs-mobile-layout .acs-field-stack > *,
+.acs-shell.acs-mobile-layout .acs-model-field,
+.acs-shell.acs-mobile-layout .acs-model-picker,
+.acs-shell.acs-mobile-layout .acs-model-combobox {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.acs-shell.acs-mobile-layout .acs-custom-connection {
+  padding: clamp(10px, 3vw, 13px);
+}
+
+.acs-shell.acs-mobile-layout .acs-field-stack {
+  gap: var(--acs-mobile-gap);
+}
+
+.acs-shell.acs-mobile-layout .acs-field-stack input,
+.acs-shell.acs-mobile-layout .acs-field-stack select,
+.acs-shell.acs-mobile-layout .acs-model-combobox > input,
+.acs-shell.acs-mobile-layout .acs-button-compact {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--acs-mobile-control-height);
+  font-size: var(--acs-mobile-body-size);
+}
+
+.acs-shell.acs-mobile-layout .acs-model-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.acs-shell.acs-mobile-layout .acs-model-picker .acs-button-compact {
+  width: auto;
+  min-width: clamp(96px, 27vw, 116px);
+  padding-right: clamp(9px, 2.8vw, 13px);
+  padding-left: clamp(9px, 2.8vw, 13px);
+  font-size: clamp(10px, 2.9vw, 12px);
+}
+
+.acs-shell.acs-mobile-layout .acs-model-options {
+  right: 0;
+  left: 0;
+  width: auto;
+  max-width: 100%;
+  max-height: min(42dvh, 320px);
+  padding: 5px;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+.acs-shell.acs-mobile-layout .acs-model-option {
+  grid-template-columns: minmax(0, 1fr) 14px;
+  min-height: clamp(38px, 10.5vw, 44px);
+  padding: 7px 9px;
+  font-size: clamp(11px, 3.1vw, 13px);
+}
+
+.acs-shell.acs-mobile-layout .acs-model-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 390px) {
+  .acs-shell.acs-mobile-layout .acs-model-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-model-picker .acs-button-compact {
+    width: 100%;
+  }
+}
+
+@media (max-width: 350px) {
+  .acs-shell.acs-mobile-layout {
+    --acs-mobile-gutter: 7px;
+    --acs-mobile-gap: 6px;
+  }
+
+  .acs-shell.acs-mobile-layout .acs-custom-connection {
+    padding: 8px;
+  }
+}
 `;
 
 const TOUR_STEPS = Object.freeze([
