@@ -5549,7 +5549,7 @@ const STEP_GUIDES = [
     {
         title: '先分析，再生成可执行的重组方案',
         description: '先点击会话窗上方的“分析当前产物”，把所有正式世界书产物解析为带稳定 blockId 的结构报告；然后由 AI 生成重组方案。',
-        prompts: ['报告中是否包含所有准备发布的正式产物？', '每个 blockId 是否在 mappings 或 discardedBlockIds 中恰好出现一次？', '条目名称、激活策略、位置、顺序与关键词是否符合 Step 28 的交付设计？'],
+        prompts: ['报告中是否包含所有准备发布的正式产物？', '需要保留的 blockId 是否只在 mappings 中出现一次，未映射项是否确实应当废弃？', '条目名称、激活策略、位置、顺序与关键词是否符合 Step 28 的交付设计？'],
         placeholder: '可补充重组偏好，例如哪些内容必须常驻、哪些按关键词触发、哪些条目需要合并；生成前请先完成上方分析。',
     },
     {
@@ -10848,9 +10848,9 @@ function buildReorgProjectContext(artifacts, report = '') {
         report || buildReorgStructureReport(artifacts),
         '',
         '# 废弃规则',
-        '需要从最终世界书删除的内容块，请把 blockId 放入顶层 discardedBlockIds 数组。',
-        '每个 blockId 必须且只能出现一次：要么进入 mappings，要么进入 discardedBlockIds；不得通过遗漏表达废弃。',
-        'discardedBlockIds 只影响最终发布，原始产物仍保留在创作台产物库。',
+        '需要保留的内容块放入 mappings；没有被任何 mapping 引用的 blockId 会按原 A.U.T.O 协议视为废弃。',
+        '也可以把废弃项明确写入顶层 discardedBlockIds；两种写法效果相同，且不能与 mappings 重复。',
+        '废弃只影响最终发布，原始产物仍保留在创作台产物库。',
         '',
         '# 当前条目规划表（SOURCE_entry_plan）',
         entryPlan || '尚未生成 SOURCE_entry_plan；请仅依据结构报告完整安排本次所选内容块。',
@@ -12366,7 +12366,7 @@ function buildReorgStructureReport(artifacts) {
         '# 世界书结构报告',
         `源世界书: ${reorgSourceWorldbookName()}`,
         `条目: ${model.entries.length} | 内容块: ${blocks.length} | XML标签: ${xmlCount} | 异常: ${abnormalCount}`,
-        '说明: 每个 blockId 都代表本次发布勾选的一项独立产物，必须且只能在 mappings 或 discardedBlockIds 中使用一次。',
+        '说明: 每个 blockId 都代表一项独立产物；映射项进入最终世界书，未映射项按原 A.U.T.O 协议视为废弃，但原产物继续保留。',
     ];
 
     for (const entry of model.entries) {
@@ -12595,7 +12595,9 @@ function validateReorgPlan(plan, selectedArtifacts) {
     }
 
     const missingBlockIds = [...expectedBlockIds].filter(blockId => !usedBlockIds.has(blockId) && !discardedBlockIds.has(blockId));
-    if (missingBlockIds.length) addError('mappings', `有 ${missingBlockIds.length} 个内容块既未映射也未显式废弃：${missingBlockIds.join(', ')}`);
+    // 原 A.U.T.O 重组器把未引用块放入 unusedBlocks，并仅给出提示；发布时不写入这些块。
+    for (const blockId of missingBlockIds) discardedBlockIds.add(blockId);
+    if (missingBlockIds.length) warnings.push(`mappings: ${missingBlockIds.length} 个未映射内容块将作为废弃项排除：${missingBlockIds.join(', ')}`);
     for (const blockId of actionByBlockId.keys()) {
         if (!usedBlockIds.has(blockId)) warnings.push(`blockActions: ${blockId} 的动作没有对应 mapping，将不会执行`);
     }
@@ -12822,8 +12824,8 @@ async function generateDeliveryReorgPlan(selectedArtifacts, { retryReason = '' }
     const userInput = [
         '请立即执行预设中的世界书重组步骤（原 Step29）。',
         '只处理 STUDIO_REORG_CONTEXT 中“世界书结构报告”列出的本次已选产物，并参考其中当前 SOURCE_entry_plan 分组。',
-        '每个 blockId 都必须且只能在 mappings 或 discardedBlockIds 中使用一次，不得遗漏，也不得自行编造 blockId。',
-        '确定废弃的内容块放入顶层 discardedBlockIds；它们不会进入最终世界书，但原产物会继续保留。',
+        '需要保留的 blockId 在 mappings 中只能使用一次，不得自行编造 blockId。',
+        '未被 mappings 引用的内容按原 A.U.T.O 协议视为废弃；也可写入顶层 discardedBlockIds 明确声明。废弃项不会进入最终世界书，但原产物会继续保留。',
         retryReason ? `上一次方案未通过完整性校验：${retryReason}。请重新核对全部 blockId 后完整输出。` : '',
         '请严格输出 A.U.T.O 规定的 reorg_plan JSON 代码块。',
     ].filter(Boolean).join('\n');
