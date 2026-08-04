@@ -3050,6 +3050,7 @@ const GITHUB_API_VERSION = '2026-03-10';
 // GitHub App 创建完成后由正式构建写入；保留可覆盖输入便于测试与私有部署。
 const DEFAULT_GITHUB_APP_CLIENT_ID = 'Iv23liCdP6AKzGp5KhEY';
 const DEFAULT_GITHUB_APP_SLUG = 'a-u-t-o-card-cloud';
+const GITHUB_AUTH_RELAY_URL = 'https://auto-card-cloud-auth.lanan-hao.workers.dev';
 const DEFAULT_CONVERSATION_FONT_SIZE = 15;
 const MIN_CONVERSATION_FONT_SIZE = 12;
 const MAX_CONVERSATION_FONT_SIZE = 20;
@@ -15980,11 +15981,23 @@ async function refreshCloudTokenIfNeeded() {
         saveCloudSettings();
         throw new Error('GitHub 登录已过期，请重新连接。');
     }
-    const body = new URLSearchParams({ client_id: cloudSettings.clientId, grant_type: 'refresh_token', refresh_token: cloudSettings.refreshToken });
-    const response = await fetch('https://github.com/login/oauth/access_token', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    const response = await cloudAuthFetch('/token', { refresh_token: cloudSettings.refreshToken });
     const data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error_description || data.error || 'GitHub 登录续期失败。');
     updateCloudTokens(data);
+}
+
+async function cloudAuthFetch(path, payload) {
+    const response = await fetch(`${GITHUB_AUTH_RELAY_URL}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {}),
+    });
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error_description || data.error || `云端认证中转请求失败（HTTP ${response.status}）。`);
+    }
+    return response;
 }
 
 function updateCloudTokens(data) {
@@ -15997,8 +16010,7 @@ function updateCloudTokens(data) {
 
 async function beginCloudDeviceLogin() {
     if (!cloudSettings.clientId) throw new Error('当前构建尚未配置 GitHub App Client ID。');
-    const body = new URLSearchParams({ client_id: cloudSettings.clientId });
-    const response = await fetch('https://github.com/login/device/code', { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    const response = await cloudAuthFetch('/device', {});
     const data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error_description || data.error || '无法发起 GitHub 登录。');
     const panel = shell.querySelector('#acs-cloud-connect-panel');
@@ -16009,10 +16021,7 @@ async function beginCloudDeviceLogin() {
     const interval = Math.max(5, Number(data.interval || 5));
     while (Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, interval * 1000));
-        const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
-            method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ client_id: cloudSettings.clientId, device_code: data.device_code, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }),
-        });
+        const tokenResponse = await cloudAuthFetch('/token', { device_code: data.device_code });
         const token = await tokenResponse.json();
         if (token.error === 'authorization_pending' || token.error === 'slow_down') continue;
         if (token.error) throw new Error(token.error_description || token.error);
