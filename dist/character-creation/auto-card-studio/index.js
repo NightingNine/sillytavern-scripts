@@ -13804,6 +13804,44 @@ function normalizeImportedCharacter(raw, fallbackName = '') {
     };
 }
 
+// 旧版角色卡没有续作快照时，世界书条目仅作为内容容器；
+// 恢复产物时按 A.U.T.O 标签识别身份与步骤，不能把重组后的每个世界书条目误当成一个产物。
+const IMPORTED_ARTIFACT_STEP_PRIORITY = Object.freeze([
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+    22, 23, 24, 25, 26, 27, 28,
+    // Step 20/21 接受任意 WORLD_*，必须最后匹配，避免吞掉更具体的前序标签。
+    20, 21,
+]);
+
+function importedArtifactStepForTag(tag) {
+    const normalizedTag = String(tag || '').trim();
+    if (!normalizedTag) return 0;
+    for (const stepNumber of IMPORTED_ARTIFACT_STEP_PRIORITY) {
+        const rules = STEP_ARTIFACT_RULES[stepNumber];
+        if (rules && artifactTagMatchesRule(normalizedTag, rules)) return stepNumber;
+    }
+    return 0;
+}
+
+function taggedArtifactsFromWorldbookEntries(worldbookEntries = []) {
+    const artifactsByIdentity = new Map();
+    for (const entry of worldbookEntries) {
+        for (const block of extractXmlBlocks(entry?.content)) {
+            const step = importedArtifactStepForTag(block.tag);
+            if (!step || !String(block.content || '').trim()) continue;
+            const identity = String(block.tag).trim();
+            // 旧卡不恢复历史版本；若异常数据重复出现同一标签，只保留最后一份当前内容。
+            artifactsByIdentity.set(artifactContextKey(step, identity), {
+                step,
+                identity,
+                content: block.content,
+                displayName: artifactDisplayName(identity, step),
+            });
+        }
+    }
+    return [...artifactsByIdentity.values()];
+}
+
 function partialContinuationFromCharacter(character, worldbookEntries = []) {
     const marker = `${character.creator_notes || ''}\n${character.description || ''}`;
     if (!/由\s*A\.U\.T\.O\s*角色卡创作台生成/iu.test(marker)) return null;
@@ -13832,15 +13870,7 @@ function partialContinuationFromCharacter(character, worldbookEntries = []) {
         imported.steps[step].status = 'accepted';
         imported.steps[step].updatedAt = now;
     };
-    for (const [index, entry] of worldbookEntries.entries()) {
-        addArtifact({
-            step: 28,
-            identity: `manual:card-entry-${entry.uid ?? index}`,
-            content: entry.content,
-            displayName: entry.name || `世界书条目 ${index + 1}`,
-            source: 'manual',
-        });
-    }
+    for (const artifact of taggedArtifactsFromWorldbookEntries(worldbookEntries)) addArtifact(artifact);
     if (character.first_messages?.[0]) {
         addArtifact({ step: 30, identity: 'opening', content: character.first_messages[0], displayName: '正式开场白' });
     }
