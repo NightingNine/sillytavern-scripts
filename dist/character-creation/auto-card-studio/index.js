@@ -11448,8 +11448,8 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         void syncConversationVaults(generationProject);
         saveProjectLibrary();
     }
-    // 新一轮生成默认从底部开始；生成中一旦用户上滚，后续 token 不再抢夺滚动位置。
-    setConversationAutoFollow(true);
+    // 发送消息只更新对话数据，不改变用户正在阅读的位置。需要跟随时由用户主动回底恢复。
+    setConversationAutoFollow(false);
     setGenerating(true);
     renderCurrentStep();
     renderStepRail();
