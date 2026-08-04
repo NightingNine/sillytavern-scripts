@@ -3512,17 +3512,9 @@ const DELIVERY_DIALOG_CSS = `
 }
 
 .acs-delivery-footer {
-  justify-content: space-between;
+  justify-content: flex-end;
   border-top: 1px solid var(--acs-line-soft);
   background: #292722;
-}
-
-.acs-delivery-footer p {
-  max-width: 58%;
-  margin: 0;
-  color: var(--acs-muted);
-  font-size: 9px;
-  line-height: 1.5;
 }
 
 .acs-delivery-actions {
@@ -3544,7 +3536,6 @@ const DELIVERY_DIALOG_CSS = `
   .acs-delivery-reorg-status { min-width: 0; flex: none; text-align: left; }
   .acs-delivery-count { justify-self: end; }
   .acs-delivery-footer { align-items: stretch; flex-direction: column; }
-  .acs-delivery-footer p { max-width: none; }
   .acs-delivery-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .acs-delivery-item { grid-template-columns: 22px minmax(0, 1fr); }
   .acs-delivery-item-meta { grid-column: 2; grid-auto-flow: column; justify-content: start; }
@@ -10222,7 +10213,6 @@ function installDeliveryUI() {
         </div>
         <div id="acs-delivery-list" class="acs-delivery-list"></div>
         <footer class="acs-delivery-footer">
-          <p>🕹️、🧩条目默认启用；🗑️、🔇、🔢及配置条目默认关闭。重组方案固定作为发布依据；方案中显式废弃的内容不会写入世界书，原产物仍保留。</p>
           <div class="acs-delivery-actions">
             <button class="acs-button" type="button" data-delivery-close>取消</button>
             <button id="acs-confirm-delivery" class="acs-button acs-button-publish" type="button">
