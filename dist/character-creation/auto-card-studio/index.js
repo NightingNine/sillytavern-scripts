@@ -11977,6 +11977,22 @@ function addArtifactsFromAssistantTurn(turnIndex) {
         return;
     }
 
+    let reorgPlanResult = null;
+    let reorgAnalysis = null;
+    if (stepNumber === 29) {
+        reorgAnalysis = currentReorgAnalysis();
+        if (!reorgAnalysis) {
+            notify('warning', '当前结构报告已过期，请重新分析产物后再恢复这份方案。');
+            return;
+        }
+        try {
+            reorgPlanResult = reorgPlanFromResponse(turn.content, reorgAnalysis.artifacts);
+        } catch (error) {
+            notify('error', `这份重组方案无法恢复：${String(error?.message || error)}`);
+            return;
+        }
+    }
+
     const vault = artifactVaultFor(project.id);
     const now = new Date().toISOString();
     let added = 0;
@@ -12007,13 +12023,26 @@ function addArtifactsFromAssistantTurn(turnIndex) {
         added += 1;
     }
     vault.updatedAt = now;
+    if (reorgPlanResult) {
+        project.autoReorg = {
+            ...project.autoReorg,
+            response: turn.content,
+            plan: reorgPlanResult.plan,
+            schemaVersion: REORG_PLAN_SCHEMA_VERSION,
+            selectionSignature: reorgAnalysis.signature,
+            updatedAt: now,
+        };
+        saveProject();
+    }
     void persistArtifactVault(project.id);
     renderArtifacts();
     const summary = [
         added ? `新增 ${added} 个版本` : '',
         selectedExisting ? `选中 ${selectedExisting} 个已有版本` : '',
     ].filter(Boolean).join('，');
-    notify('success', `已处理这条回复中的产物：${summary}。`);
+    notify('success', reorgPlanResult
+        ? `已恢复这份世界书重组方案，并处理产物：${summary}。`
+        : `已处理这条回复中的产物：${summary}。`);
 }
 
 async function retryLatestUserInput(turnIndex) {
