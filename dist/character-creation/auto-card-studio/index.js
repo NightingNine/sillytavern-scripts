@@ -16030,6 +16030,7 @@ async function beginCloudDeviceLogin() {
         cloudSettings.login = String(user.login || '');
         if (!cloudSettings.owner) cloudSettings.owner = cloudSettings.login;
         saveCloudSettings();
+        panel.querySelector('#acs-cloud-device-box').hidden = true;
         await renderCloudRepository();
         notify('success', `已连接 GitHub：${cloudSettings.login}`);
         return;
@@ -16151,8 +16152,8 @@ async function archiveCloudCharacter(record) {
     target.archived = true;
     target.updatedAt = new Date().toISOString();
     registry.updatedAt = target.updatedAt;
-    await writeCloudFile(CLOUD_REGISTRY_PATH, JSON.stringify({ schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: registry.updatedAt, cards: registry.cards }, null, 2), `归档角色卡：${target.name}`, registry._sha);
-    cloudRegistry = null;
+    const result = await writeCloudFile(CLOUD_REGISTRY_PATH, JSON.stringify({ schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: registry.updatedAt, cards: registry.cards }, null, 2), `归档角色卡：${target.name}`, registry._sha);
+    cloudRegistry = { ...registry, _sha: result.content?.sha || registry._sha };
 }
 
 function openCloudRepository() {
@@ -16186,7 +16187,8 @@ async function renderCloudRepository() {
         remoteList.innerHTML = '<div class="acs-cloud-empty"><p><i class="fa-solid fa-cloud"></i>连接 GitHub 并选择仓库后显示云端角色卡</p></div>';
         return;
     }
-    const registry = await loadCloudRegistry(true);
+    // 复用刚完成写入的本地索引，避免 GitHub 内容接口短暂返回旧缓存。
+    const registry = await loadCloudRegistry();
     const cards = registry.cards.filter(item => !item.archived);
     remoteList.innerHTML = cards.length ? cards.map(item => `<article class="acs-cloud-card"><span class="acs-cloud-card-icon"><i class="fa-solid fa-id-card"></i></span><span><strong>${cloudEscapeHtml(item.name)}</strong><small>${new Date(item.updatedAt).toLocaleString('zh-CN')}</small></span><span class="acs-cloud-card-actions"><button class="acs-cloud-mini" type="button" data-cloud-pull="${cloudEscapeHtml(item.id)}" title="导入为新角色"><i class="fa-solid fa-cloud-arrow-down"></i></button><button class="acs-cloud-mini" type="button" data-cloud-archive="${cloudEscapeHtml(item.id)}" title="归档"><i class="fa-solid fa-box-archive"></i></button></span></article>`).join('') : '<div class="acs-cloud-empty"><p><i class="fa-solid fa-cloud"></i>云仓库还没有角色卡</p></div>';
 }
