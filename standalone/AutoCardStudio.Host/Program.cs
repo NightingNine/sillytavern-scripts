@@ -429,6 +429,37 @@ public static class Program
         app.MapPost("/api/projects", async (CreateProjectRequest request, ProjectStore projectStore) =>
             Results.Ok(await projectStore.CreateProjectAsync(request.Name)));
 
+        app.MapGet("/api/projects/{projectId}/export", async (string projectId, ProjectStore projectStore) =>
+        {
+            try
+            {
+                var bundle = await projectStore.ExportProjectAsync(projectId);
+                var bytes = JsonSerializer.SerializeToUtf8Bytes(bundle, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+                return Results.File(bytes, "application/json; charset=utf-8", $"A.U.T.O-project-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.auto-card-studio.json");
+            }
+            catch (KeyNotFoundException error)
+            {
+                return Results.NotFound(new { code = "project_not_found", message = error.Message });
+            }
+        });
+
+        app.MapPost("/api/projects/import", async (ImportFileRequest request, ProjectStore projectStore, GenerationCoordinator coordinator) =>
+        {
+            if (coordinator.HasActiveGenerations) return Results.Conflict(new { code = "generation_active", message = "请先停止当前生成，再导入项目。" });
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.Content)) throw new InvalidDataException("项目文件为空。");
+                if (request.Content.Length > 50 * 1024 * 1024) throw new InvalidDataException("项目文件超过 50 MB。");
+                var bundle = JsonSerializer.Deserialize<ProjectTransferBundle>(request.Content, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                    ?? throw new InvalidDataException("项目文件不可读取。");
+                return Results.Ok(await projectStore.ImportProjectAsync(bundle));
+            }
+            catch (Exception error) when (error is JsonException or InvalidDataException or IOException)
+            {
+                return Results.BadRequest(new { code = "invalid_project_file", message = error.Message });
+            }
+        });
+
         app.MapPatch("/api/projects/{projectId}", async (string projectId, UpdateProjectRequest request, ProjectStore projectStore) =>
         {
             try

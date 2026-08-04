@@ -288,6 +288,11 @@
         <div><span>占用空间</span><strong id="diagnosis-size">0 B</strong></div>
       </section>
       <p id="diagnosis-detail" class="maintenance-detail">诊断只检查文件结构，不读取或显示对话、产物和密钥正文。</p>
+      <section class="project-transfer">
+        <div><strong>当前项目迁移</strong><span>导入始终创建副本，不覆盖现有项目；包含 29 步对话、产物和附属世界书快照。</span></div>
+        <div><button id="export-project" type="button">导出当前项目</button><button id="import-project" type="button">导入项目副本</button></div>
+        <input id="project-import-file" type="file" accept="application/json,.json,.auto-card-studio.json" hidden>
+      </section>
       <div class="maintenance-actions"><button id="refresh-maintenance" type="button">重新诊断</button><button id="create-backup" type="button" class="primary">立即备份</button></div>
       <section class="backup-section">
         <header><strong>本机备份</strong><span>恢复前会再自动创建恢复点</span></header>

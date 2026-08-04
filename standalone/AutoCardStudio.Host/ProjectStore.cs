@@ -181,6 +181,139 @@ public sealed class ProjectStore
         }
     }
 
+    public async Task<ProjectTransferBundle> ExportProjectAsync(string projectId)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var project = await RequireProjectAsync(projectId);
+            var steps = new List<StepData>();
+            for (var number = 1; number <= 29; number++) steps.Add(await RequireStepAsync(projectId, number));
+            var artifacts = await _files.ReadRecoverableAsync<ArtifactVault>(Path.Combine(ProjectDirectory(projectId), "artifacts.json"));
+            var selection = await _files.ReadRecoverableAsync<ReferenceProjectSelection>(Path.Combine(ProjectDirectory(projectId), "reference-worldbooks.json"));
+            var libraryPath = Path.Combine(_dataRoot, "resources", "reference-worldbooks", "library.json");
+            var library = await _files.ReadRecoverableAsync<ReferenceWorldbookLibrary>(libraryPath);
+            var selectedBookIds = selection?.Books.Keys.ToHashSet(StringComparer.Ordinal) ?? [];
+            var referenceBooks = (library?.Books ?? []).Where(book => selectedBookIds.Contains(book.Id)).ToList();
+            return new ProjectTransferBundle(
+                "auto-card-studio-project",
+                1,
+                DateTimeOffset.UtcNow,
+                project,
+                steps,
+                artifacts,
+                selection,
+                referenceBooks);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<StudioState> ImportProjectAsync(ProjectTransferBundle bundle)
+    {
+        if (bundle is null || bundle.Project is null || bundle.Steps is null || bundle.Format != "auto-card-studio-project" || bundle.SchemaVersion != 1)
+            throw new InvalidDataException("不是受支持的 A.U.T.O 独立版项目文件。");
+        if (bundle.Steps.Count != 29 || bundle.Steps.Any(step => step is null) || !bundle.Steps.Select(step => step.Number).ToHashSet().SetEquals(Enumerable.Range(1, 29)))
+            throw new InvalidDataException("项目文件必须包含完整的 29 个创作步骤。");
+
+        await _gate.WaitAsync();
+        string? temporaryDirectory = null;
+        string? finalDirectory = null;
+        try
+        {
+            var index = await RequireIndexAsync();
+            var projects = await LoadProjectsAsync(index);
+            var newId = Guid.NewGuid().ToString("D");
+            var now = DateTimeOffset.UtcNow;
+            var importedName = UniqueName($"{NormalizeName(bundle.Project.Name)}（导入）", projects.Select(item => item.Name));
+            var importedBrief = bundle.Project.Brief ?? string.Empty;
+            if (importedBrief.Length > 20000) importedBrief = importedBrief[..20000];
+            var imported = new StudioProject(
+                newId,
+                importedName,
+                importedBrief,
+                Math.Clamp(bundle.Project.CurrentStep, 1, 29),
+                1,
+                now,
+                now,
+                bundle.Project.IncludeFutureArtifacts);
+
+            temporaryDirectory = Path.Combine(_projectsRoot, $".import-{Guid.NewGuid():N}.tmp");
+            finalDirectory = ProjectDirectory(newId);
+            Directory.CreateDirectory(Path.Combine(temporaryDirectory, "steps"));
+            await _files.WriteAtomicAsync(Path.Combine(temporaryDirectory, "project.json"), imported);
+            foreach (var source in bundle.Steps.OrderBy(step => step.Number))
+            {
+                var normalized = NormalizeStep(source, source.Number);
+                await _files.WriteAtomicAsync(Path.Combine(temporaryDirectory, "steps", $"{source.Number:00}.json"), normalized);
+            }
+
+            if (bundle.Artifacts is not null)
+            {
+                var artifacts = bundle.Artifacts with { ProjectId = newId, Revision = Math.Max(1, bundle.Artifacts.Revision), UpdatedAt = now };
+                await _files.WriteAtomicAsync(Path.Combine(temporaryDirectory, "artifacts.json"), artifacts);
+            }
+
+            var (books, selection) = await MergeImportedReferenceBooksUnsafeAsync(bundle.ReferenceBooks ?? [], bundle.ReferenceSelection, now);
+            if (selection is not null)
+                await _files.WriteAtomicAsync(Path.Combine(temporaryDirectory, "reference-worldbooks.json"), selection);
+
+            Directory.Move(temporaryDirectory, finalDirectory);
+            temporaryDirectory = null;
+            if (books is not null)
+            {
+                var libraryPath = Path.Combine(_dataRoot, "resources", "reference-worldbooks", "library.json");
+                await _files.WriteAtomicAsync(libraryPath, books);
+            }
+
+            projects.Add(imported);
+            var nextIndex = BuildIndex(imported, projects);
+            await _files.WriteAtomicAsync(_indexPath, nextIndex);
+            return new StudioState(nextIndex, imported, await RequireStepAsync(newId, imported.CurrentStep));
+        }
+        catch
+        {
+            if (temporaryDirectory is not null && Directory.Exists(temporaryDirectory)) Directory.Delete(temporaryDirectory, true);
+            if (finalDirectory is not null && Directory.Exists(finalDirectory)) Directory.Delete(finalDirectory, true);
+            throw;
+        }
+        finally { _gate.Release(); }
+    }
+
+    private async Task<(ReferenceWorldbookLibrary? Library, ReferenceProjectSelection? Selection)> MergeImportedReferenceBooksUnsafeAsync(
+        IReadOnlyList<ReferenceWorldbook> importedBooks,
+        ReferenceProjectSelection? importedSelection,
+        DateTimeOffset now)
+    {
+        if (importedSelection is null) return (null, null);
+        var libraryPath = Path.Combine(_dataRoot, "resources", "reference-worldbooks", "library.json");
+        var current = await _files.ReadRecoverableAsync<ReferenceWorldbookLibrary>(libraryPath)
+            ?? new ReferenceWorldbookLibrary(1, [], now);
+        var books = current.Books.ToList();
+        var idMap = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var imported in importedBooks)
+        {
+            var existing = books.FirstOrDefault(book => book.SourceSha256 == imported.SourceSha256);
+            if (existing is not null)
+            {
+                idMap[imported.Id] = existing.Id;
+                continue;
+            }
+            var id = books.Any(book => book.Id == imported.Id) ? Guid.NewGuid().ToString("D") : imported.Id;
+            books.Add(imported with { Id = id, ImportedAt = now });
+            idMap[imported.Id] = id;
+        }
+
+        var selections = new Dictionary<string, ReferenceBookSelection>(StringComparer.Ordinal);
+        foreach (var pair in importedSelection.Books)
+        {
+            if (idMap.TryGetValue(pair.Key, out var mappedId)) selections[mappedId] = pair.Value;
+            else if (books.Any(book => book.Id == pair.Key)) selections[pair.Key] = pair.Value;
+        }
+        var changed = books.Count != current.Books.Count;
+        var library = changed ? new ReferenceWorldbookLibrary(current.Revision + 1, books, now) : current;
+        return (library, new ReferenceProjectSelection(1, selections, now));
+    }
+
     public async Task<GenerationSnapshot> GetGenerationSnapshotAsync(string projectId, int stepNumber)
     {
         await _gate.WaitAsync();
@@ -611,6 +744,15 @@ public sealed record StepTurn(
     DateTimeOffset? EditedAt = null);
 public sealed record StudioState(AppIndex Index, StudioProject Project, StepData Step);
 public sealed record GenerationSnapshot(StudioProject Project, StepData Step);
+public sealed record ProjectTransferBundle(
+    string Format,
+    int SchemaVersion,
+    DateTimeOffset ExportedAt,
+    StudioProject Project,
+    IReadOnlyList<StepData> Steps,
+    ArtifactVault? Artifacts,
+    ReferenceProjectSelection? ReferenceSelection,
+    IReadOnlyList<ReferenceWorldbook> ReferenceBooks);
 public sealed record CreateProjectRequest(string? Name);
 public sealed record UpdateProjectRequest(
     long ExpectedRevision,

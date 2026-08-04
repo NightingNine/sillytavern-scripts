@@ -111,6 +111,7 @@ const elements = Object.fromEntries([
   'maintenance-summary', 'maintenance-health', 'open-maintenance', 'maintenance-modal', 'maintenance-location',
   'close-maintenance', 'diagnosis-status', 'diagnosis-projects', 'diagnosis-files', 'diagnosis-size',
   'diagnosis-detail', 'refresh-maintenance', 'create-backup', 'backup-list', 'clear-workspace',
+  'export-project', 'import-project', 'project-import-file',
   'publication-cache-status', 'publication-character-name', 'publication-worldbook-name',
   'publication-creator', 'publication-language', 'publication-person', 'publication-avatar',
   'publication-avatar-name', 'publication-selection-count', 'publication-select-all',
@@ -1765,6 +1766,33 @@ async function clearWorkspace() {
   } catch (error) { toast(error.message, true); }
 }
 
+async function exportCurrentProject() {
+  try {
+    await flushPendingPatch();
+    const link = document.createElement('a');
+    link.href = `/api/projects/${encodeURIComponent(state.project.id)}/export`;
+    link.download = '';
+    link.click();
+    toast('当前项目正在导出；文件不包含 API 密钥。');
+  } catch (error) { toast(error.message, true); }
+}
+
+async function importProjectFile(file) {
+  if (!file) return;
+  if (file.size > 50 * 1024 * 1024) { toast('项目文件超过 50 MB。', true); return; }
+  elements.import_project.disabled = true;
+  try {
+    const payload = await api('/api/projects/import', {
+      method: 'POST',
+      body: JSON.stringify({ fileName: file.name, content: await file.text() }),
+    });
+    closeMaintenance();
+    await loadState(payload.project.id);
+    toast(`已导入为项目副本“${payload.project.name}”。`);
+  } catch (error) { toast(error.message, true); }
+  finally { elements.import_project.disabled = false; }
+}
+
 function toggleProjectMenu(force) {
   const open = typeof force === 'boolean' ? force : elements.project_menu.hidden;
   elements.project_menu.hidden = !open;
@@ -1846,6 +1874,12 @@ elements.close_maintenance.addEventListener('click', closeMaintenance);
 elements.refresh_maintenance.addEventListener('click', () => loadMaintenanceState(true).catch(error => toast(error.message, true)));
 elements.create_backup.addEventListener('click', createWorkspaceBackup);
 elements.clear_workspace.addEventListener('click', clearWorkspace);
+elements.export_project.addEventListener('click', exportCurrentProject);
+elements.import_project.addEventListener('click', () => elements.project_import_file.click());
+elements.project_import_file.addEventListener('change', async event => {
+  await importProjectFile(event.currentTarget.files?.[0]);
+  event.currentTarget.value = '';
+});
 elements.project_brief.addEventListener('input', () => queueProjectPatch({ brief: elements.project_brief.value }));
 elements.project_brief.addEventListener('change', () => flushPendingPatch().catch(() => {}));
 elements.project_name.addEventListener('input', () => queueProjectPatch({ name: elements.project_name.value }));

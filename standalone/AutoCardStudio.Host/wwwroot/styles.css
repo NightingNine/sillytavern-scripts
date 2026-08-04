@@ -379,7 +379,7 @@ button { color: inherit; }
 .reference-entry-detail-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 18px; }
 .reference-entry-detail-meta span { padding: 4px 7px; border-radius: 999px; background: rgba(181,158,208,.1); color: var(--violet); font-size: 8px; }
 .reference-entry-detail pre { margin: 0; color: var(--soft); font: 12px/1.75 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
-.maintenance-modal { position: fixed; z-index: 31; top: 50%; left: 50%; display: grid; grid-template-rows: auto auto auto auto minmax(0,1fr) auto; width: min(900px, calc(100vw - 40px)); height: min(720px, calc(100vh - 40px)); overflow: hidden; padding: 0 20px; transform: translate(-50%,-50%); border: 1px solid var(--line-strong); border-radius: 16px; background: var(--panel); box-shadow: 0 30px 90px rgba(0,0,0,.55); }
+.maintenance-modal { position: fixed; z-index: 31; top: 50%; left: 50%; display: grid; grid-template-rows: auto auto auto auto auto minmax(0,1fr) auto; width: min(900px, calc(100vw - 40px)); height: min(760px, calc(100vh - 40px)); overflow: hidden; padding: 0 20px; transform: translate(-50%,-50%); border: 1px solid var(--line-strong); border-radius: 16px; background: var(--panel); box-shadow: 0 30px 90px rgba(0,0,0,.55); }
 .maintenance-modal > header { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .maintenance-modal h2, .maintenance-modal p { margin: 0; }
 .maintenance-modal h2 { font-family: var(--display); font-size: 20px; }
@@ -391,6 +391,12 @@ button { color: inherit; }
 .maintenance-diagnosis span { color: var(--muted); font-size: 8px; }
 .maintenance-diagnosis strong { margin-top: 5px; color: var(--soft); font-size: 12px; }
 .maintenance-detail { min-height: 35px; padding: 8px 10px; border-left: 2px solid var(--green); background: rgba(142,178,139,.05); color: var(--muted); font-size: 9px; line-height: 1.55; }
+.project-transfer { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; align-items: center; margin-top: 10px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 10px; background: rgba(181,158,208,.045); }
+.project-transfer strong, .project-transfer span { display: block; }
+.project-transfer strong { color: var(--soft); font-size: 10px; }
+.project-transfer span { margin-top: 3px; color: var(--muted); font-size: 8px; line-height: 1.45; }
+.project-transfer > div:last-of-type { display: flex; gap: 7px; }
+.project-transfer button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--raised); color: var(--soft); cursor: pointer; font-size: 9px; }
 .maintenance-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 0; }
 .maintenance-actions button, .backup-item button, .maintenance-danger button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--raised); color: var(--soft); cursor: pointer; font-size: 9px; }
 .maintenance-actions .primary { border-color: rgba(142,178,139,.35); background: rgba(142,178,139,.09); }
@@ -478,6 +484,8 @@ button { color: inherit; }
   .reference-manager-body { grid-template-columns: minmax(120px, 36%) minmax(0,1fr); }
   .reference-manager-body article { padding: 15px; }
   .maintenance-diagnosis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .project-transfer { grid-template-columns: 1fr; }
+  .project-transfer > div:last-of-type { display: grid; grid-template-columns: 1fr 1fr; }
   .backup-item { grid-template-columns: minmax(0,1fr) auto; }
   .backup-item .backup-download { display: none; }
 }
