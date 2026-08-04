@@ -20,7 +20,9 @@ public static class Program
         if (args.Contains("--self-test", StringComparer.OrdinalIgnoreCase))
         {
             var projectResult = await ProjectStoreSelfTest.RunAsync();
-            return projectResult == 0 ? await Stage2SelfTest.RunAsync() : projectResult;
+            if (projectResult != 0) return projectResult;
+            var stage2Result = await Stage2SelfTest.RunAsync();
+            return stage2Result == 0 ? await Stage3SelfTest.RunAsync() : stage2Result;
         }
 
         using var singleInstance = new Mutex(true, MutexName, out var ownsInstance);
@@ -145,7 +147,7 @@ public static class Program
         app.MapGet("/api/health", () => Results.Ok(new
         {
             status = "ready",
-            version = "0.2.0-stage2",
+            version = "0.3.0-stage3",
             dataDirectory,
         }));
 
@@ -254,6 +256,55 @@ public static class Program
             }
         });
 
+        app.MapPost("/api/projects/{projectId}/steps/{stepNumber:int}/conversations", async (
+            string projectId, int stepNumber, ConversationMutationRequest request, ProjectStore projectStore) =>
+        {
+            try { return Results.Ok(await projectStore.CreateConversationAsync(projectId, stepNumber, request)); }
+            catch (Exception error) when (IsStepMutationError(error)) { return StepMutationError(error); }
+        });
+
+        app.MapPost("/api/projects/{projectId}/steps/{stepNumber:int}/conversations/{conversationId}/activate", async (
+            string projectId, int stepNumber, string conversationId, RevisionRequest request, ProjectStore projectStore) =>
+        {
+            try { return Results.Ok(await projectStore.ActivateConversationAsync(projectId, stepNumber, conversationId, request.ExpectedRevision)); }
+            catch (Exception error) when (IsStepMutationError(error)) { return StepMutationError(error); }
+        });
+
+        app.MapPatch("/api/projects/{projectId}/steps/{stepNumber:int}/conversations/{conversationId}", async (
+            string projectId, int stepNumber, string conversationId, ConversationMutationRequest request, ProjectStore projectStore) =>
+        {
+            try { return Results.Ok(await projectStore.RenameConversationAsync(projectId, stepNumber, conversationId, request)); }
+            catch (Exception error) when (IsStepMutationError(error)) { return StepMutationError(error); }
+        });
+
+        app.MapDelete("/api/projects/{projectId}/steps/{stepNumber:int}/conversations/{conversationId}", async (
+            string projectId, int stepNumber, string conversationId, long expectedRevision, ProjectStore projectStore) =>
+        {
+            try { return Results.Ok(await projectStore.DeleteConversationAsync(projectId, stepNumber, conversationId, expectedRevision)); }
+            catch (Exception error) when (IsStepMutationError(error)) { return StepMutationError(error); }
+        });
+
+        app.MapPost("/api/projects/{projectId}/steps/{stepNumber:int}/conversations/{conversationId}/clear", async (
+            string projectId, int stepNumber, string conversationId, RevisionRequest request, ProjectStore projectStore) =>
+        {
+            try { return Results.Ok(await projectStore.ClearConversationAsync(projectId, stepNumber, conversationId, request.ExpectedRevision)); }
+            catch (Exception error) when (IsStepMutationError(error)) { return StepMutationError(error); }
+        });
+
+        app.MapPatch("/api/projects/{projectId}/steps/{stepNumber:int}/conversations/{conversationId}/turns/{turnId}", async (
+            string projectId, int stepNumber, string conversationId, string turnId, TurnEditRequest request, ProjectStore projectStore) =>
+        {
+            try { return Results.Ok(await projectStore.EditTurnAsync(projectId, stepNumber, conversationId, turnId, request)); }
+            catch (Exception error) when (IsStepMutationError(error)) { return StepMutationError(error); }
+        });
+
+        app.MapDelete("/api/projects/{projectId}/steps/{stepNumber:int}/conversations/{conversationId}/turns/{turnId}", async (
+            string projectId, int stepNumber, string conversationId, string turnId, long expectedRevision, ProjectStore projectStore) =>
+        {
+            try { return Results.Ok(await projectStore.DeleteTurnAsync(projectId, stepNumber, conversationId, turnId, expectedRevision)); }
+            catch (Exception error) when (IsStepMutationError(error)) { return StepMutationError(error); }
+        });
+
         app.MapPost("/api/generations", async (GenerateStepRequest request, HttpContext context, GenerationCoordinator coordinator) =>
         {
             context.Response.StatusCode = StatusCodes.Status200OK;
@@ -275,6 +326,24 @@ public static class Program
                     // 页面离开时不再写回 SSE；RequestAborted 仍会取消上游模型请求。
                 }
             }, context.RequestAborted);
+        });
+
+        app.MapPost("/api/prompt-preview", async (PromptPreviewRequest request, GenerationCoordinator coordinator) =>
+        {
+            try { return Results.Ok(await coordinator.PreviewAsync(request)); }
+            catch (StepRevisionConflictException conflict)
+            {
+                return Results.Conflict(new
+                {
+                    code = "step_revision_conflict",
+                    message = "当前步骤已在其他页面变化，请重新载入。",
+                    currentRevision = conflict.CurrentRevision,
+                });
+            }
+            catch (GenerationRejectedException rejected)
+            {
+                return Results.BadRequest(new { code = rejected.Code, message = rejected.Message });
+            }
         });
 
         app.MapPost("/api/generations/{generationId}/cancel", (string generationId, GenerationCoordinator coordinator) =>
@@ -336,6 +405,21 @@ public static class Program
             return false;
         }
     }
+
+    private static bool IsStepMutationError(Exception error) =>
+        error is StepRevisionConflictException or InvalidDataException or InvalidOperationException or KeyNotFoundException;
+
+    private static IResult StepMutationError(Exception error) => error switch
+    {
+        StepRevisionConflictException conflict => Results.Conflict(new
+        {
+            code = "step_revision_conflict",
+            message = "当前步骤已在其他页面变化，请重新载入。",
+            currentRevision = conflict.CurrentRevision,
+        }),
+        KeyNotFoundException => Results.NotFound(new { code = "step_item_not_found", message = error.Message }),
+        _ => Results.BadRequest(new { code = "step_mutation_invalid", message = error.Message }),
+    };
 
     private static void OpenBrowser(string url)
     {

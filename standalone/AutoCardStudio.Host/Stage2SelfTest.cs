@@ -49,17 +49,17 @@ public static class Stage2SelfTest
             await projectStore.InitializeAsync();
             var initial = await projectStore.GetStateAsync();
             var userTurn = new StepTurn(Guid.NewGuid().ToString("D"), "user", "测试输入", DateTimeOffset.UtcNow);
-            var step = await projectStore.AppendTurnAsync(initial.Project.Id, 1, initial.Step.Revision, userTurn);
+            var step = await projectStore.AppendTurnAsync(initial.Project.Id, 1, initial.Step.ActiveConversationId, initial.Step.Revision, userTurn);
             var reopened = new ProjectStore(root);
             await reopened.InitializeAsync();
             var restored = await reopened.GetStateAsync();
-            if (step.Revision != 2 || restored.Step.Turns.Single().Content != "测试输入") return 24;
+            if (step.Revision != 2 || PromptAssembler.ActiveConversation(restored.Step).Turns.Single().Content != "测试输入") return 24;
             var ready = await projectStore.UpdateProjectAsync(
                 restored.Project.Id,
                 new UpdateProjectRequest(restored.Project.Revision, Brief: "测试母题"));
 
             var preset = await resources.GetPresetAsync() ?? throw new InvalidDataException();
-            var messages = PromptAssembler.Build(preset, ready.Project, ready.Step, 1, "继续", await resources.GetRegexesAsync());
+            var messages = PromptAssembler.Build(preset, ready.Project, PromptAssembler.ActiveConversation(ready.Step).Turns, 1, "继续", await resources.GetRegexesAsync());
             if (!messages.Any(message => message.Content.Contains("STEP-CONTENT-01", StringComparison.Ordinal)) ||
                 messages.Any(message => message.Content.Contains("STEP-CONTENT-02", StringComparison.Ordinal))) return 25;
 

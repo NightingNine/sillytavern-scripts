@@ -63,10 +63,19 @@ const state = {
   pendingPatch: {},
   generating: false,
   generationId: '',
+  generationConversationId: '',
+  generationRetryTurnId: '',
   generationUserCommitted: false,
   optimisticTurnId: '',
+  conversationRenameId: '',
+  promptPreview: null,
   collapsedPhases: new Set(JSON.parse(localStorage.getItem('acs:collapsed-phases') || '[]')),
 };
+
+let conversationScrollContextKey = '';
+let conversationAutoFollow = true;
+let conversationLastScrollTop = 0;
+let conversationScrollSyncing = false;
 
 const elements = Object.fromEntries([
   'app', 'service-status', 'reload-button', 'close-button', 'project-menu-button', 'project-button-name',
@@ -74,11 +83,17 @@ const elements = Object.fromEntries([
   'step-number', 'step-title', 'step-goal', 'requirement-chip', 'station-label', 'guide-title',
   'guide-description', 'guide-prompts', 'brief-label', 'project-brief', 'save-status', 'project-name',
   'empty-state', 'turn-list', 'user-input', 'generation-hint', 'generate-button', 'stop-generation',
+  'conversation-manager-toggle', 'active-conversation-name', 'conversation-count', 'conversation-menu',
+  'conversation-menu-count', 'conversation-list', 'new-conversation-name', 'create-conversation',
+  'clear-conversation', 'conversation-nav', 'previous-turn-top', 'latest-turn-bottom',
   'preset-summary', 'regex-summary', 'import-preset-button', 'import-regex-button', 'preset-file', 'regex-file',
   'connection-profile', 'connection-name', 'connection-provider', 'connection-url', 'connection-key',
   'connection-model', 'connection-output', 'connection-timeout', 'parameter-context', 'parameter-completion',
   'parameter-temperature', 'parameter-top-p', 'connection-secret-state', 'model-options', 'fetch-models',
   'save-connection', 'delete-connection',
+  'conversation-font-value', 'conversation-font-size', 'conversation-font-decrease', 'conversation-font-increase',
+  'prompt-preview-button', 'prompt-preview-modal', 'prompt-preview-title', 'prompt-preview-summary',
+  'prompt-preview-list', 'copy-prompt-preview', 'close-prompt-preview',
   'modal-backdrop', 'confirm-modal', 'confirm-title', 'confirm-message', 'confirm-cancel', 'confirm-accept', 'toast-region',
 ].map(id => [id.replaceAll('-', '_'), document.getElementById(id)]));
 
@@ -159,6 +174,17 @@ function renderSteps() {
 
 function renderCurrentStep() {
   const step = STEPS[state.project.currentStep - 1];
+  const conversation = activeConversation();
+  const scrollContextKey = `${state.project.id}:${step.number}:${conversation.id}`;
+  const contextChanged = scrollContextKey !== conversationScrollContextKey;
+  if (contextChanged) {
+    conversationScrollContextKey = scrollContextKey;
+    conversationAutoFollow = true;
+  }
+  const scroller = document.querySelector('.conversation');
+  const preservedScrollTop = scroller?.scrollTop || 0;
+  const shouldFollowBottom = conversationAutoFollow;
+  conversationScrollSyncing = true;
   elements.step_number.textContent = String(step.number).padStart(2, '0');
   elements.step_title.textContent = step.name;
   elements.step_goal.textContent = step.goal;
@@ -176,30 +202,245 @@ function renderCurrentStep() {
     item.textContent = text;
     return item;
   }));
+  renderConversationManager();
   renderTurns();
+  elements.clear_conversation.disabled = state.generating || conversation.turns.length === 0;
+  elements.clear_conversation.title = conversation.turns.length ? `清空“${conversation.name}”` : '当前对话没有消息';
+  elements.conversation_nav.hidden = conversation.turns.length === 0;
+  requestAnimationFrame(() => {
+    if (!scroller) { conversationScrollSyncing = false; return; }
+    if (shouldFollowBottom) scrollConversationToBottom({ force: true });
+    else scroller.scrollTop = Math.min(preservedScrollTop, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
+    conversationLastScrollTop = scroller.scrollTop;
+    conversationAutoFollow = shouldFollowBottom;
+    conversationScrollSyncing = false;
+  });
 }
 
 function renderTurns(streamText = null) {
-  const turns = state.step?.turns || [];
+  const storedTurns = activeConversation().turns || [];
+  const retryIndex = state.generationRetryTurnId
+    ? storedTurns.findIndex(turn => turn.id === state.generationRetryTurnId)
+    : -1;
+  const turns = retryIndex >= 0 ? storedTurns.slice(0, retryIndex + 1) : storedTurns;
   elements.empty_state.hidden = turns.length > 0 || streamText !== null;
-  const items = turns.map(turn => createTurnElement(turn));
+  let latestUserId = '';
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    if (turns[index].role === 'user') { latestUserId = turns[index].id; break; }
+  }
+  const items = turns.map(turn => createTurnElement(turn, false, turn.id === latestUserId));
   if (streamText !== null) {
-    items.push(createTurnElement({ role: 'assistant', content: streamText, state: 'streaming' }, true));
+    items.push(createTurnElement({ id: 'stream-draft', role: 'assistant', content: streamText, state: 'streaming' }, true));
   }
   elements.turn_list.replaceChildren(...items);
 }
 
-function createTurnElement(turn, streaming = false) {
+function createTurnElement(turn, streaming = false, isLatestUser = false) {
   const article = document.createElement('article');
   article.className = `turn${streaming ? ' is-streaming' : ''}`;
   article.dataset.role = turn.role === 'assistant' ? 'assistant' : 'user';
+  if (turn.id) article.dataset.turnId = turn.id;
+  const header = document.createElement('div');
+  header.className = 'turn-header';
   const label = document.createElement('span');
   label.className = 'turn-meta';
   label.textContent = turn.role === 'assistant' ? 'A.U.T.O.' : '你';
+  const actions = document.createElement('span');
+  actions.className = 'turn-actions';
+  if (!streaming) {
+    const edit = turnAction('✎', '编辑这条消息', () => beginTurnEdit(turn.id));
+    edit.disabled = state.generating;
+    actions.append(edit);
+    if (isLatestUser) {
+      const retry = turnAction('↻ 重试', '重新生成这条输入', () => retryLatestUserInput(turn.id));
+      retry.disabled = state.generating;
+      actions.append(retry);
+    }
+    const remove = turnAction('⌫', turn.role === 'assistant' ? '删除这条 AI 回复' : '删除这条用户消息', () => deleteConversationTurn(turn));
+    remove.classList.add('is-delete');
+    remove.disabled = state.generating;
+    actions.append(remove);
+  }
+  header.append(label, actions);
   const content = document.createElement('div');
+  content.className = 'turn-content';
   content.textContent = turn.content || (streaming ? '正在连接模型…' : '');
-  article.append(label, content);
+  article.append(header, content);
   return article;
+}
+
+function turnAction(label, title, action) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'turn-action';
+  button.textContent = label;
+  button.title = title;
+  button.setAttribute('aria-label', title);
+  button.addEventListener('click', action);
+  return button;
+}
+
+function activeConversation(step = state.step) {
+  const conversations = step?.conversations || [];
+  return conversations.find(item => item.id === step.activeConversationId) || conversations[0] || { id: '', name: '默认对话', turns: [] };
+}
+
+function replaceActiveConversation(updatedConversation) {
+  state.step.conversations = state.step.conversations.map(item => item.id === updatedConversation.id ? updatedConversation : item);
+}
+
+function nextConversationName() {
+  const numbers = (state.step?.conversations || [])
+    .map(item => /^对话\s*(\d+)$/.exec(String(item.name || '').trim()))
+    .filter(Boolean)
+    .map(match => Number(match[1]))
+    .filter(Number.isFinite);
+  return `对话 ${Math.max(1, ...numbers) + 1}`;
+}
+
+function setConversationMenuOpen(open) {
+  elements.conversation_menu.hidden = !open;
+  elements.conversation_manager_toggle.setAttribute('aria-expanded', String(open));
+  if (!open) state.conversationRenameId = '';
+}
+
+function renderConversationManager() {
+  const current = activeConversation();
+  const conversations = state.step?.conversations || [];
+  elements.active_conversation_name.textContent = current.name;
+  elements.conversation_count.textContent = String(conversations.length);
+  elements.conversation_menu_count.textContent = `${conversations.length} 个`;
+  elements.conversation_manager_toggle.title = `本步骤对话：${current.name}（共 ${conversations.length} 个）`;
+  elements.new_conversation_name.placeholder = nextConversationName();
+  elements.new_conversation_name.disabled = state.generating;
+  elements.create_conversation.disabled = state.generating;
+  elements.conversation_list.replaceChildren(...conversations.map(conversation => {
+    const row = document.createElement('div');
+    row.className = `conversation-row${conversation.id === current.id ? ' is-active' : ''}`;
+    if (state.conversationRenameId === conversation.id) {
+      const form = document.createElement('div');
+      form.className = 'conversation-rename-form';
+      const input = document.createElement('input');
+      input.value = conversation.name;
+      input.maxLength = 60;
+      input.setAttribute('aria-label', '对话名称');
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.textContent = '保存';
+      save.addEventListener('click', () => renameConversation(conversation.id, input.value));
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.textContent = '取消';
+      cancel.addEventListener('click', () => { state.conversationRenameId = ''; renderConversationManager(); });
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); renameConversation(conversation.id, input.value); }
+        if (event.key === 'Escape') { state.conversationRenameId = ''; renderConversationManager(); }
+      });
+      form.append(input, save, cancel);
+      row.append(form);
+      requestAnimationFrame(() => { input.focus(); input.select(); });
+      return row;
+    }
+    const select = document.createElement('button');
+    select.type = 'button';
+    select.className = 'conversation-switch';
+    select.disabled = state.generating || conversation.id === current.id;
+    select.innerHTML = `<strong>${escapeHtml(conversation.name)}</strong><small>${conversation.turns.length} 条消息 · ${formatTime(conversation.updatedAt)}</small>`;
+    select.addEventListener('click', () => activateConversation(conversation.id));
+    const rename = document.createElement('button');
+    rename.type = 'button';
+    rename.className = 'conversation-row-action';
+    rename.textContent = '✎';
+    rename.title = '重命名';
+    rename.disabled = state.generating;
+    rename.addEventListener('click', () => { state.conversationRenameId = conversation.id; renderConversationManager(); });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'conversation-row-action is-delete';
+    remove.textContent = '⌫';
+    remove.disabled = state.generating || conversations.length <= 1;
+    remove.title = conversations.length <= 1 ? '最后一个对话不能删除' : '删除对话';
+    remove.addEventListener('click', () => deleteConversation(conversation));
+    row.append(select, rename, remove);
+    return row;
+  }));
+}
+
+function stepApiPath(conversationId = '') {
+  const base = `/api/projects/${encodeURIComponent(state.project.id)}/steps/${state.project.currentStep}/conversations`;
+  return conversationId ? `${base}/${encodeURIComponent(conversationId)}` : base;
+}
+
+async function applyStepMutation(request, successMessage = '') {
+  try {
+    state.step = await request();
+    state.conversationRenameId = '';
+    renderCurrentStep();
+    if (successMessage) toast(successMessage);
+    return true;
+  } catch (error) {
+    toast(error.message, true);
+    if (error.code === 'step_revision_conflict') await loadState(state.project.id).catch(() => {});
+    return false;
+  }
+}
+
+async function createConversation() {
+  if (state.generating) return;
+  const name = elements.new_conversation_name.value.trim() || nextConversationName();
+  const succeeded = await applyStepMutation(() => api(stepApiPath(), {
+    method: 'POST',
+    body: JSON.stringify({ expectedRevision: state.step.revision, name }),
+  }), `已创建并切换到“${name}”。`);
+  if (succeeded) {
+    elements.new_conversation_name.value = '';
+    setConversationMenuOpen(false);
+    elements.user_input.focus();
+  }
+}
+
+async function activateConversation(conversationId) {
+  if (state.generating || conversationId === state.step.activeConversationId) return;
+  const target = state.step.conversations.find(item => item.id === conversationId);
+  const succeeded = await applyStepMutation(() => api(`${stepApiPath(conversationId)}/activate`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedRevision: state.step.revision }),
+  }), target ? `已切换到“${target.name}”。` : '对话已切换。');
+  if (succeeded) setConversationMenuOpen(false);
+}
+
+async function renameConversation(conversationId, requestedName) {
+  if (state.generating) return;
+  const name = String(requestedName || '').trim();
+  if (!name) { toast('对话名称不能为空。', true); return; }
+  await applyStepMutation(() => api(stepApiPath(conversationId), {
+    method: 'PATCH',
+    body: JSON.stringify({ expectedRevision: state.step.revision, name }),
+  }), `对话已命名为“${name}”。`);
+}
+
+async function deleteConversation(conversation) {
+  if (state.generating) return;
+  if (!await confirmAction(`删除“${conversation.name}”？`, `将删除其中 ${conversation.turns.length} 条消息。之后建立的正式产物不会受影响。`, '删除对话')) return;
+  const succeeded = await applyStepMutation(() => api(`${stepApiPath(conversation.id)}?expectedRevision=${state.step.revision}`, { method: 'DELETE' }), `“${conversation.name}”已删除。`);
+  if (succeeded) setConversationMenuOpen(false);
+}
+
+async function clearCurrentConversation() {
+  if (state.generating) return;
+  const conversation = activeConversation();
+  if (!conversation.turns.length) return;
+  if (!await confirmAction(`清空“${conversation.name}”？`, '只会清空当前对话，本步骤的其他对话都会保留。', '清空对话')) return;
+  await applyStepMutation(() => api(`${stepApiPath(conversation.id)}/clear`, {
+    method: 'POST',
+    body: JSON.stringify({ expectedRevision: state.step.revision }),
+  }), `“${conversation.name}”已清空。`);
+}
+
+function formatTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '刚刚';
+  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
 }
 
 function renderProjectList() {
@@ -283,6 +524,8 @@ function renderGenerationAvailability() {
   elements.stop_generation.hidden = !state.generating;
   elements.user_input.disabled = state.generating;
   elements.project_brief.disabled = state.generating;
+  elements.prompt_preview_button.disabled = state.generating || !hasPreset;
+  elements.clear_conversation.disabled = state.generating || activeConversation().turns.length === 0;
   elements.generation_hint.textContent = state.generating
     ? 'A.U.T.O 正在生成，当前项目与步骤已锁定'
     : !hasPreset
@@ -292,8 +535,98 @@ function renderGenerationAvailability() {
         : `${activeConnection()?.profile.name || '当前连接'} · ${activeConnection()?.profile.outputMode === 'complete' ? '非流式' : '流式'}`;
 }
 
+async function openPromptPreview() {
+  if (state.generating || !state.resources?.preset) return;
+  try {
+    const conversation = activeConversation();
+    state.promptPreview = await api('/api/prompt-preview', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId: state.project.id,
+        stepNumber: state.project.currentStep,
+        expectedStepRevision: state.step.revision,
+        conversationId: conversation.id,
+        userInput: elements.user_input.value.trim()
+          || `请执行 Step ${state.project.currentStep}「${STEPS[state.project.currentStep - 1].name}」。`,
+      }),
+    });
+    renderPromptPreview();
+    elements.modal_backdrop.hidden = false;
+    elements.prompt_preview_modal.hidden = false;
+    elements.close_prompt_preview.focus();
+  } catch (error) {
+    toast(error.message, true);
+    if (error.code === 'step_revision_conflict') await loadState(state.project.id).catch(() => {});
+  }
+}
+
+function renderPromptPreview() {
+  const preview = state.promptPreview;
+  if (!preview) return;
+  elements.prompt_preview_title.textContent = `本轮发送内容 · ${preview.conversationName}`;
+  elements.prompt_preview_summary.textContent = `${preview.messages.length} 条消息 · 约 ${Number(preview.estimatedTokens).toLocaleString('zh-CN')} tokens`;
+  elements.prompt_preview_list.replaceChildren(...preview.messages.map((message, index) => {
+    const details = document.createElement('details');
+    details.className = 'prompt-preview-item';
+    details.open = index === preview.messages.length - 1;
+    details.addEventListener('toggle', () => {
+      if (!details.open) return;
+      elements.prompt_preview_list.querySelectorAll('details[open]').forEach(item => {
+        if (item !== details) item.open = false;
+      });
+    });
+    const summary = document.createElement('summary');
+    const number = document.createElement('span');
+    number.className = 'prompt-preview-index';
+    number.textContent = String(message.index).padStart(2, '0');
+    const role = document.createElement('span');
+    role.className = 'prompt-preview-role';
+    role.textContent = message.role.toUpperCase();
+    const name = document.createElement('strong');
+    name.textContent = message.name;
+    const tokens = document.createElement('small');
+    tokens.textContent = `≈ ${Number(message.estimatedTokens).toLocaleString('zh-CN')} tokens`;
+    const content = document.createElement('pre');
+    content.className = 'prompt-preview-content';
+    content.textContent = message.content;
+    summary.append(number, role, name, tokens);
+    details.append(summary, content);
+    return details;
+  }));
+}
+
+function closePromptPreview() {
+  elements.prompt_preview_modal.hidden = true;
+  elements.modal_backdrop.hidden = true;
+}
+
+async function copyPromptPreview() {
+  if (!state.promptPreview) return;
+  const content = state.promptPreview.messages
+    .map(message => `# ${message.index}. ${message.role.toUpperCase()} · ${message.name}\n\n${message.content}`)
+    .join('\n\n---\n\n');
+  try {
+    await navigator.clipboard.writeText(content);
+    toast('完整消息队列已复制。');
+  } catch {
+    toast('浏览器未允许复制，请展开条目后手动复制。', true);
+  }
+}
+
 function activeConnection() {
   return (state.connections?.profiles || []).find(item => item.profile.id === state.connections.activeProfileId);
+}
+
+function applyConversationFontSize(value) {
+  const size = Math.max(12, Math.min(20, Number(value) || 15));
+  document.documentElement.style.setProperty('--conversation-font-size', `${size}px`);
+  elements.conversation_font_size.value = String(size);
+  elements.conversation_font_value.textContent = `${size} px`;
+  localStorage.setItem('acs:conversation-font-size', String(size));
+}
+
+function changeConversationFontSize(delta) {
+  applyConversationFontSize(Number(elements.conversation_font_size.value) + delta);
 }
 
 async function importResource(file, kind) {
@@ -440,25 +773,48 @@ function flushPendingPatch() {
 }
 
 async function generateCurrentStep() {
+  return runGeneration();
+}
+
+async function retryLatestUserInput(turnId) {
+  if (state.generating) return;
+  const conversation = activeConversation();
+  const latestUser = [...conversation.turns].reverse().find(turn => turn.role === 'user');
+  if (!latestUser || latestUser.id !== turnId) {
+    toast('只能重试当前对话中最新的用户输入。', true);
+    renderCurrentStep();
+    return;
+  }
+  return runGeneration(turnId);
+}
+
+async function runGeneration(retryTurnId = '') {
   if (state.generating) return;
   if (!state.resources?.preset || !activeConnection()) { renderGenerationAvailability(); return; }
   await flushPendingPatch();
   const step = STEPS[state.project.currentStep - 1];
-  const input = elements.user_input.value.trim() || `请执行 Step ${step.number}「${step.name}」。`;
+  const conversation = activeConversation();
+  const retryTurn = retryTurnId ? conversation.turns.find(turn => turn.id === retryTurnId) : null;
+  const input = retryTurn?.content || elements.user_input.value.trim() || `请执行 Step ${step.number}「${step.name}」。`;
   const generationId = crypto.randomUUID();
-  const optimisticTurn = {
-    id: `optimistic-${generationId}`,
-    role: 'user',
-    content: input,
-    createdAt: new Date().toISOString(),
-  };
+  const optimisticTurn = retryTurnId ? null : {
+      id: `optimistic-${generationId}`,
+      role: 'user',
+      content: input,
+      createdAt: new Date().toISOString(),
+    };
   state.generating = true;
   state.generationId = generationId;
+  state.generationConversationId = conversation.id;
+  state.generationRetryTurnId = retryTurnId;
   state.generationUserCommitted = false;
-  state.optimisticTurnId = optimisticTurn.id;
-  state.step.turns = [...(state.step.turns || []), optimisticTurn];
-  elements.user_input.value = '';
+  state.optimisticTurnId = optimisticTurn?.id || '';
+  if (optimisticTurn) {
+    replaceActiveConversation({ ...conversation, turns: [...conversation.turns, optimisticTurn] });
+    elements.user_input.value = '';
+  }
   renderTurns('');
+  renderConversationManager();
   renderGenerationAvailability();
   scrollConversationToBottom();
 
@@ -475,49 +831,78 @@ async function generateCurrentStep() {
         expectedStepRevision: state.step.revision,
         userInput: input,
         connectionId: state.connections.activeProfileId,
+        conversationId: conversation.id,
+        retryTurnId: retryTurnId || null,
       }),
     });
     if (!response.ok || !response.body) throw new Error(`本地生成服务返回 ${response.status}`);
     await consumeGenerationStream(response.body, event => {
       if (event.generationId && event.generationId !== generationId) return;
+      if (event.conversationId && event.conversationId !== state.generationConversationId) return;
       if (event.type === 'user_committed') {
         state.generationUserCommitted = true;
-        state.step.turns = state.step.turns.map(turn => turn.id === state.optimisticTurnId ? event.turn : turn);
+        const current = activeConversation();
+        replaceActiveConversation({ ...current, turns: current.turns.map(turn => turn.id === state.optimisticTurnId ? event.turn : turn) });
         state.step.revision = event.stepRevision;
+      } else if (event.type === 'retry_started') {
+        state.generationUserCommitted = true;
       } else if (event.type === 'chunk') {
         appendStreamDelta(event.delta || '');
       } else if (event.type === 'completed') {
         terminal = true;
-        state.step.turns = [...state.step.turns, event.turn];
+        applyCompletedAssistantTurn(event.turn, retryTurnId);
         state.step.revision = event.stepRevision;
+        state.generationRetryTurnId = '';
         renderTurns();
-        scrollConversationToBottom();
-        toast('本轮草案已生成。');
+        if (conversationAutoFollow) scrollConversationToBottom();
+        toast(retryTurnId ? '最新输入已重新生成。' : '本轮草案已生成。');
       } else if (event.type === 'cancelled') {
         terminal = true;
-        if (event.turn) state.step.turns = [...state.step.turns, event.turn];
+        if (event.turn) applyCompletedAssistantTurn(event.turn, retryTurnId);
         if (event.stepRevision) state.step.revision = event.stepRevision;
+        state.generationRetryTurnId = '';
         renderTurns();
         toast(event.message || '生成已停止。');
       } else if (event.type === 'failed') {
         terminal = true;
-        if (!state.generationUserCommitted) state.step.turns = state.step.turns.filter(turn => turn.id !== state.optimisticTurnId);
+        if (!state.generationUserCommitted && state.optimisticTurnId) removeOptimisticTurn();
         if (event.stepRevision) state.step.revision = event.stepRevision;
+        state.generationRetryTurnId = '';
         renderTurns();
         toast(event.message || '生成失败。', true);
       }
     });
     if (!terminal) throw new Error('生成连接提前结束。');
   } catch (error) {
-    if (!state.generationUserCommitted) state.step.turns = state.step.turns.filter(turn => turn.id !== state.optimisticTurnId);
+    if (!state.generationUserCommitted && state.optimisticTurnId) removeOptimisticTurn();
+    state.generationRetryTurnId = '';
     renderTurns();
     toast(error.message || '生成连接中断。', true);
   } finally {
     state.generating = false;
     state.generationId = '';
+    state.generationConversationId = '';
+    state.generationRetryTurnId = '';
     state.optimisticTurnId = '';
+    renderConversationManager();
+    renderTurns();
     renderGenerationAvailability();
   }
+}
+
+function applyCompletedAssistantTurn(turn, retryTurnId) {
+  const conversation = activeConversation();
+  const retryIndex = retryTurnId ? conversation.turns.findIndex(item => item.id === retryTurnId) : -1;
+  // 后端已按稳定消息 ID 校验；前端仍保护异常事件，避免找不到目标时误清空整段对话。
+  const turns = retryIndex >= 0
+    ? [...conversation.turns.slice(0, retryIndex + 1), turn]
+    : [...conversation.turns, turn];
+  replaceActiveConversation({ ...conversation, turns, updatedAt: new Date().toISOString() });
+}
+
+function removeOptimisticTurn() {
+  const conversation = activeConversation();
+  replaceActiveConversation({ ...conversation, turns: conversation.turns.filter(turn => turn.id !== state.optimisticTurnId) });
 }
 
 async function consumeGenerationStream(stream, onEvent) {
@@ -543,20 +928,122 @@ async function consumeGenerationStream(stream, onEvent) {
 }
 
 function appendStreamDelta(delta) {
-  const conversation = document.querySelector('.conversation');
-  const follow = conversation.scrollHeight - conversation.scrollTop - conversation.clientHeight < 80;
   const turn = elements.turn_list.querySelector('.turn.is-streaming');
-  const content = turn?.querySelector('div');
+  const content = turn?.querySelector('.turn-content');
   if (content) {
     if (content.textContent === '正在连接模型…') content.textContent = '';
     content.textContent += delta;
   }
-  if (follow) scrollConversationToBottom();
+  scrollConversationToBottom();
 }
 
-function scrollConversationToBottom() {
+function isConversationNearBottom(conversation) {
+  return conversation.scrollHeight - conversation.clientHeight - conversation.scrollTop <= 80;
+}
+
+function handleConversationScroll(event) {
+  const conversation = event.currentTarget;
+  const currentTop = conversation.scrollTop;
+  if (!conversationScrollSyncing) {
+    if (currentTop < conversationLastScrollTop - 1) conversationAutoFollow = false;
+    else if (isConversationNearBottom(conversation)) conversationAutoFollow = true;
+  }
+  conversationLastScrollTop = currentTop;
+}
+
+function scrollConversationToBottom({ force = false, behavior = 'auto' } = {}) {
   const conversation = document.querySelector('.conversation');
-  conversation.scrollTop = conversation.scrollHeight;
+  if (!conversation || (!force && !conversationAutoFollow)) return;
+  conversation.scrollTo({ top: conversation.scrollHeight, behavior });
+  conversationLastScrollTop = conversation.scrollTop;
+}
+
+function scrollToPreviousTurnTop() {
+  const conversation = document.querySelector('.conversation');
+  const turns = [...elements.turn_list.querySelectorAll('.turn')];
+  if (!conversation || !turns.length) return;
+  const bounds = conversation.getBoundingClientRect();
+  const stored = Number(conversation.dataset.previousTurnIndex);
+  let currentIndex;
+  if (Number.isInteger(stored) && stored >= 0 && stored < turns.length) {
+    currentIndex = stored;
+  } else {
+    currentIndex = turns.findIndex(turn => turn.getBoundingClientRect().top >= bounds.top + 8);
+    if (currentIndex < 0) currentIndex = turns.length;
+  }
+  const targetIndex = Math.max(0, currentIndex - 1);
+  conversation.dataset.previousTurnIndex = String(targetIndex);
+  const targetBounds = turns[targetIndex].getBoundingClientRect();
+  const maximum = Math.max(0, conversation.scrollHeight - conversation.clientHeight);
+  conversationAutoFollow = false;
+  conversation.scrollTo({
+    top: Math.max(0, Math.min(maximum, conversation.scrollTop + targetBounds.top - bounds.top - 10)),
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  });
+}
+
+function scrollToLatestTurnBottom() {
+  const conversation = document.querySelector('.conversation');
+  const latest = elements.turn_list.querySelector('.turn:last-child');
+  if (!conversation || !latest) return;
+  delete conversation.dataset.previousTurnIndex;
+  conversationAutoFollow = true;
+  const bounds = conversation.getBoundingClientRect();
+  const turnBounds = latest.getBoundingClientRect();
+  const maximum = Math.max(0, conversation.scrollHeight - conversation.clientHeight);
+  conversation.scrollTo({
+    top: Math.max(0, Math.min(maximum, conversation.scrollTop + turnBounds.bottom - bounds.bottom + 10)),
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  });
+}
+
+function beginTurnEdit(turnId) {
+  if (state.generating) return;
+  const turn = activeConversation().turns.find(item => item.id === turnId);
+  const article = [...elements.turn_list.querySelectorAll('.turn')].find(item => item.dataset.turnId === turnId);
+  const content = article?.querySelector('.turn-content');
+  const actions = article?.querySelector('.turn-actions');
+  if (!turn || !article || !content || !actions) return;
+  const articleRect = article.getBoundingClientRect();
+  const contentRect = content.getBoundingClientRect();
+  article.style.width = `${articleRect.width}px`;
+  article.style.maxWidth = '100%';
+  article.classList.add('is-editing');
+  const editor = document.createElement('textarea');
+  editor.className = 'turn-editor';
+  editor.value = turn.content;
+  editor.style.height = `${Math.max(contentRect.height, turn.role === 'user' ? 88 : 120)}px`;
+  editor.setAttribute('aria-label', turn.role === 'user' ? '编辑用户消息' : '编辑 AI 回复');
+  content.replaceWith(editor);
+  actions.replaceChildren();
+  const cancel = turnAction('取消', '取消编辑', () => renderCurrentStep());
+  const save = turnAction('保存', '保存修改', () => saveTurnEdit(turnId, editor.value));
+  actions.append(cancel, save);
+  editor.addEventListener('keydown', event => {
+    if (event.key === 'Escape') renderCurrentStep();
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') saveTurnEdit(turnId, editor.value);
+  });
+  editor.focus();
+  editor.setSelectionRange(editor.value.length, editor.value.length);
+}
+
+async function saveTurnEdit(turnId, content) {
+  if (!String(content || '').trim()) { toast('对话内容不能为空。', true); return; }
+  const conversation = activeConversation();
+  await applyStepMutation(() => api(`${stepApiPath(conversation.id)}/turns/${encodeURIComponent(turnId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ expectedRevision: state.step.revision, content }),
+  }), '消息已保存；未来的正式产物不会随对话修改。');
+}
+
+async function deleteConversationTurn(turn) {
+  if (state.generating) return;
+  const roleName = turn.role === 'assistant' ? 'AI 回复' : '用户消息';
+  if (!await confirmAction(`删除这条${roleName}？`, '只删除当前对话中的这条消息，不会自动删除相邻消息或未来的正式产物。', '删除消息')) return;
+  const conversation = activeConversation();
+  await applyStepMutation(() => api(`${stepApiPath(conversation.id)}/turns/${encodeURIComponent(turn.id)}?expectedRevision=${state.step.revision}`, {
+    method: 'DELETE',
+  }), `已删除这条${roleName}。`);
 }
 
 async function stopGeneration() {
@@ -653,6 +1140,25 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
 elements.project_menu_button.addEventListener('click', () => toggleProjectMenu());
 elements.project_menu_close.addEventListener('click', () => toggleProjectMenu(false));
 elements.new_project_button.addEventListener('click', createProject);
+elements.conversation_manager_toggle.addEventListener('click', () => {
+  setConversationMenuOpen(elements.conversation_menu.hidden);
+});
+elements.create_conversation.addEventListener('click', createConversation);
+elements.new_conversation_name.addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    createConversation();
+  }
+});
+elements.clear_conversation.addEventListener('click', clearCurrentConversation);
+elements.previous_turn_top.addEventListener('click', scrollToPreviousTurnTop);
+elements.latest_turn_bottom.addEventListener('click', scrollToLatestTurnBottom);
+document.querySelector('.conversation').addEventListener('scroll', handleConversationScroll, { passive: true });
+document.addEventListener('pointerdown', event => {
+  if (!elements.conversation_menu.hidden && !event.target.closest('.conversation-manager')) {
+    setConversationMenuOpen(false);
+  }
+});
 elements.reload_button.addEventListener('click', async () => {
   try {
     await flushPendingPatch();
@@ -677,6 +1183,18 @@ elements.connection_profile.addEventListener('change', event => selectConnection
 elements.save_connection.addEventListener('click', saveConnection);
 elements.delete_connection.addEventListener('click', deleteConnection);
 elements.fetch_models.addEventListener('click', fetchModels);
+elements.conversation_font_size.addEventListener('input', event => applyConversationFontSize(event.target.value));
+elements.conversation_font_decrease.addEventListener('click', () => changeConversationFontSize(-1));
+elements.conversation_font_increase.addEventListener('click', () => changeConversationFontSize(1));
+elements.prompt_preview_button.addEventListener('click', openPromptPreview);
+elements.copy_prompt_preview.addEventListener('click', copyPromptPreview);
+elements.close_prompt_preview.addEventListener('click', closePromptPreview);
+elements.modal_backdrop.addEventListener('click', () => {
+  if (!elements.prompt_preview_modal.hidden && elements.confirm_modal.hidden) closePromptPreview();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !elements.prompt_preview_modal.hidden && elements.confirm_modal.hidden) closePromptPreview();
+});
 elements.generate_button.addEventListener('click', generateCurrentStep);
 elements.stop_generation.addEventListener('click', stopGeneration);
 elements.close_button.addEventListener('click', async () => {
@@ -690,6 +1208,7 @@ elements.close_button.addEventListener('click', async () => {
   } catch (error) { toast(error.message, true); }
 });
 
+applyConversationFontSize(localStorage.getItem('acs:conversation-font-size') || 15);
 loadState().then(() => {
   elements.app.setAttribute('aria-busy', 'false');
   elements.service_status.classList.add('is-ready');

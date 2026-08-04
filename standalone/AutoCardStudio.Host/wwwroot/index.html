@@ -56,6 +56,26 @@
             <span id="requirement-chip" class="requirement-chip">必做</span>
           </div>
           <p id="step-goal" class="step-goal"></p>
+          <div class="stage-tools">
+            <div class="conversation-manager">
+              <button id="conversation-manager-toggle" class="conversation-manager-toggle" type="button" aria-expanded="false">
+                <span aria-hidden="true">☵</span>
+                <strong id="active-conversation-name">默认对话</strong>
+                <small id="conversation-count">1</small>
+                <span aria-hidden="true">⌄</span>
+              </button>
+              <section id="conversation-menu" class="conversation-menu" aria-label="本步骤对话" hidden>
+                <header><strong>本步骤对话</strong><span id="conversation-menu-count">1 个</span></header>
+                <div id="conversation-list" class="conversation-list"></div>
+                <footer>
+                  <input id="new-conversation-name" type="text" maxlength="60" placeholder="对话 2" aria-label="新对话名称">
+                  <button id="create-conversation" type="button">＋ 新建</button>
+                  <p>各对话彼此独立，之后建立的正式产物由整个项目共享。</p>
+                </footer>
+              </section>
+            </div>
+            <button id="clear-conversation" class="stage-tool-button" type="button" title="清空当前对话">⌫</button>
+          </div>
         </header>
 
         <section class="project-overview" aria-label="创作母题">
@@ -84,12 +104,16 @@
           <div class="composer-footer">
             <span id="generation-hint" class="save-status">请先导入预设并配置模型连接</span>
             <div class="future-actions" aria-label="生成操作">
-              <button type="button" disabled title="提示词预览将在完整对话阶段接通">提示词</button>
+              <button id="prompt-preview-button" type="button">提示词</button>
               <button id="stop-generation" type="button" class="danger" hidden>停止</button>
               <button id="generate-button" type="button" class="primary">生成阶段草案</button>
               <button type="button" disabled class="confirm">确认并前往下一站 →</button>
             </div>
           </div>
+          <nav id="conversation-nav" class="conversation-nav" aria-label="消息定位" hidden>
+            <button id="previous-turn-top" type="button" title="回到上一条消息顶部">↑ 回顶</button>
+            <button id="latest-turn-bottom" type="button" title="回到最新消息底部">↓ 回底</button>
+          </nav>
         </section>
       </main>
 
@@ -107,7 +131,7 @@
           </div>
         </section>
         <section class="tab-panel" data-panel="settings" hidden>
-          <div class="panel-heading"><strong>模型与资源</strong><span>阶段 2</span></div>
+          <div class="panel-heading"><strong>模型与资源</strong><span>阶段 3</span></div>
           <label class="field-label" for="project-name">项目名称</label>
           <input id="project-name" class="text-field" type="text" maxlength="80">
 
@@ -148,6 +172,16 @@
             <div class="button-row"><button id="save-connection" type="button" class="primary-action">保存并使用</button><button id="delete-connection" type="button" class="danger-action">删除连接</button></div>
           </section>
 
+          <section class="settings-card conversation-font-settings">
+            <header><div><strong>对话字体大小</strong><small>只调整用户与 AI 的消息正文，并保存在当前浏览器</small></div><span id="conversation-font-value">15 px</span></header>
+            <div class="font-size-control">
+              <button id="conversation-font-decrease" type="button" aria-label="减小对话字体">−</button>
+              <input id="conversation-font-size" type="range" min="12" max="20" step="1" value="15" aria-label="对话字体大小">
+              <button id="conversation-font-increase" type="button" aria-label="增大对话字体">＋</button>
+            </div>
+            <p class="font-size-preview">示例：角色设定、生成建议与代码内容都会同步调整。</p>
+          </section>
+
           <div class="info-card"><i>●</i><div><strong>密钥与项目分离</strong><p>项目、预设和导出文件都不会包含 API 密钥；更换 Windows 用户后需要重新填写。</p></div></div>
         </section>
         <section class="tab-panel" data-panel="publish" hidden>
@@ -162,6 +196,14 @@
       <h2 id="confirm-title">确认操作</h2>
       <p id="confirm-message"></p>
       <div><button id="confirm-cancel" type="button">取消</button><button id="confirm-accept" type="button" class="danger">确认</button></div>
+    </section>
+    <section id="prompt-preview-modal" class="prompt-preview-modal" role="dialog" aria-modal="true" aria-labelledby="prompt-preview-title" hidden>
+      <header>
+        <div><h2 id="prompt-preview-title">本轮发送内容</h2><p id="prompt-preview-summary">正在装配提示词…</p></div>
+        <div><button id="copy-prompt-preview" type="button">复制全部</button><button id="close-prompt-preview" type="button" aria-label="关闭提示词预览">×</button></div>
+      </header>
+      <p class="prompt-preview-notice">这里展示点击生成后将按顺序发送的消息。Token 为独立版当前的近似估算值。</p>
+      <div id="prompt-preview-list" class="prompt-preview-list"></div>
     </section>
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
   </div>

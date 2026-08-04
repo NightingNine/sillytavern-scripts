@@ -21,6 +21,32 @@ public sealed class GenerationCoordinator(
         return true;
     }
 
+    public async Task<PromptPreviewResponse> PreviewAsync(PromptPreviewRequest request)
+    {
+        var preset = await resources.GetPresetAsync()
+            ?? throw new GenerationRejectedException("preset_required", "请先在设置中导入完整的 A.U.T.O 预设。");
+        var regexes = await resources.GetRegexesAsync();
+        var snapshot = await projects.GetGenerationSnapshotAsync(request.ProjectId, request.StepNumber);
+        if (snapshot.Step.Revision != request.ExpectedStepRevision)
+            throw new StepRevisionConflictException(snapshot.Step.Revision);
+
+        var conversation = PromptAssembler.ActiveConversation(snapshot.Step);
+        if (!string.IsNullOrWhiteSpace(request.ConversationId) && conversation.Id != request.ConversationId.Trim())
+            throw new GenerationRejectedException("conversation_changed", "当前对话已经切换，请重新查看提示词。");
+
+        var input = string.IsNullOrWhiteSpace(request.UserInput)
+            ? $"请执行 Step {request.StepNumber}。"
+            : request.UserInput.Trim();
+        var messages = PromptAssembler.Build(preset, snapshot.Project, conversation.Turns, request.StepNumber, input, regexes);
+        var items = messages.Select((message, index) => new PromptPreviewItem(
+            index + 1,
+            message.Role,
+            message.Name ?? "未命名消息",
+            message.Content,
+            EstimateTokens(message.Content))).ToList();
+        return new PromptPreviewResponse(conversation.Id, conversation.Name, items, items.Sum(item => item.EstimatedTokens));
+    }
+
     public async Task RunAsync(GenerateStepRequest request, Func<GenerationEvent, Task> emit, CancellationToken clientCancellation)
     {
         var generationId = string.IsNullOrWhiteSpace(request.GenerationId) ? Guid.NewGuid().ToString("D") : request.GenerationId.Trim();
@@ -34,6 +60,9 @@ public sealed class GenerationCoordinator(
         var timer = Stopwatch.StartNew();
         var draft = new StringBuilder();
         StepData? committedStep = null;
+        var targetConversationId = request.ConversationId?.Trim() ?? string.Empty;
+        var retryUserTurnId = request.RetryTurnId?.Trim();
+        var retrying = !string.IsNullOrWhiteSpace(retryUserTurnId);
         try
         {
             var preset = await resources.GetPresetAsync() ?? throw new GenerationRejectedException("preset_required", "请先在设置中导入完整的 A.U.T.O 预设。");
@@ -44,18 +73,44 @@ public sealed class GenerationCoordinator(
             var snapshot = await projects.GetGenerationSnapshotAsync(request.ProjectId, request.StepNumber);
             if (snapshot.Step.Revision != request.ExpectedStepRevision)
                 throw new StepRevisionConflictException(snapshot.Step.Revision);
+            var conversation = PromptAssembler.ActiveConversation(snapshot.Step);
+            if (string.IsNullOrWhiteSpace(targetConversationId)) targetConversationId = conversation.Id;
+            if (snapshot.Step.ActiveConversationId != targetConversationId)
+                throw new GenerationRejectedException("conversation_changed", "当前对话已经切换，请重新发送。");
             if (request.StepNumber == 1 && string.IsNullOrWhiteSpace(snapshot.Project.Brief))
                 throw new GenerationRejectedException("brief_required", "请先写下一两句创作母题，再开始第一阶段。");
 
-            var userInput = string.IsNullOrWhiteSpace(request.UserInput)
-                ? $"请执行 Step {request.StepNumber}。"
-                : request.UserInput.Trim();
-            var messages = PromptAssembler.Build(preset, snapshot.Project, snapshot.Step, request.StepNumber, userInput, regexes);
+            IReadOnlyList<StepTurn> history = conversation.Turns;
+            string userInput;
+            if (retrying)
+            {
+                var latestUser = conversation.Turns.LastOrDefault(turn => turn.Role == "user");
+                if (latestUser?.Id != retryUserTurnId)
+                    throw new GenerationRejectedException("retry_not_latest", "只能重试当前对话中最新的用户输入。");
+                var userIndex = conversation.Turns.ToList().FindIndex(turn => turn.Id == retryUserTurnId);
+                history = conversation.Turns.Take(userIndex).ToList();
+                userInput = latestUser!.Content;
+            }
+            else
+            {
+                userInput = string.IsNullOrWhiteSpace(request.UserInput)
+                    ? $"请执行 Step {request.StepNumber}。"
+                    : request.UserInput.Trim();
+            }
+            var messages = PromptAssembler.Build(preset, snapshot.Project, history, request.StepNumber, userInput, regexes);
             EnsureContextBudget(messages, connection.Profile.Parameters);
 
-            var userTurn = new StepTurn(Guid.NewGuid().ToString("D"), "user", userInput, DateTimeOffset.UtcNow);
-            committedStep = await projects.AppendTurnAsync(request.ProjectId, request.StepNumber, snapshot.Step.Revision, userTurn);
-            await emit(new GenerationEvent("user_committed", generationId, Turn: userTurn, StepRevision: committedStep.Revision));
+            if (retrying)
+            {
+                committedStep = snapshot.Step;
+                await emit(new GenerationEvent("retry_started", generationId, ConversationId: targetConversationId, StepRevision: committedStep.Revision));
+            }
+            else
+            {
+                var userTurn = new StepTurn(Guid.NewGuid().ToString("D"), "user", userInput, DateTimeOffset.UtcNow);
+                committedStep = await projects.AppendTurnAsync(request.ProjectId, request.StepNumber, targetConversationId, snapshot.Step.Revision, userTurn);
+                await emit(new GenerationEvent("user_committed", generationId, Turn: userTurn, ConversationId: targetConversationId, StepRevision: committedStep.Revision));
+            }
 
             logger.LogInformation(
                 "Generation {GenerationId} started for project {ProjectId}, step {Step}, provider {Provider}, model {Model}, messages {MessageCount}",
@@ -69,8 +124,10 @@ public sealed class GenerationCoordinator(
 
             var content = ProcessResponse(completion.Text, regexes, "display");
             var assistantTurn = new StepTurn(Guid.NewGuid().ToString("D"), "assistant", content, DateTimeOffset.UtcNow, completion.Text);
-            committedStep = await projects.AppendTurnAsync(request.ProjectId, request.StepNumber, committedStep.Revision, assistantTurn);
-            await emit(new GenerationEvent("completed", generationId, Turn: assistantTurn, StepRevision: committedStep.Revision, FinishReason: completion.FinishReason));
+            committedStep = retrying
+                ? await projects.CompleteRetryAsync(request.ProjectId, request.StepNumber, targetConversationId, retryUserTurnId!, committedStep.Revision, assistantTurn)
+                : await projects.AppendTurnAsync(request.ProjectId, request.StepNumber, targetConversationId, committedStep.Revision, assistantTurn);
+            await emit(new GenerationEvent("completed", generationId, Turn: assistantTurn, ConversationId: targetConversationId, StepRevision: committedStep.Revision, FinishReason: completion.FinishReason));
             logger.LogInformation(
                 "Generation {GenerationId} completed in {ElapsedMs} ms, response hash {ResponseHash}",
                 generationId, timer.ElapsedMilliseconds, Fingerprint(completion.Text));
@@ -84,8 +141,10 @@ public sealed class GenerationCoordinator(
                     var regexes = await resources.GetRegexesAsync();
                     var raw = draft.ToString();
                     var partial = new StepTurn(Guid.NewGuid().ToString("D"), "assistant", ProcessResponse(raw, regexes, "display"), DateTimeOffset.UtcNow, raw, "cancelled_partial");
-                    committedStep = await projects.AppendTurnAsync(request.ProjectId, request.StepNumber, committedStep.Revision, partial);
-                    await emit(new GenerationEvent("cancelled", generationId, Turn: partial, StepRevision: committedStep.Revision, Message: "生成已停止，已保存收到的部分内容。"));
+                    committedStep = retrying
+                        ? await projects.CompleteRetryAsync(request.ProjectId, request.StepNumber, targetConversationId, retryUserTurnId!, committedStep.Revision, partial)
+                        : await projects.AppendTurnAsync(request.ProjectId, request.StepNumber, targetConversationId, committedStep.Revision, partial);
+                    await emit(new GenerationEvent("cancelled", generationId, Turn: partial, ConversationId: targetConversationId, StepRevision: committedStep.Revision, Message: "生成已停止，已保存收到的部分内容。"));
                 }
                 catch (Exception saveError)
                 {
@@ -95,7 +154,7 @@ public sealed class GenerationCoordinator(
             }
             else
             {
-                await emit(new GenerationEvent("cancelled", generationId, StepRevision: committedStep?.Revision, Message: "生成已停止。"));
+                await emit(new GenerationEvent("cancelled", generationId, ConversationId: targetConversationId, StepRevision: committedStep?.Revision, Message: "生成已停止。"));
             }
         }
         catch (StepRevisionConflictException conflict)
@@ -127,11 +186,13 @@ public sealed class GenerationCoordinator(
     private static void EnsureContextBudget(IReadOnlyList<PromptMessage> messages, ModelParameters parameters)
     {
         // 当前阶段没有供应商 tokenizer，中文按约 3 字符/token 保守估算并明确作为估算值。
-        var inputTokens = messages.Sum(message => Math.Max(1, (Encoding.UTF8.GetByteCount(message.Content) + 5) / 6));
+        var inputTokens = messages.Sum(message => EstimateTokens(message.Content));
         var outputTokens = Math.Max(0, (int)(parameters.MaxCompletionTokens ?? 0));
         if (inputTokens + outputTokens > parameters.MaxContextTokens)
             throw new GenerationRejectedException("context_limit", $"预计需要 {inputTokens + outputTokens:N0} tokens，超过当前设置的 {parameters.MaxContextTokens:N0} tokens 上限。");
     }
+
+    private static int EstimateTokens(string content) => Math.Max(1, (Encoding.UTF8.GetByteCount(content) + 5) / 6);
 
     private static string ProcessResponse(string raw, IReadOnlyList<StudioRegex> regexes, string destination)
     {
@@ -149,7 +210,7 @@ public static class PromptAssembler
     public static IReadOnlyList<PromptMessage> Build(
         ImportedPreset preset,
         StudioProject project,
-        StepData step,
+        IReadOnlyList<StepTurn> conversationTurns,
         int stepNumber,
         string userInput,
         IReadOnlyList<StudioRegex> regexes)
@@ -167,7 +228,7 @@ public static class PromptAssembler
         }
 
         messages.Add(new PromptMessage("user", BuildProjectContext(project, stepNumber), "项目上下文"));
-        foreach (var turn in step.Turns)
+        foreach (var turn in conversationTurns)
         {
             var content = turn.Role == "assistant" && !string.IsNullOrEmpty(turn.RawContent)
                 ? ProcessForPrompt(turn.RawContent, regexes)
@@ -177,6 +238,11 @@ public static class PromptAssembler
         messages.Add(new PromptMessage("user", userInput, "本轮输入"));
         return messages;
     }
+
+    public static StepConversation ActiveConversation(StepData step) =>
+        step.Conversations.FirstOrDefault(item => item.Id == step.ActiveConversationId)
+        ?? step.Conversations.FirstOrDefault()
+        ?? throw new InvalidDataException("当前步骤没有可用对话。");
 
     private static string BuildProjectContext(StudioProject project, int stepNumber) => $"""
         <STUDIO_PROJECT_CONTEXT>
@@ -198,8 +264,42 @@ public static class PromptAssembler
     }
 }
 
-public sealed record GenerateStepRequest(string GenerationId, string ProjectId, int StepNumber, long ExpectedStepRevision, string UserInput, string? ConnectionId = null);
-public sealed record GenerationEvent(string Type, string? GenerationId = null, string? Delta = null, StepTurn? Turn = null, long? StepRevision = null, string? Code = null, string? Message = null, bool? Retryable = null, string? FinishReason = null);
+public sealed record GenerateStepRequest(
+    string GenerationId,
+    string ProjectId,
+    int StepNumber,
+    long ExpectedStepRevision,
+    string UserInput,
+    string? ConnectionId = null,
+    string? ConversationId = null,
+    string? RetryTurnId = null);
+
+public sealed record PromptPreviewRequest(
+    string ProjectId,
+    int StepNumber,
+    long ExpectedStepRevision,
+    string UserInput,
+    string? ConversationId = null);
+
+public sealed record PromptPreviewItem(int Index, string Role, string Name, string Content, int EstimatedTokens);
+
+public sealed record PromptPreviewResponse(
+    string ConversationId,
+    string ConversationName,
+    IReadOnlyList<PromptPreviewItem> Messages,
+    int EstimatedTokens);
+
+public sealed record GenerationEvent(
+    string Type,
+    string? GenerationId = null,
+    string? Delta = null,
+    StepTurn? Turn = null,
+    string? ConversationId = null,
+    long? StepRevision = null,
+    string? Code = null,
+    string? Message = null,
+    bool? Retryable = null,
+    string? FinishReason = null);
 
 public sealed class GenerationRejectedException(string code, string message) : Exception(message)
 {
