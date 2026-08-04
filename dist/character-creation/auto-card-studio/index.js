@@ -11781,10 +11781,11 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         });
         // 重组方案必须先通过完整性校验，避免无效方案进入正式产物库。
         let reorgPlanResult = null;
+        let reorgAnalysis = null;
         if (step.number === 29) {
-            const analysis = currentReorgAnalysis();
-            if (!analysis) throw new Error('当前结构报告已过期，请重新分析产物');
-            reorgPlanResult = reorgPlanFromResponse(response, analysis.artifacts);
+            reorgAnalysis = currentReorgAnalysis();
+            if (!reorgAnalysis) throw new Error('当前结构报告已过期，请重新分析产物');
+            reorgPlanResult = reorgPlanFromResponse(response, reorgAnalysis.artifacts);
         }
         // AI 回复只在完成时提取一次；入库后产物与对话彻底分离，后续互不回写。
         const capturedArtifacts = appendArtifactsToVault(artifactVaultFor(project.id), response, step.number, {
@@ -11797,7 +11798,7 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
                 response,
                 plan: reorgPlanResult.plan,
                 schemaVersion: REORG_PLAN_SCHEMA_VERSION,
-                selectionSignature: analysis.signature,
+                selectionSignature: reorgAnalysis.signature,
                 updatedAt: new Date().toISOString(),
             };
         }
