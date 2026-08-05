@@ -2994,7 +2994,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.51';
+const AUTO_CARD_STUDIO_VERSION = '0.6.52';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -13912,6 +13912,43 @@ function partialContinuationFromCharacter(character, worldbookEntries = []) {
     return { project: imported, vault, exact: false };
 }
 
+// 发布后的角色世界书是世界书产物的唯一事实源。续作快照只保存项目状态以及
+// 无法从最终角色卡反推的内容；不能让旧快照覆盖已发布卡实际在用的世界书。
+function rebuildContinuationSnapshotWorldbookArtifacts(result, worldbookEntries = []) {
+    if (!result?.exact || !Array.isArray(worldbookEntries) || !worldbookEntries.length) return 0;
+    const recoveredArtifacts = taggedArtifactsFromWorldbookEntries(worldbookEntries);
+    const recoveredKeys = new Set(recoveredArtifacts.map(artifact => artifactContextKey(artifact.step, artifact.identity)));
+    if (!recoveredKeys.size) return 0;
+
+    // 移除快照中所有已经发布为世界书的产物：既移除同身份旧内容，也清掉卡中已不存在的旧条目。
+    const snapshotWorldbookKeys = new Set(result.vault.versions
+        .filter(version => deliveryTargetForArtifact(version.identity, version.step)?.kind === 'worldbook')
+        .map(version => artifactContextKey(version.step, version.identity)));
+    result.vault.versions = result.vault.versions.filter(version => !snapshotWorldbookKeys.has(artifactContextKey(version.step, version.identity)));
+    for (const key of snapshotWorldbookKeys) delete result.vault.selectedVersionIds[key];
+
+    const now = new Date().toISOString();
+    for (const artifact of recoveredArtifacts) {
+        const key = artifactContextKey(artifact.step, artifact.identity);
+        const version = {
+            id: globalThis.crypto?.randomUUID?.() || `artifact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            step: artifact.step,
+            identity: artifact.identity,
+            content: artifact.content,
+            displayName: artifact.displayName,
+            createdAt: now,
+            updatedAt: now,
+            source: 'card-worldbook-recovery',
+        };
+        result.vault.versions.push(version);
+        result.vault.selectedVersionIds[key] = version.id;
+        result.project.steps[artifact.step].status = 'accepted';
+        result.project.steps[artifact.step].updatedAt = now;
+    }
+    result.vault.updatedAt = now;
+    return recoveredArtifacts.length;
+}
+
 async function activateImportedContinuation(imported, vault, sourceLabel) {
     flushPendingProjectEdits();
     const existingNames = new Set(projectLibrary.projects.map(item => item.name));
@@ -14002,11 +14039,12 @@ async function importContinuationCharacter(character, suppliedWorldbookEntries =
     const snapshot = character.extensions?.auto_card_studio;
     let result = continuationProjectFromSnapshot(snapshot, character.name);
     let worldbookEntries = suppliedWorldbookEntries;
+    if (!worldbookEntries.length && character.worldbook && typeof helper?.getWorldbook === 'function') {
+        const names = helper.getWorldbookNames?.() || [];
+        if (names.includes(character.worldbook)) worldbookEntries = await helper.getWorldbook(character.worldbook);
+    }
+    const rebuiltWorldbookArtifacts = rebuildContinuationSnapshotWorldbookArtifacts(result, worldbookEntries);
     if (!result) {
-        if (!worldbookEntries.length && character.worldbook && typeof helper?.getWorldbook === 'function') {
-            const names = helper.getWorldbookNames?.() || [];
-            if (names.includes(character.worldbook)) worldbookEntries = await helper.getWorldbook(character.worldbook);
-        }
         result = partialContinuationFromCharacter(character, worldbookEntries);
     }
     if (!result) throw new Error('这不是由 A.U.T.O 角色卡创作台生成的角色卡。');
@@ -14014,7 +14052,7 @@ async function importContinuationCharacter(character, suppliedWorldbookEntries =
     const confirmed = await showStudioConfirm({
         title: result.exact ? '导入可继续创作项目？' : '导入旧版角色卡？',
         message: result.exact
-            ? `将创建新项目“${result.project.name}”。\n恢复 ${summary.artifacts} 项当前产物，不包含对话、历史版本和废弃项。`
+            ? `将创建新项目“${result.project.name}”。\n恢复 ${summary.artifacts} 项当前产物${rebuiltWorldbookArtifacts ? `；其中 ${rebuiltWorldbookArtifacts} 项按最终世界书重建` : ''}，不包含对话、历史版本和废弃项。`
             : `该卡没有续作快照，将从现有世界书、开场白和状态栏正则部分恢复。\n恢复 ${summary.artifacts} 项当前内容，不包含原步骤对话和历史版本。`,
         confirmLabel: '创建续作项目',
     });
