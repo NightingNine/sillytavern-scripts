@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.48 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.49 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -2994,7 +2994,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.48';
+const AUTO_CARD_STUDIO_VERSION = '0.6.49';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -13771,18 +13771,37 @@ function continuationProjectFromSnapshot(snapshot, fallbackName = '导入的角�
     return { project: imported, vault, exact: true };
 }
 
-function worldbookEntriesFromCharacterBook(characterBook) {
-    const entries = characterBook?.entries;
-    const list = Array.isArray(entries) ? entries : entries && typeof entries === 'object' ? Object.values(entries) : [];
+// 云端角色卡必须携带完整世界书快照。只保留 uid/name/content 会丢掉关键词、
+// 常驻、注入位置、深度、递归等字段，跨设备导入后看似有世界书但行为已变化。
+function cloneWorldbookEntries(entriesLike) {
+    const list = Array.isArray(entriesLike)
+        ? entriesLike
+        : entriesLike && typeof entriesLike === 'object' ? Object.values(entriesLike) : [];
+    const usedUids = new Set();
+    let nextUid = 0;
     return list.flatMap((entry, index) => {
-        const content = String(entry?.content || '').trim();
-        if (!content) return [];
+        if (!entry || typeof entry !== 'object') return [];
+        const content = entry.content == null ? '' : String(entry.content);
+        let uid = Number(entry.uid ?? entry.id);
+        if (!Number.isInteger(uid) || uid < 0 || usedUids.has(uid)) {
+            while (usedUids.has(nextUid)) nextUid += 1;
+            uid = nextUid;
+        }
+        usedUids.add(uid);
+        nextUid = Math.max(nextUid, uid + 1);
+        // JSON round-trip makes a detached plain object and prevents修改云端快照时反写宿主数据。
+        const cloned = JSON.parse(JSON.stringify(entry));
         return [{
-            uid: entry.uid ?? entry.id ?? index,
+            ...cloned,
+            uid,
             name: String(entry.name || entry.comment || `世界书条目 ${index + 1}`),
             content,
         }];
     });
+}
+
+function worldbookEntriesFromCharacterBook(characterBook) {
+    return cloneWorldbookEntries(characterBook?.entries);
 }
 
 function normalizeImportedCharacter(raw, fallbackName = '') {
@@ -13790,6 +13809,7 @@ function normalizeImportedCharacter(raw, fallbackName = '') {
     if (!data || typeof data !== 'object') throw new Error('角色卡数据不是有效的 JSON 对象。');
     const extensions = data.extensions && typeof data.extensions === 'object' ? data.extensions : {};
     const firstMessage = String(data.first_mes || data.first_message || data.first_messages?.[0] || '');
+    const embeddedCharacterBook = data.character_book || raw?.character_book;
     return {
         name: String(data.name || raw?.name || fallbackName || '导入的角色卡').replace(/\.(?:json|png)$/iu, ''),
         creator: String(data.creator || raw?.creator || ''),
@@ -13798,7 +13818,12 @@ function normalizeImportedCharacter(raw, fallbackName = '') {
         first_messages: firstMessage ? [firstMessage] : [],
         worldbook: String(extensions.world || data.worldbook || raw?.worldbook || ''),
         extensions,
-        embeddedWorldbookEntries: worldbookEntriesFromCharacterBook(data.character_book || raw?.character_book),
+        embeddedWorldbookEntries: worldbookEntriesFromCharacterBook(embeddedCharacterBook),
+        hasEmbeddedWorldbookSnapshot: Boolean(
+            embeddedCharacterBook
+            && typeof embeddedCharacterBook === 'object'
+            && Object.prototype.hasOwnProperty.call(embeddedCharacterBook, 'entries'),
+        ),
     };
 }
 
@@ -15947,20 +15972,30 @@ function saveCloudSettings() {
 }
 
 function cloudBase64(text) {
-    const bytes = new TextEncoder().encode(String(text));
+    return cloudBytesBase64(new TextEncoder().encode(String(text)));
+}
+
+function cloudBytesBase64(value) {
+    const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
     let binary = '';
-    for (const byte of bytes) binary += String.fromCharCode(byte);
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
     return btoa(binary);
 }
 
-function cloudDecodeBase64(value) {
+function cloudDecodeBytes(value) {
     const binary = atob(String(value || '').replace(/\s/g, ''));
-    return new TextDecoder().decode(Uint8Array.from(binary, character => character.charCodeAt(0)));
+    return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
+
+function cloudDecodeBase64(value) {
+    return new TextDecoder().decode(cloudDecodeBytes(value));
 }
 
 async function cloudFetch(url, options = {}, authenticated = true) {
     const headers = new Headers(options.headers || {});
-    headers.set('Accept', 'application/vnd.github+json');
+    if (!headers.has('Accept')) headers.set('Accept', 'application/vnd.github+json');
     headers.set('X-GitHub-Api-Version', GITHUB_API_VERSION);
     if (authenticated) {
         await refreshCloudTokenIfNeeded();
@@ -16067,6 +16102,29 @@ async function writeCloudFile(path, text, message, knownSha = '') {
     return response.json();
 }
 
+async function readCloudBinary(path, optional = false) {
+    try {
+        const url = `${cloudRepoApi(path)}?ref=${encodeURIComponent(cloudSettings.branch || 'main')}`;
+        const response = await cloudFetch(url);
+        const data = await response.json();
+        if (data.content) return { bytes: cloudDecodeBytes(data.content), sha: data.sha };
+        const raw = await cloudFetch(url, { headers: { Accept: 'application/vnd.github.raw+json' } });
+        return { bytes: new Uint8Array(await raw.arrayBuffer()), sha: data.sha };
+    } catch (error) {
+        if (optional && /404|Not Found/iu.test(String(error.message))) return null;
+        throw error;
+    }
+}
+
+async function writeCloudBinary(path, bytes, message, knownSha = '') {
+    let sha = knownSha;
+    if (!sha) sha = (await readCloudBinary(path, true))?.sha || '';
+    const payload = { message, content: cloudBytesBase64(bytes), branch: cloudSettings.branch || 'main' };
+    if (sha) payload.sha = sha;
+    const response = await cloudFetch(cloudRepoApi(path), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    return response.json();
+}
+
 function emptyCloudRegistry() {
     return { schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: new Date().toISOString(), cards: [] };
 }
@@ -16089,8 +16147,9 @@ async function uploadCharacterToCloud(characterName) {
     const character = await helper.getCharacter(characterName);
     if (!character) throw new Error(`找不到角色卡“${characterName}”。`);
     const registry = await loadCloudRegistry(true);
-    const id = cloudCardId(character);
-    const existing = registry.cards.find(item => item.id === id);
+    const knownId = String(character?.extensions?.auto_card_studio?.cloud?.cardId || '');
+    const existing = registry.cards.find(item => item.id === knownId) || registry.cards.find(item => item.name === characterName);
+    const id = existing?.id || cloudCardId(character);
     const localRevision = String(character?.extensions?.auto_card_studio?.cloud?.revision || '');
     if (existing?.revision && localRevision && existing.revision !== localRevision) {
         const overwrite = await showStudioConfirm({
@@ -16105,14 +16164,27 @@ async function uploadCharacterToCloud(characterName) {
     const cloud = { cardId: id, repository: `${cloudSettings.owner}/${cloudSettings.repo}`, revision: localRevision, updatedAt: now };
     character.extensions = { ...(character.extensions || {}), auto_card_studio: { ...(character.extensions?.auto_card_studio || {}), cloud } };
     const path = `cards/${id}/character.json`;
+    const avatarPath = `cards/${id}/avatar.png`;
+    const localAvatarPath = helper.getCharAvatarPath?.(characterName);
+    const avatarResponse = localAvatarPath ? await fetch(localAvatarPath, { cache: 'no-store' }) : null;
+    if (!avatarResponse?.ok) throw new Error(`无法读取“${characterName}”的角色图片，请刷新酒馆角色列表后重试。`);
+    const avatarBytes = new Uint8Array(await avatarResponse.arrayBuffer());
+    if (!avatarBytes.length) throw new Error(`“${characterName}”的角色图片为空，已停止上传。`);
     const result = await writeCloudFile(path, JSON.stringify(character, null, 2), `同步角色卡：${characterName}`);
-    const record = { id, name: characterName, path, archived: false, updatedAt: now, revision: result.content?.sha || '' };
+    await writeCloudBinary(avatarPath, avatarBytes, `同步角色图片：${characterName}`, existing?.avatarSha || '');
+    const record = { id, name: characterName, path, avatarPath, archived: false, updatedAt: now, revision: result.content?.sha || '' };
     if (existing) Object.assign(existing, record); else registry.cards.push(record);
     registry.updatedAt = now;
     await writeCloudFile(CLOUD_REGISTRY_PATH, JSON.stringify({ schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: registry.updatedAt, cards: registry.cards }, null, 2), `更新云仓库索引：${characterName}`, registry._sha);
     cloudRegistry = null;
     character.extensions.auto_card_studio.cloud.revision = record.revision;
-    await helper.createOrReplaceCharacter(characterName, character, { render: 'immediate' });
+    try {
+        await helper.createOrReplaceCharacter(characterName, character, { render: 'immediate' });
+    } catch (error) {
+        // 部分酒馆版本在保存成功后的列表刷新阶段会按“角色名.png”误查头像；确认数据已落盘后忽略这类伪失败。
+        const saved = await helper.getCharacter(characterName).catch(() => null);
+        if (saved?.extensions?.auto_card_studio?.cloud?.cardId !== id) throw error;
+    }
     return true;
 }
 
@@ -16144,7 +16216,9 @@ async function importCloudCharacter(record) {
             },
         },
     };
-    const character = { ...source, ...normalized, name, worldbook, extensions };
+    const avatarFile = record.avatarPath ? await readCloudBinary(record.avatarPath, true) : null;
+    const avatar = avatarFile ? new Blob([avatarFile.bytes], { type: 'image/png' }) : undefined;
+    const character = { ...source, ...normalized, name, worldbook, extensions, ...(avatar ? { avatar } : {}) };
     await helper.createOrReplaceCharacter(name, character, { render: 'immediate' });
     notify('success', `已从云仓库导入“${name}”。`);
 }
