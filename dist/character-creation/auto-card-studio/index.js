@@ -3004,7 +3004,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.05-93';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.05-94';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -15950,20 +15950,30 @@ function saveCloudSettings() {
 }
 
 function cloudBase64(text) {
-    const bytes = new TextEncoder().encode(String(text));
+    return cloudBytesBase64(new TextEncoder().encode(String(text)));
+}
+
+function cloudBytesBase64(value) {
+    const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
     let binary = '';
-    for (const byte of bytes) binary += String.fromCharCode(byte);
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
     return btoa(binary);
 }
 
-function cloudDecodeBase64(value) {
+function cloudDecodeBytes(value) {
     const binary = atob(String(value || '').replace(/\s/g, ''));
-    return new TextDecoder().decode(Uint8Array.from(binary, character => character.charCodeAt(0)));
+    return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
+
+function cloudDecodeBase64(value) {
+    return new TextDecoder().decode(cloudDecodeBytes(value));
 }
 
 async function cloudFetch(url, options = {}, authenticated = true) {
     const headers = new Headers(options.headers || {});
-    headers.set('Accept', 'application/vnd.github+json');
+    if (!headers.has('Accept')) headers.set('Accept', 'application/vnd.github+json');
     headers.set('X-GitHub-Api-Version', GITHUB_API_VERSION);
     if (authenticated) {
         await refreshCloudTokenIfNeeded();
@@ -16070,6 +16080,29 @@ async function writeCloudFile(path, text, message, knownSha = '') {
     return response.json();
 }
 
+async function readCloudBinary(path, optional = false) {
+    try {
+        const url = `${cloudRepoApi(path)}?ref=${encodeURIComponent(cloudSettings.branch || 'main')}`;
+        const response = await cloudFetch(url);
+        const data = await response.json();
+        if (data.content) return { bytes: cloudDecodeBytes(data.content), sha: data.sha };
+        const raw = await cloudFetch(url, { headers: { Accept: 'application/vnd.github.raw+json' } });
+        return { bytes: new Uint8Array(await raw.arrayBuffer()), sha: data.sha };
+    } catch (error) {
+        if (optional && /404|Not Found/iu.test(String(error.message))) return null;
+        throw error;
+    }
+}
+
+async function writeCloudBinary(path, bytes, message, knownSha = '') {
+    let sha = knownSha;
+    if (!sha) sha = (await readCloudBinary(path, true))?.sha || '';
+    const payload = { message, content: cloudBytesBase64(bytes), branch: cloudSettings.branch || 'main' };
+    if (sha) payload.sha = sha;
+    const response = await cloudFetch(cloudRepoApi(path), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    return response.json();
+}
+
 function emptyCloudRegistry() {
     return { schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: new Date().toISOString(), cards: [] };
 }
@@ -16092,8 +16125,9 @@ async function uploadCharacterToCloud(characterName) {
     const character = await helper.getCharacter(characterName);
     if (!character) throw new Error(`找不到角色卡“${characterName}”。`);
     const registry = await loadCloudRegistry(true);
-    const id = cloudCardId(character);
-    const existing = registry.cards.find(item => item.id === id);
+    const knownId = String(character?.extensions?.auto_card_studio?.cloud?.cardId || '');
+    const existing = registry.cards.find(item => item.id === knownId) || registry.cards.find(item => item.name === characterName);
+    const id = existing?.id || cloudCardId(character);
     const localRevision = String(character?.extensions?.auto_card_studio?.cloud?.revision || '');
     if (existing?.revision && localRevision && existing.revision !== localRevision) {
         const overwrite = await showStudioConfirm({
@@ -16108,14 +16142,27 @@ async function uploadCharacterToCloud(characterName) {
     const cloud = { cardId: id, repository: `${cloudSettings.owner}/${cloudSettings.repo}`, revision: localRevision, updatedAt: now };
     character.extensions = { ...(character.extensions || {}), auto_card_studio: { ...(character.extensions?.auto_card_studio || {}), cloud } };
     const path = `cards/${id}/character.json`;
+    const avatarPath = `cards/${id}/avatar.png`;
+    const localAvatarPath = helper.getCharAvatarPath?.(characterName);
+    const avatarResponse = localAvatarPath ? await fetch(localAvatarPath, { cache: 'no-store' }) : null;
+    if (!avatarResponse?.ok) throw new Error(`无法读取“${characterName}”的角色图片，请刷新酒馆角色列表后重试。`);
+    const avatarBytes = new Uint8Array(await avatarResponse.arrayBuffer());
+    if (!avatarBytes.length) throw new Error(`“${characterName}”的角色图片为空，已停止上传。`);
     const result = await writeCloudFile(path, JSON.stringify(character, null, 2), `同步角色卡：${characterName}`);
-    const record = { id, name: characterName, path, archived: false, updatedAt: now, revision: result.content?.sha || '' };
+    await writeCloudBinary(avatarPath, avatarBytes, `同步角色图片：${characterName}`, existing?.avatarSha || '');
+    const record = { id, name: characterName, path, avatarPath, archived: false, updatedAt: now, revision: result.content?.sha || '' };
     if (existing) Object.assign(existing, record); else registry.cards.push(record);
     registry.updatedAt = now;
     await writeCloudFile(CLOUD_REGISTRY_PATH, JSON.stringify({ schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: registry.updatedAt, cards: registry.cards }, null, 2), `更新云仓库索引：${characterName}`, registry._sha);
     cloudRegistry = null;
     character.extensions.auto_card_studio.cloud.revision = record.revision;
-    await helper.createOrReplaceCharacter(characterName, character, { render: 'immediate' });
+    try {
+        await helper.createOrReplaceCharacter(characterName, character, { render: 'immediate' });
+    } catch (error) {
+        // 部分酒馆版本在保存成功后的列表刷新阶段会按“角色名.png”误查头像；确认数据已落盘后忽略这类伪失败。
+        const saved = await helper.getCharacter(characterName).catch(() => null);
+        if (saved?.extensions?.auto_card_studio?.cloud?.cardId !== id) throw error;
+    }
     return true;
 }
 
@@ -16147,7 +16194,9 @@ async function importCloudCharacter(record) {
             },
         },
     };
-    const character = { ...source, ...normalized, name, worldbook, extensions };
+    const avatarFile = record.avatarPath ? await readCloudBinary(record.avatarPath, true) : null;
+    const avatar = avatarFile ? new Blob([avatarFile.bytes], { type: 'image/png' }) : undefined;
+    const character = { ...source, ...normalized, name, worldbook, extensions, ...(avatar ? { avatar } : {}) };
     await helper.createOrReplaceCharacter(name, character, { render: 'immediate' });
     notify('success', `已从云仓库导入“${name}”。`);
 }
