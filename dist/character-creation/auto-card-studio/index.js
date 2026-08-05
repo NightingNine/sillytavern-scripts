@@ -2994,7 +2994,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.49';
+const AUTO_CARD_STUDIO_VERSION = '0.6.50';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -13774,9 +13774,7 @@ function continuationProjectFromSnapshot(snapshot, fallbackName = '导入的角�
 // 云端角色卡必须携带完整世界书快照。只保留 uid/name/content 会丢掉关键词、
 // 常驻、注入位置、深度、递归等字段，跨设备导入后看似有世界书但行为已变化。
 function cloneWorldbookEntries(entriesLike) {
-    const list = Array.isArray(entriesLike)
-        ? entriesLike
-        : entriesLike && typeof entriesLike === 'object' ? Object.values(entriesLike) : [];
+    const list = referenceWorldbookEntriesFromRaw(entriesLike);
     const usedUids = new Set();
     let nextUid = 0;
     return list.flatMap((entry, index) => {
@@ -16143,6 +16141,29 @@ function cloudCardId(character) {
     return String(character?.extensions?.auto_card_studio?.cloud?.cardId || globalThis.crypto?.randomUUID?.() || `card-${Date.now()}`);
 }
 
+async function captureCloudWorldbookSnapshot(character) {
+    const worldbookName = String(character?.worldbook || character?.extensions?.world || '').trim();
+    const embeddedEntries = worldbookEntriesFromCharacterBook(character?.character_book);
+    let entries = embeddedEntries;
+    let source = embeddedEntries.length || character?.character_book?.entries ? 'embedded' : 'none';
+
+    // 已绑定到本机角色的世界书才是发布后真实生效的版本，上传时优先读取它。
+    // 不能只上传名称：另一个设备没有同名本地世界书时会得到空白或错误结构。
+    if (worldbookName && typeof helper?.getWorldbook === 'function') {
+        const worldbookNames = helper.getWorldbookNames?.() || [];
+        if (worldbookNames.includes(worldbookName)) {
+            entries = cloneWorldbookEntries(await helper.getWorldbook(worldbookName));
+            source = 'linked';
+        }
+    }
+    return {
+        name: worldbookName,
+        entries,
+        source,
+        capturedAt: new Date().toISOString(),
+    };
+}
+
 async function uploadCharacterToCloud(characterName) {
     const character = await helper.getCharacter(characterName);
     if (!character) throw new Error(`找不到角色卡“${characterName}”。`);
@@ -16161,8 +16182,29 @@ async function uploadCharacterToCloud(characterName) {
         if (!overwrite) return false;
     }
     const now = new Date().toISOString();
-    const cloud = { cardId: id, repository: `${cloudSettings.owner}/${cloudSettings.repo}`, revision: localRevision, updatedAt: now };
+    const worldbookSnapshot = await captureCloudWorldbookSnapshot(character);
+    const cloud = {
+        cardId: id,
+        repository: `${cloudSettings.owner}/${cloudSettings.repo}`,
+        revision: localRevision,
+        updatedAt: now,
+        worldbookSnapshot: {
+            name: worldbookSnapshot.name,
+            entryCount: worldbookSnapshot.entries.length,
+            source: worldbookSnapshot.source,
+            capturedAt: worldbookSnapshot.capturedAt,
+        },
+    };
     character.extensions = { ...(character.extensions || {}), auto_card_studio: { ...(character.extensions?.auto_card_studio || {}), cloud } };
+    // character_book 是跨设备同步使用的自包含副本；角色本地仍继续绑定它原来的世界书。
+    // entries 必须原样保留，不能降级为 uid/name/content 三项。
+    if (worldbookSnapshot.name || worldbookSnapshot.source !== 'none') {
+        character.character_book = {
+            ...(character.character_book && typeof character.character_book === 'object' ? character.character_book : {}),
+            name: worldbookSnapshot.name,
+            entries: worldbookSnapshot.entries,
+        };
+    }
     const path = `cards/${id}/character.json`;
     const avatarPath = `cards/${id}/avatar.png`;
     const localAvatarPath = helper.getCharAvatarPath?.(characterName);
@@ -16172,7 +16214,16 @@ async function uploadCharacterToCloud(characterName) {
     if (!avatarBytes.length) throw new Error(`“${characterName}”的角色图片为空，已停止上传。`);
     const result = await writeCloudFile(path, JSON.stringify(character, null, 2), `同步角色卡：${characterName}`);
     await writeCloudBinary(avatarPath, avatarBytes, `同步角色图片：${characterName}`, existing?.avatarSha || '');
-    const record = { id, name: characterName, path, avatarPath, archived: false, updatedAt: now, revision: result.content?.sha || '' };
+    const record = {
+        id,
+        name: characterName,
+        path,
+        avatarPath,
+        archived: false,
+        updatedAt: now,
+        revision: result.content?.sha || '',
+        worldbookSnapshot: cloud.worldbookSnapshot,
+    };
     if (existing) Object.assign(existing, record); else registry.cards.push(record);
     registry.updatedAt = now;
     await writeCloudFile(CLOUD_REGISTRY_PATH, JSON.stringify({ schemaVersion: CLOUD_SCHEMA_VERSION, updatedAt: registry.updatedAt, cards: registry.cards }, null, 2), `更新云仓库索引：${characterName}`, registry._sha);
@@ -16198,6 +16249,11 @@ async function importCloudCharacter(record) {
     let suffix = 2;
     while (existing.has(name)) name = `${base}（云端 ${suffix++}）`;
     let worldbook = normalized.worldbook;
+    // 0.6.49 前上传的文件只有 worldbook 名称，没有条目快照；继续导入会静默制造
+    // “名称存在但条目缺失/结构改变”的假同步。明确停止，要求回原设备重新上传。
+    if (worldbook && !normalized.hasEmbeddedWorldbookSnapshot) {
+        throw new Error('此云端卡由旧版上传，未包含世界书快照。请在原设备更新创作台后重新上传该角色卡，再下载。');
+    }
     if (normalized.embeddedWorldbookEntries.length) {
         worldbook = `${name} · 云端世界书`;
         await helper.createOrReplaceWorldbook(worldbook, normalized.embeddedWorldbookEntries, { render: 'immediate' });
