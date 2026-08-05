@@ -2994,7 +2994,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.53';
+const AUTO_CARD_STUDIO_VERSION = '0.6.54';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -3002,6 +3002,8 @@ const UPDATE_CATALOG_URLS = [
 ];
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
+// 兼容直接导入旧版 index.js 的用户：刷新后先跳转到本次确认的不可变正式标签。
+const UPDATE_LOAD_KEY = 'auto-card-studio:load-after-update:v1';
 const TOUR_COMPLETED_KEY = 'auto-card-studio:tour-completed:v1';
 // 测试分支不参与正式版版本号比较；手动更新直接重新拉取本分支的最新脚本。
 const TEST_BRANCH_UPDATE_MODE = false;
@@ -17233,6 +17235,7 @@ async function checkForUpdatesManually() {
         showUpdateFeedback(`发现 v${latestVersion}，正在更新…`, 'checking', 0);
         notify('info', `发现新版本 v${latestVersion}，即将刷新并重新打开创作台。`);
         hostWindow.sessionStorage.setItem(UPDATE_REOPEN_KEY, latestVersion);
+        hostWindow.sessionStorage.setItem(UPDATE_LOAD_KEY, latestVersion);
         hostWindow.setTimeout(() => hostWindow.location.reload(), 650);
     } catch (error) {
         console.error('[A.U.T.O Card Studio] 手动检查更新失败', error);
@@ -17314,10 +17317,13 @@ function startStudioRuntime() {
     });
     window.addEventListener('pagehide', cleanupScriptRuntime, { once: true });
     const installedUpdateVersion = String(hostWindow.sessionStorage.getItem(UPDATE_REOPEN_KEY) || '').trim();
-    if (installedUpdateVersion) {
+    if (installedUpdateVersion === AUTO_CARD_STUDIO_VERSION) {
         hostWindow.sessionStorage.removeItem(UPDATE_REOPEN_KEY);
         // 正式版更新完成后首次打开也展示一次公告，避免刷新后用户看不到本次变化。
         hostWindow.setTimeout(() => { void showInstalledUpdateNotes(installedUpdateVersion); }, 0);
+    } else if (installedUpdateVersion) {
+        // 当前脚本仍是旧版时不能提前消费“更新完成”状态；应交给目标版本处理。
+        console.info(`[A.U.T.O Card Studio] 正在等待目标版本 v${installedUpdateVersion} 载入后显示更新公告。`);
     }
 }
 
@@ -17340,6 +17346,21 @@ async function startStudioWithAutoUpdate() {
         // 测试版只跟随测试分支，不参与正式版自动更新。
         startStudioRuntime();
         return;
+    }
+
+    // 兼容用户曾直接导入某个 index.js 固定版本的情况：更新确认后，旧脚本会在刷新后
+    // 先加载本次目标标签，而不是再次启动自己，从根源上避免移动端反复弹出同一更新公告。
+    const requestedVersion = String(hostWindow.sessionStorage.getItem(UPDATE_LOAD_KEY) || '').trim();
+    if (/^\d+\.\d+\.\d+$/.test(requestedVersion)) {
+        hostWindow.sessionStorage.removeItem(UPDATE_LOAD_KEY);
+        if (requestedVersion !== AUTO_CARD_STUDIO_VERSION) {
+            try {
+                await import(VERSIONED_SCRIPT_URL(requestedVersion));
+                return;
+            } catch (error) {
+                console.warn(`[A.U.T.O Card Studio] 目标正式版 v${requestedVersion} 载入失败，继续使用当前脚本。`, error);
+            }
+        }
     }
 
     // 正式版在创作台打开后再检查；发现更新时先展示完整更新内容，由用户确认后加载。
