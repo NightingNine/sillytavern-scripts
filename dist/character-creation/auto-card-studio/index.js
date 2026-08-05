@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.47 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.48 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -2994,7 +2994,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.47';
+const AUTO_CARD_STUDIO_VERSION = '0.6.48';
 const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
@@ -15910,7 +15910,7 @@ const CLOUD_REPOSITORY_CSS = `
 .acs-cloud-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.acs-cloud-field{display:grid;gap:7px}.acs-cloud-field>span{color:#afa79d;font-size:12px;font-weight:700}.acs-cloud-field input,.acs-cloud-field select{width:100%;min-height:44px;padding:0 13px;border:1px solid #554f47;border-radius:10px;background:#34312b;color:#eee7df}.acs-cloud-field-wide{grid-column:1/-1}.acs-cloud-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.acs-cloud-note{padding:12px 14px;border-left:3px solid #9c7cb7;background:#332e35;color:#bbb2c2;font-size:12px;line-height:1.6}
 .acs-cloud-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.acs-cloud-card{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px;border:1px solid #504a42;border-radius:14px;background:#302d27}.acs-cloud-card-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:#413642;color:#c6a6d9}.acs-cloud-card strong,.acs-cloud-card small{display:block}.acs-cloud-card small{margin-top:4px;color:#9c958b}.acs-cloud-operation{color:#d8ab79!important}.acs-cloud-operation.is-success{color:#8fbe92!important}.acs-cloud-operation.is-error{color:#d88778!important}.acs-cloud-card-actions{display:flex;gap:7px}.acs-cloud-mini{width:36px;height:36px;border:1px solid #5c554b;border-radius:10px;background:#3a362f;color:#e0d8ce}.acs-cloud-mini:hover{border-color:#d27b5c;color:#fff}
 .acs-cloud-device{padding:18px;border:1px solid #6d5a78;border-radius:14px;background:#332d36;text-align:center}.acs-cloud-code{margin:12px 0;color:#f0c692;font:800 25px/1 ui-monospace,monospace;letter-spacing:.12em}
-@media(max-width:720px){.acs-cloud-overlay{padding:0}.acs-cloud-dialog{height:100%;border-radius:0}.acs-cloud-head{padding:16px}.acs-cloud-tabs{padding:8px 12px 0;overflow:auto}.acs-cloud-tab{padding:9px 11px;white-space:nowrap}.acs-cloud-body{padding:16px}.acs-cloud-empty{min-height:180px;padding:22px}.acs-cloud-grid,.acs-cloud-cards{grid-template-columns:1fr}.acs-cloud-status{grid-template-columns:auto 1fr}.acs-cloud-status>.acs-button{grid-column:1/-1;width:100%}}
+@media(max-width:720px){.acs-cloud-overlay{padding:0}.acs-cloud-dialog{height:100%;border-radius:0}.acs-cloud-head{padding:16px}.acs-cloud-tabs{padding:8px 12px 0;overflow:auto}.acs-cloud-tab{padding:9px 11px;white-space:nowrap}.acs-cloud-body{padding:16px}.acs-cloud-list-toolbar{align-items:center;gap:8px}.acs-cloud-list-toolbar small{min-width:0;line-height:1.45}.acs-cloud-refresh{flex:0 0 auto;min-width:max-content;padding:0 10px;white-space:nowrap}.acs-cloud-cards:has(>.acs-cloud-empty){flex:0}.acs-cloud-empty{min-height:180px;margin:0 auto;padding:22px}.acs-cloud-grid,.acs-cloud-cards{grid-template-columns:1fr}.acs-cloud-status{grid-template-columns:auto 1fr}.acs-cloud-status>.acs-button{grid-column:1/-1;width:100%}}
 `;
 
 function loadCloudSettings() {
