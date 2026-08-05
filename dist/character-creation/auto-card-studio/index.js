@@ -2994,8 +2994,12 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.50';
-const UPDATE_CATALOG_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/contents/catalog.json?ref=main';
+const AUTO_CARD_STUDIO_VERSION = '0.6.51';
+// GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
+const UPDATE_CATALOG_URLS = [
+    'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
+    'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@main/catalog.json',
+];
 const UPDATE_CACHE_KEY = 'auto-card-studio:update-state:v1';
 const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
 const TOUR_COMPLETED_KEY = 'auto-card-studio:tour-completed:v1';
@@ -16684,12 +16688,23 @@ async function getLatestPublishedVersion(forceRefresh = false) {
         // 缓存损坏时直接重新检查，不影响创作台启动。
     }
 
-    const response = await hostWindow.fetch(UPDATE_CATALOG_URL, {
-        cache: 'no-store',
-        headers: { Accept: 'application/vnd.github.raw+json' },
-    });
-    if (!response.ok) throw new Error(`更新索引请求失败：HTTP ${response.status}`);
-    const catalog = await response.json();
+    const errors = [];
+    let catalog = null;
+    const cacheBuster = Date.now();
+    for (const url of UPDATE_CATALOG_URLS) {
+        try {
+            const response = await hostWindow.fetch(`${url}?t=${cacheBuster}`, {
+                cache: 'no-store',
+                headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            catalog = await response.json();
+            break;
+        } catch (error) {
+            errors.push(`${new URL(url).hostname}: ${error?.message || error}`);
+        }
+    }
+    if (!catalog) throw new Error(`更新索引请求失败（${errors.join('；')}）`);
     const entries = catalog?.categories?.['character-creation'];
     const entry = Array.isArray(entries) ? entries.find(item => item?.id === 'auto-card-studio') : null;
     const version = String(entry?.version || '').trim();
