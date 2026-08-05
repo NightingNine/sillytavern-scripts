@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.49 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.55 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -72,6 +72,66 @@ const WORKSPACE_RESIZER_CSS = `
     visibility: hidden;
 }
 
+.acs-composer-resizer {
+    position: absolute;
+    top: -6px;
+    right: 0;
+    left: 0;
+    z-index: 4;
+    height: 12px;
+    outline: 0;
+    cursor: row-resize;
+    touch-action: none;
+}
+
+.acs-composer-resizer::before {
+    position: absolute;
+    top: 5px;
+    right: 0;
+    left: 0;
+    height: 1px;
+    background: var(--acs-line-soft);
+    content: '';
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.acs-composer-resizer::after {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    width: 42px;
+    height: 3px;
+    border-radius: 999px;
+    background: transparent;
+    content: '';
+    transform: translateX(-50%);
+    transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.acs-composer-resizer:hover::before,
+.acs-composer-resizer:focus-visible::before,
+.acs-composer-resizer.is-dragging::before {
+    background: rgba(217, 119, 87, 0.58);
+    box-shadow: 0 0 12px rgba(217, 119, 87, 0.2);
+}
+
+.acs-composer-resizer:hover::after,
+.acs-composer-resizer:focus-visible::after,
+.acs-composer-resizer.is-dragging::after {
+    background: var(--acs-cyan);
+    box-shadow: 0 0 9px rgba(217, 119, 87, 0.34);
+}
+
+.acs-shell:not(.acs-mobile-layout) .acs-composer textarea {
+    resize: none;
+}
+
+.acs-shell.is-resizing-composer,
+.acs-shell.is-resizing-composer * {
+    cursor: row-resize !important;
+    user-select: none !important;
+}
+
 @media (max-width: 1120px) and (min-width: 861px) {
     .acs-workspace {
         --acs-rail-width: 205px;
@@ -85,6 +145,10 @@ const WORKSPACE_RESIZER_CSS = `
     }
 
     .acs-workspace-resizer {
+        display: none;
+    }
+
+    .acs-composer-resizer {
         display: none;
     }
 }
@@ -2994,7 +3058,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.54';
+const AUTO_CARD_STUDIO_VERSION = '0.6.55';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -3051,6 +3115,7 @@ const LEGACY_CONVERSATION_STORE_NAME = 'step-conversations';
 const RESOURCE_DOCK_POSITION_KEY = 'auto-card-studio:resource-dock-position:v1';
 const CONVERSATION_FONT_SIZE_KEY = 'auto-card-studio:conversation-font-size:v1';
 const WORKSPACE_WIDTHS_KEY = 'auto-card-studio:workspace-widths:v1';
+const COMPOSER_HEIGHT_KEY = 'auto-card-studio:composer-height:v1';
 // 云仓库凭证独立保存，不进入项目、角色卡或导出档案。
 const CLOUD_STORAGE_KEY = 'auto-card-studio:cloud:v1';
 const CLOUD_REGISTRY_PATH = 'registry.json';
@@ -9925,6 +9990,29 @@ function fitWorkspaceWidthsToViewport() {
     setWorkspacePanelWidth('rail', rail.offsetWidth);
 }
 
+function composerHeightLimits() {
+    const stageHeight = shell?.querySelector('.acs-stage')?.clientHeight || 0;
+    return { minimum: 58, maximum: Math.max(140, Math.min(560, stageHeight * 0.58 || 560)) };
+}
+
+function setComposerInputHeight(height, persist = false) {
+    const input = shell?.querySelector('#acs-user-input');
+    const handle = shell?.querySelector('#acs-composer-resizer');
+    if (!input) return;
+    const { minimum, maximum } = composerHeightLimits();
+    const normalized = Math.round(Math.max(minimum, Math.min(maximum, Number(height) || minimum)));
+    input.style.height = `${normalized}px`;
+    handle?.setAttribute('aria-valuenow', String(normalized));
+    handle?.setAttribute('aria-valuemin', String(minimum));
+    handle?.setAttribute('aria-valuemax', String(Math.round(maximum)));
+    if (persist) localStorage.setItem(COMPOSER_HEIGHT_KEY, String(normalized));
+}
+
+function restoreComposerInputHeight() {
+    const stored = Number(localStorage.getItem(COMPOSER_HEIGHT_KEY));
+    if (Number.isFinite(stored) && stored > 0) setComposerInputHeight(stored);
+}
+
 function installWorkspaceResizers() {
     const workspace = shell.querySelector('.acs-workspace');
     if (!workspace || workspace.querySelector('.acs-workspace-resizer')) return;
@@ -9981,6 +10069,54 @@ function installWorkspaceResizers() {
             workspace.style.removeProperty('--acs-inspector-width');
             localStorage.removeItem(WORKSPACE_WIDTHS_KEY);
             hostWindow.requestAnimationFrame(syncWorkspaceResizeHandles);
+        });
+    }
+    const composer = shell.querySelector('.acs-composer');
+    if (composer && !composer.querySelector('#acs-composer-resizer')) {
+        const handle = document.createElement('div');
+        handle.id = 'acs-composer-resizer';
+        handle.className = 'acs-composer-resizer';
+        handle.tabIndex = 0;
+        handle.setAttribute('role', 'separator');
+        handle.setAttribute('aria-orientation', 'horizontal');
+        handle.setAttribute('aria-label', '调整输入框高度');
+        handle.title = '上下拖动调整输入框高度；双击恢复默认高度';
+        composer.prepend(handle);
+        handle.addEventListener('pointerdown', event => {
+            if (event.button !== 0 || shell.classList.contains('acs-mobile-layout')) return;
+            event.preventDefault();
+            const input = shell.querySelector('#acs-user-input');
+            const startY = event.clientY;
+            const startHeight = input.offsetHeight;
+            const scale = Math.max(0.1, Number(shell.dataset.layoutScale) || 1);
+            handle.classList.add('is-dragging');
+            shell.classList.add('is-resizing-composer');
+            handle.setPointerCapture(event.pointerId);
+            const move = moveEvent => setComposerInputHeight(startHeight + (startY - moveEvent.clientY) / scale);
+            const finish = finishEvent => {
+                handle.removeEventListener('pointermove', move);
+                handle.removeEventListener('pointerup', finish);
+                handle.removeEventListener('pointercancel', finish);
+                handle.classList.remove('is-dragging');
+                shell.classList.remove('is-resizing-composer');
+                if (handle.hasPointerCapture(finishEvent.pointerId)) handle.releasePointerCapture(finishEvent.pointerId);
+                setComposerInputHeight(input.offsetHeight, true);
+            };
+            handle.addEventListener('pointermove', move);
+            handle.addEventListener('pointerup', finish);
+            handle.addEventListener('pointercancel', finish);
+        });
+        handle.addEventListener('keydown', event => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            const input = shell.querySelector('#acs-user-input');
+            const step = event.shiftKey ? 48 : 20;
+            setComposerInputHeight(input.offsetHeight + (event.key === 'ArrowUp' ? step : -step), true);
+        });
+        handle.addEventListener('dblclick', () => {
+            shell.querySelector('#acs-user-input')?.style.removeProperty('height');
+            localStorage.removeItem(COMPOSER_HEIGHT_KEY);
+            handle.removeAttribute('aria-valuenow');
         });
     }
     restoreWorkspaceWidths();
@@ -16792,6 +16928,7 @@ async function openStudio() {
         setStudioPageScrollLock(true);
         updateStudioViewportScale();
         fitWorkspaceWidthsToViewport();
+        restoreComposerInputHeight();
         renderAll();
         const initialFocus = project.ui.overviewCollapsed
             ? shell.querySelector('#acs-user-input')
