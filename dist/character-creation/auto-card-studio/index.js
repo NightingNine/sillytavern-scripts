@@ -3004,7 +3004,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.05-90';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.05-91';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -15969,7 +15969,7 @@ async function cloudFetch(url, options = {}, authenticated = true) {
         if (!cloudSettings.accessToken) throw new Error('请先连接 GitHub。');
         headers.set('Authorization', `Bearer ${cloudSettings.accessToken}`);
     }
-    const response = await fetch(url, { ...options, headers });
+    const response = await fetch(url, { cache: 'no-store', ...options, headers });
     if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         throw new Error(data.message || `GitHub 请求失败（${response.status}）`);
@@ -16013,13 +16013,16 @@ function updateCloudTokens(data) {
 
 async function beginCloudDeviceLogin() {
     if (!cloudSettings.clientId) throw new Error('当前构建尚未配置 GitHub App Client ID。');
+    // 必须在用户点击的同步阶段打开页面，否则移动浏览器会拦截 await 之后触发的新窗口。
+    const authorizationWindow = hostWindow.open('https://github.com/login/device', '_blank');
+    try { if (authorizationWindow) authorizationWindow.opener = null; } catch { /* 跨域窗口无需进一步处理。 */ }
     const response = await cloudAuthFetch('/device', {});
     const data = await response.json();
     if (!response.ok || data.error) throw new Error(data.error_description || data.error || '无法发起 GitHub 登录。');
     const panel = shell.querySelector('#acs-cloud-connect-panel');
     panel.querySelector('#acs-cloud-device-box').hidden = false;
     panel.querySelector('#acs-cloud-user-code').textContent = data.user_code;
-    hostWindow.open(data.verification_uri || 'https://github.com/login/device', '_blank', 'noopener,noreferrer');
+    if (!authorizationWindow) notify('warning', '浏览器阻止了 GitHub 授权页，请允许弹出窗口后重试。');
     const deadline = Date.now() + Number(data.expires_in || 900) * 1000;
     const interval = Math.max(5, Number(data.interval || 5));
     while (Date.now() < deadline) {
@@ -16219,7 +16222,7 @@ function installCloudRepositoryUI() {
         const tab = event.target.closest('[data-cloud-tab]');
         if (tab) { for (const item of overlay.querySelectorAll('[data-cloud-tab]')) item.classList.toggle('is-active', item === tab); for (const panel of overlay.querySelectorAll('[data-cloud-panel]')) panel.hidden = panel.dataset.cloudPanel !== tab.dataset.cloudTab; return; }
         const upload = event.target.closest('[data-cloud-upload]');
-        if (upload) { upload.disabled = true; try { const synced = await uploadCharacterToCloud(upload.dataset.cloudUpload); if (synced) { notify('success', `已同步“${upload.dataset.cloudUpload}”。`); await renderCloudRepository(); } } catch (error) { notify('error', error.message); } finally { upload.disabled = false; } return; }
+        if (upload) { const name = upload.dataset.cloudUpload; const originalHtml = upload.innerHTML; upload.disabled = true; upload.title = '正在上传并等待 GitHub 确认'; upload.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>'; const remoteList = shell.querySelector('#acs-cloud-remote-list'); remoteList.innerHTML = `<div class="acs-cloud-empty"><p><i class="fa-solid fa-spinner fa-spin"></i>“${cloudEscapeHtml(name)}”正在上传<br><small>等待 GitHub 云端确认…</small></p></div>`; try { const synced = await uploadCharacterToCloud(name); if (synced) { notify('success', `已同步“${name}”。`); await renderCloudRepository(); } } catch (error) { notify('error', error.message); await renderCloudRepository().catch(() => undefined); } finally { if (upload.isConnected) { upload.disabled = false; upload.title = '同步到云端'; upload.innerHTML = originalHtml; } } return; }
         const pull = event.target.closest('[data-cloud-pull]');
         if (pull) { const item = (await loadCloudRegistry()).cards.find(card => card.id === pull.dataset.cloudPull); if (item) await importCloudCharacter(item); return; }
         const archive = event.target.closest('[data-cloud-archive]');
