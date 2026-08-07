@@ -3,6 +3,9 @@
 
 const hostWindow = window.parent;
 const BOOTSTRAP_STATE_KEY = '__AUTO_CARD_STUDIO_BOOTSTRAP_V4__';
+// 与正式脚本共用版本缓存：启动阶段和后台扫描只需消费同一份轻量目录结果。
+const PUBLISHED_VERSION_CACHE_KEY = 'auto-card-studio:update-state:v1';
+const PUBLISHED_VERSION_CACHE_TTL = 6 * 60 * 60 * 1000;
 const CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
     'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@main/catalog.json',
@@ -22,7 +25,31 @@ function getPublishedVersion(catalog) {
     return version;
 }
 
+function getCachedPublishedVersion() {
+    try {
+        const cached = JSON.parse(hostWindow.localStorage.getItem(PUBLISHED_VERSION_CACHE_KEY) || 'null');
+        const version = String(cached?.version || '').trim();
+        const checkedAt = Number(cached?.checkedAt || 0);
+        if (/^\d+\.\d+\.\d+$/.test(version) && Date.now() - checkedAt < PUBLISHED_VERSION_CACHE_TTL) {
+            return version;
+        }
+    } catch {
+        // 缓存不可用或损坏时直接联网，不影响启动。
+    }
+    return '';
+}
+
+function savePublishedVersion(version) {
+    try {
+        hostWindow.localStorage.setItem(PUBLISHED_VERSION_CACHE_KEY, JSON.stringify({ version, checkedAt: Date.now() }));
+    } catch {
+        // 隐私模式或存储满时仍允许本次启动继续。
+    }
+}
+
 async function fetchPublishedVersion() {
+    const cachedVersion = getCachedPublishedVersion();
+    if (cachedVersion) return cachedVersion;
     const errors = [];
     const cacheBuster = Date.now();
 
@@ -36,7 +63,9 @@ async function fetchPublishedVersion() {
                 throw new Error(`HTTP ${response.status}`);
             }
 
-            return getPublishedVersion(await response.json());
+            const version = getPublishedVersion(await response.json());
+            savePublishedVersion(version);
+            return version;
         } catch (error) {
             errors.push(`${catalogUrl}: ${error?.message || error}`);
         }

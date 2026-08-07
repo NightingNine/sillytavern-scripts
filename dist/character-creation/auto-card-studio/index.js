@@ -3058,7 +3058,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.55';
+const AUTO_CARD_STUDIO_VERSION = '0.6.56';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -17414,8 +17414,9 @@ async function scanForUpdatesInBackground() {
             const loadedRevision = String(localStorage.getItem(TEST_BRANCH_PIN_KEY) || '').trim();
             if (revision !== loadedRevision) pendingAutomaticUpdate = { mode: 'test', revision };
         } else {
-            // 每次脚本加载都绕过上一次会话缓存，真正向版本目录查询一次。
-            const latestVersion = await getLatestPublishedVersion(true);
+            // 启动时与 bootstrap 共用六小时版本缓存，避免每次加载重复请求目录。
+            // 用户手动点“检查更新”仍会传 true 强制联网。
+            const latestVersion = await getLatestPublishedVersion(false);
             if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) > 0) {
                 pendingAutomaticUpdate = { mode: 'release', version: latestVersion };
             }

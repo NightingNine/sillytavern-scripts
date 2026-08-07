@@ -21,7 +21,12 @@ import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-s
 
 ## 数据与更新
 
-- 当前发布版本：`0.6.55`
+- 当前发布版本：`0.6.56`
+
+### 启动更新检查缓存
+
+- 启动时的版本目录结果会在浏览器本地缓存 6 小时；缓存有效时不再重复请求 GitHub/CDN。
+- 手动点击“检查更新”仍会强制联网，立即检查最新正式版。
 
 ### 更新循环修复
 

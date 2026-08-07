@@ -2,6 +2,14 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.6.56",
+      "title": "启动更新检查缓存",
+      "changes": [
+        "版本目录会在浏览器本地缓存 6 小时，正常启动不再重复请求 GitHub/CDN。",
+        "bootstrap 与创作台后台检查共用同一缓存；手动检查更新始终强制联网。"
+      ]
+    },
+    {
       "version": "0.6.55",
       "title": "输入框拖拽调整",
       "changes": [
