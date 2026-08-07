@@ -3058,7 +3058,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.56';
+const AUTO_CARD_STUDIO_VERSION = '0.6.57';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -8815,6 +8815,23 @@ function selectedArtifactForGroup(group) {
     return group?.versions?.[Number(group.selectedIndex)] || group?.versions?.at(-1) || null;
 }
 
+// 重试会暂时移除原 AI 回复；仅凭“当前会话是否包含产物”判断会让原回复产物重新进入上下文。
+// 这里按原回复正文精确找出当前选中版本，供本次重试单独排除，不影响其他产物或后续正常生成。
+function artifactIdsProducedInTurns(stepNumber, turns, projectData = project) {
+    const assistantContent = (turns || [])
+        .filter(turn => turn?.role === 'assistant')
+        .map(turn => String(turn.content || ''))
+        .join('\n');
+    if (!assistantContent) return new Set();
+    const ids = new Set();
+    for (const group of collectArtifactGroups(projectData)) {
+        const artifact = selectedArtifactForGroup(group);
+        if (artifact?.step !== Number(stepNumber) || !artifact.content) continue;
+        if (assistantContent.includes(artifact.content)) ids.add(artifact.id);
+    }
+    return ids;
+}
+
 // 创作助手只读取用户明确选中的“当前版本”产物，不接入步骤会话或 A.U.T.O 预设上下文。
 function creativeAssistantArtifactOptions(projectData = project) {
     return collectArtifactGroups(projectData).map(group => {
@@ -11254,14 +11271,20 @@ function buildProjectContext(currentStep, preset, options = {}) {
 
     for (const step of STEPS) {
         if (step.number >= currentStep.number) break;
-        const response = effectiveStepArtifacts(step.number, { forContext: true });
+        const response = effectiveStepArtifacts(step.number, {
+            forContext: true,
+            excludedArtifactIds: options.excludedArtifactIds,
+        });
         if (!response) continue;
         const status = project.steps[step.number].status === 'accepted' ? '已确认' : '草案';
         const promptResponse = responseForPrompt(response, preset);
         sections.push(`\n## Step ${step.number} ${step.name} [${status}]\n${promptResponse}`);
     }
 
-    const currentArtifacts = effectiveStepArtifacts(currentStep.number, { forContext: true });
+    const currentArtifacts = effectiveStepArtifacts(currentStep.number, {
+        forContext: true,
+        excludedArtifactIds: options.excludedArtifactIds,
+    });
     if (currentArtifacts) {
         sections.push(`\n# 当前阶段正式产物（各产物当前选中版本）\n${responseForPrompt(currentArtifacts, preset)}`);
     }
@@ -11270,7 +11293,10 @@ function buildProjectContext(currentStep, preset, options = {}) {
         let futureHeadingAdded = false;
         for (const step of STEPS) {
             if (step.number <= currentStep.number) continue;
-            const response = effectiveStepArtifacts(step.number, { forContext: true });
+            const response = effectiveStepArtifacts(step.number, {
+                forContext: true,
+                excludedArtifactIds: options.excludedArtifactIds,
+            });
             if (!response) continue;
             if (!futureHeadingAdded) {
                 sections.push('\n# 后序阶段现有正式产物（用户已开启发送）');
@@ -11895,7 +11921,11 @@ function restoreUnexpectedStepConversationChanges(projectData, snapshots) {
     return restored;
 }
 
-async function runStepGeneration(step, state, userInput, { appendUserTurn = true, retried = false } = {}) {
+async function runStepGeneration(step, state, userInput, {
+    appendUserTurn = true,
+    retried = false,
+    excludedArtifactIds = new Set(),
+} = {}) {
     const generationProject = project;
     const targetStepNumber = Number(step.number);
     state = generationProject.steps[targetStepNumber];
@@ -11923,7 +11953,10 @@ async function runStepGeneration(step, state, userInput, { appendUserTurn = true
         const shouldStream = connectionSettings.outputMode === 'stream';
         const customApi = presetGenerationOptions(preset);
         // 同一轮只构建一次，确保日志的条目数与实际传给酒馆助手的内容一致。
-        const orderedPrompts = buildOrderedPrompts(preset, step, { referenceUserInput: userInput });
+        const orderedPrompts = buildOrderedPrompts(preset, step, {
+            referenceUserInput: userInput,
+            excludedArtifactIds,
+        });
         // 必须在写入对话、清空输入框和建立网络请求之前完成校验，确保超限时完全不改变本轮状态。
         const contextBudget = await assertContextWithinLimit(preset, orderedPrompts, userInput);
         protectedConversations = snapshotOtherStepConversations(generationProject, targetStepNumber);
@@ -12303,9 +12336,14 @@ async function retryLatestUserInput(turnIndex) {
 
     const userInput = state.turns[latestUserIndex].content;
     const previousTail = state.turns.slice(latestUserIndex + 1);
+    const excludedArtifactIds = artifactIdsProducedInTurns(step.number, previousTail);
     const previousStatus = state.status;
     state.turns = state.turns.slice(0, latestUserIndex + 1);
-    const succeeded = await runStepGeneration(step, state, userInput, { appendUserTurn: false, retried: true });
+    const succeeded = await runStepGeneration(step, state, userInput, {
+        appendUserTurn: false,
+        retried: true,
+        excludedArtifactIds,
+    });
     if (!succeeded && previousTail.length) {
         state.turns.push(...previousTail);
         state.status = previousStatus;
@@ -12471,6 +12509,7 @@ function effectiveStepArtifacts(stepNumber, options = {}) {
     for (const group of collectArtifactGroups()) {
         const stored = selectedArtifactForGroup(group);
         if (!stored || stored.step !== Number(stepNumber)) continue;
+        if (options.excludedArtifactIds?.has(stored.id)) continue;
         // 隐藏状态按“步骤 + 产物身份”保存，因此同类唯一产物的新版本仍保持隐藏。
         if (options.forContext && isArtifactHiddenFromContext(stepNumber, stored.identity)) continue;
         selectedArtifacts.push(stored.content);
