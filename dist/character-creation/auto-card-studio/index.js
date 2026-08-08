@@ -3074,7 +3074,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.09-99';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.09-100';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -16256,7 +16256,7 @@ function ensureStudioStyle() {
 
 const CREATIVE_ASSISTANT_CSS = `
 .acs-assistant-overlay { position:absolute; inset:0; z-index:96; display:grid; place-items:center; padding:24px; background:rgba(12,10,9,.76); backdrop-filter:blur(5px); }
-.acs-assistant-dialog { width:min(940px,100%); height:min(760px,calc(100dvh - 48px)); display:grid; grid-template-rows:auto auto minmax(0,1fr); overflow:hidden; border:1px solid rgba(211,142,93,.48); border-radius:22px; background:#302b27; box-shadow:0 24px 80px rgba(0,0,0,.55); color:#eee5dc; }
+.acs-assistant-dialog { width:min(940px,100%); height:min(760px,calc(100dvh - 48px)); display:grid; grid-template-rows:auto auto minmax(0,1fr); overflow:hidden; border:1px solid rgba(211,142,93,.48); border-radius:22px; background:var(--acs-ink); box-shadow:0 24px 80px rgba(0,0,0,.55); color:var(--acs-text); }
 .acs-assistant-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:20px 24px 17px; border-bottom:1px solid rgba(255,255,255,.09); }
 .acs-assistant-head p { margin:0 0 4px; color:#de875e; font:700 10px/1.2 ui-monospace,monospace; letter-spacing:.16em; }
 .acs-assistant-head h2 { margin:0; font-size:24px; }
@@ -16312,29 +16312,26 @@ const CREATIVE_ASSISTANT_CSS = `
 .acs-assistant-knowledge-list>.acs-assistant-empty { width:auto; margin:0; padding:30px 20px; }
 /* 创作助手统一控件与知识编辑器：不继承宿主的原生灰色表单外观。 */
 .acs-assistant-dialog { width:min(1120px,100%); }
-.acs-assistant-dialog * { scrollbar-width:thin; scrollbar-color:#94654f #342e29; }
+.acs-assistant-dialog * { scrollbar-width:thin; scrollbar-color:var(--acs-line) var(--acs-ink); }
 .acs-assistant-dialog *::-webkit-scrollbar { width:8px; height:8px; }
-.acs-assistant-dialog *::-webkit-scrollbar-track { background:#342e29; }
-.acs-assistant-dialog *::-webkit-scrollbar-thumb { border:2px solid #342e29; border-radius:999px; background:#94654f; }
+.acs-assistant-dialog *::-webkit-scrollbar-track { background:var(--acs-ink); }
+.acs-assistant-dialog *::-webkit-scrollbar-thumb { border:2px solid var(--acs-ink); border-radius:999px; background:var(--acs-line); }
 .acs-assistant-dialog button,.acs-assistant-dialog input,.acs-assistant-dialog textarea,.acs-assistant-dialog select { font:inherit; }
-.acs-assistant-dialog input[type="text"],.acs-assistant-dialog input:not([type]),.acs-assistant-dialog textarea,.acs-assistant-dialog select { width:100%; box-sizing:border-box; border:1px solid #65584d; border-radius:11px; outline:0; background:#3a342e; color:#f1e8df; box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 0 0 0 rgba(222,120,78,0); transition:border-color .16s ease,box-shadow .16s ease,background .16s ease; }
+.acs-assistant-dialog input[type="text"],.acs-assistant-dialog input:not([type]),.acs-assistant-dialog textarea,.acs-assistant-dialog select { width:100%; box-sizing:border-box; border:1px solid var(--acs-line); border-radius:10px; outline:0; background:#34312c!important; color:var(--acs-text); box-shadow:none; transition:border-color 140ms ease,box-shadow 140ms ease; }
 .acs-assistant-dialog input[type="text"],.acs-assistant-dialog input:not([type]),.acs-assistant-dialog select { min-height:44px; padding:0 13px; }
 .acs-assistant-dialog textarea { padding:12px 13px; }
-.acs-assistant-dialog input:focus,.acs-assistant-dialog textarea:focus,.acs-assistant-dialog select:focus { border-color:#d98963; background:#403831; box-shadow:0 0 0 3px rgba(212,119,81,.14); }
+.acs-assistant-dialog input:focus,.acs-assistant-dialog textarea:focus,.acs-assistant-dialog select:focus { border-color:var(--acs-cyan); background:#34312c!important; box-shadow:0 0 0 3px rgba(217,119,87,.1); }
 .acs-assistant-dialog input::placeholder,.acs-assistant-dialog textarea::placeholder { color:#756d65; opacity:1; }
 .acs-assistant-dialog select { appearance:none; padding-right:38px; background-color:#1d1c1a; background-image:linear-gradient(45deg,transparent 50%,#d47b55 50%),linear-gradient(135deg,#d47b55 50%,transparent 50%); background-position:calc(100% - 18px) 18px,calc(100% - 12px) 18px; background-size:6px 6px,6px 6px; background-repeat:no-repeat; cursor:pointer; }
 .acs-assistant-dialog select option { background:#24211e; color:#eee5dc; }
-.acs-assistant-dialog .acs-button,.acs-assistant-toolbar-button { height:40px; min-height:40px; padding:0 13px; border:1px solid #6a5c50; border-radius:10px; background:linear-gradient(180deg,#464039,#39332e); color:#e8ddd2; box-shadow:inset 0 1px 0 rgba(255,255,255,.065); cursor:pointer; }
-.acs-assistant-dialog .acs-button:hover,.acs-assistant-toolbar-button:hover { border-color:#b96e4f; background:linear-gradient(180deg,#40362f,#312a26); color:#fff5ed; }
-.acs-assistant-dialog .acs-button-primary { border-color:#a75f43; background:linear-gradient(180deg,#70412f,#583326); }
-.acs-assistant-dialog .acs-button-primary:hover { border-color:#df8b66; background:linear-gradient(180deg,#80503a,#653a2b); }
+.acs-assistant-toolbar-button { min-height:36px; white-space:nowrap; }
 .acs-assistant-dialog button:focus-visible { outline:2px solid #df8b66; outline-offset:2px; }
 .acs-assistant-knowledge { display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; }
 .acs-assistant-knowledge-intro { align-items:center; margin-bottom:15px; }
 .acs-assistant-knowledge-toolbar { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
 .acs-assistant-toolbar-button { display:inline-flex; align-items:center; gap:7px; padding:0 12px; }
-.acs-assistant-knowledge-workspace { min-height:0; grid-template-columns:286px minmax(0,1fr); gap:0; overflow:hidden; border:1px solid #625448; border-radius:16px; background:#332e29; }
-.acs-assistant-knowledge-sidebar { display:grid; grid-template-rows:auto minmax(0,1fr); min-width:0; min-height:0; border-right:1px solid #625448; background:#38322d; }
+.acs-assistant-knowledge-workspace { min-height:0; grid-template-columns:286px minmax(0,1fr); gap:0; overflow:hidden; border:1px solid var(--acs-line); border-radius:16px; background:var(--acs-panel); }
+.acs-assistant-knowledge-sidebar { display:grid; grid-template-rows:auto minmax(0,1fr); min-width:0; min-height:0; border-right:1px solid var(--acs-line); background:var(--acs-ink); }
 .acs-assistant-knowledge-sidebar-head { padding:14px; border-bottom:1px solid rgba(255,255,255,.065); }
 .acs-assistant-search { position:relative; }
 .acs-assistant-search>i { position:absolute; left:13px; top:50%; z-index:1; color:#8f8276; transform:translateY(-50%); pointer-events:none; }
@@ -16342,7 +16339,7 @@ const CREATIVE_ASSISTANT_CSS = `
 .acs-assistant-knowledge-list { display:block; max-height:none; overflow:auto; padding:8px; }
 .acs-assistant-knowledge-list>.acs-assistant-empty { margin:12px 4px; padding:20px 12px; }
 .acs-assistant-knowledge-item { width:100%; display:grid; grid-template-columns:9px minmax(0,1fr); align-items:center; gap:10px; padding:11px 10px; border:1px solid transparent; border-radius:11px; background:transparent; color:#d8cec4; text-align:left; cursor:pointer; }
-.acs-assistant-knowledge-item:hover { background:#453d36; }
+.acs-assistant-knowledge-item:hover { background:var(--acs-panel-raised); }
 .acs-assistant-knowledge-item.is-active { border-color:#80533f; background:linear-gradient(100deg,rgba(128,72,50,.36),rgba(91,64,48,.12)); }
 .acs-assistant-knowledge-item.is-disabled { opacity:.56; }
 .acs-assistant-knowledge-status { width:8px; height:8px; border-radius:50%; background:#6d6259; box-shadow:0 0 0 3px rgba(109,98,89,.12); }
@@ -16351,19 +16348,19 @@ const CREATIVE_ASSISTANT_CSS = `
 .acs-assistant-knowledge-item strong,.acs-assistant-knowledge-item small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .acs-assistant-knowledge-item strong { font-size:13px; }
 .acs-assistant-knowledge-item small { margin-top:4px; color:#93877d; font-size:11px; }
-.acs-assistant-knowledge-editor { min-width:0; min-height:0; overflow:auto; padding:20px 22px; border:0; border-radius:0; background:#332e29; }
+.acs-assistant-knowledge-editor { min-width:0; min-height:0; overflow:auto; padding:20px 22px; border:0; border-radius:0; background:var(--acs-ink); }
 .acs-assistant-knowledge-form { display:grid; grid-template-columns:minmax(0,1fr) 160px; gap:15px; }
-.acs-assistant-knowledge-form textarea { min-height:330px; background:#3a342e; }
+.acs-assistant-knowledge-form textarea { min-height:330px; background:#34312c!important; }
 .acs-assistant-knowledge-editor-head { grid-column:1/-1; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding-bottom:15px; border-bottom:1px solid rgba(255,255,255,.07); }
 .acs-assistant-knowledge-editor-head h4 { margin:0 0 5px; font-size:17px; }
 .acs-assistant-knowledge-editor-head p { margin:0; color:#91867b; font-size:12px; }
 .acs-assistant-field { display:grid; gap:7px; color:#cfc2b5; font-size:13px; font-weight:700; }
-.acs-assistant-segmented { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px; padding:3px; border:1px solid #62564b; border-radius:11px; background:#302b26; }
+.acs-assistant-segmented { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px; padding:3px; border:1px solid var(--acs-line); border-radius:11px; background:#34312c; }
 .acs-assistant-segmented button { min-height:36px; padding:0 9px; border:0; border-radius:8px; background:transparent; color:#958a80; cursor:pointer; }
 .acs-assistant-segmented button:hover { color:#e7dbd0; }
 .acs-assistant-segmented button[aria-pressed="true"] { background:linear-gradient(180deg,#5e3d2f,#493128); color:#f2dfd2; box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 1px 4px rgba(0,0,0,.25); }
 .acs-assistant-enabled-toggle { display:inline-flex; align-items:center; gap:9px; min-height:38px; padding:0 4px; border:0; background:transparent; color:#cfc2b5; font-weight:700; cursor:pointer; }
-.acs-assistant-toggle-track { position:relative; width:40px; height:23px; box-sizing:border-box; border:1px solid #75665a; border-radius:999px; background:#413a34; transition:border-color .16s ease,background .16s ease; }
+.acs-assistant-toggle-track { position:relative; width:40px; height:23px; box-sizing:border-box; border:1px solid #805746; border-radius:999px; background:#4a3026; transition:border-color .16s ease,background .16s ease; }
 .acs-assistant-toggle-track>span { position:absolute; top:3px; left:3px; width:15px; height:15px; border-radius:50%; background:#a89a8e; box-shadow:0 1px 3px rgba(0,0,0,.35); transition:transform .16s ease,background .16s ease; }
 .acs-assistant-enabled-toggle[aria-pressed="true"] .acs-assistant-toggle-track { border-color:#bd7958; background:#704833; }
 .acs-assistant-enabled-toggle[aria-pressed="true"] .acs-assistant-toggle-track>span { background:#f0b18d; transform:translateX(17px); }
@@ -16371,18 +16368,18 @@ const CREATIVE_ASSISTANT_CSS = `
 .acs-assistant-knowledge-form-actions { align-items:center; justify-content:space-between; }
 .acs-assistant-knowledge-form-actions-right { display:flex; gap:9px; margin-left:auto; }
 .acs-assistant-import-overlay { position:absolute; inset:0; z-index:4; display:grid; place-items:center; padding:22px; background:rgba(10,9,8,.8); backdrop-filter:blur(3px); }
-.acs-assistant-import-dialog { width:min(680px,100%); max-height:min(650px,calc(100dvh - 80px)); display:grid; grid-template-rows:auto auto minmax(0,1fr) auto; overflow:hidden; border:1px solid #80604d; border-radius:18px; background:#342f2a; box-shadow:0 24px 70px rgba(0,0,0,.58); }
+.acs-assistant-import-dialog { width:min(680px,100%); max-height:min(650px,calc(100dvh - 80px)); display:grid; grid-template-rows:auto auto minmax(0,1fr) auto; overflow:hidden; border:1px solid var(--acs-line); border-radius:18px; background:var(--acs-panel); box-shadow:0 24px 70px rgba(0,0,0,.58); }
 .acs-assistant-import-head { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; padding:18px 20px 15px; border-bottom:1px solid rgba(255,255,255,.075); }
 .acs-assistant-import-head h3 { margin:0 0 5px; font-size:19px; }
 .acs-assistant-import-head p { margin:0; color:#9b9085; font-size:12px; }
-.acs-assistant-import-controls { display:grid; grid-template-columns:auto minmax(320px,1fr); align-items:end; gap:16px; padding:14px 20px; border-bottom:1px solid rgba(255,255,255,.065); background:#39332e; }
+.acs-assistant-import-controls { display:grid; grid-template-columns:auto minmax(320px,1fr); align-items:end; gap:16px; padding:14px 20px; border-bottom:1px solid var(--acs-line-soft); background:#292722; }
 .acs-assistant-import-controls>.acs-button { width:auto; min-width:150px; align-self:end; }
 .acs-assistant-import-list { overflow:auto; padding:10px 12px; }
 .acs-assistant-import-option { position:relative; display:grid; grid-template-columns:20px minmax(0,1fr); align-items:center; gap:11px; padding:11px 10px; border-radius:10px; cursor:pointer; }
-.acs-assistant-import-option:hover { background:#443c35; }
+.acs-assistant-import-option:hover { background:var(--acs-panel-raised); }
 .acs-assistant-import-option.is-disabled { opacity:.45; cursor:not-allowed; }
 .acs-assistant-import-option input { position:absolute; opacity:0; pointer-events:none; }
-.acs-assistant-checkmark { position:relative; width:18px; height:18px; box-sizing:border-box; border:1px solid #75675b; border-radius:5px; background:#39332e; }
+.acs-assistant-checkmark { position:relative; width:18px; height:18px; box-sizing:border-box; border:1px solid var(--acs-line); border-radius:5px; background:#34312c; }
 .acs-assistant-import-option input:checked+.acs-assistant-checkmark { border-color:#d48964; background:#a85f43; box-shadow:none; }
 .acs-assistant-import-option input:checked+.acs-assistant-checkmark::after { content:""; position:absolute; left:5px; top:2px; width:5px; height:9px; border:solid #fff2e9; border-width:0 2px 2px 0; transform:rotate(45deg); }
 .acs-assistant-import-option-text strong,.acs-assistant-import-option-text small { display:block; }
@@ -16671,7 +16668,7 @@ function installCreativeAssistantUI() {
         <div class="acs-assistant-body">
             <section class="acs-assistant-panel acs-assistant-chat" data-assistant-panel="chat"><div id="acs-assistant-turns" class="acs-assistant-turns" aria-live="polite"></div><div class="acs-assistant-composer"><textarea id="acs-assistant-input" rows="3" placeholder="向创作助手提问；Enter 发送，Shift + Enter 换行。"></textarea><button id="acs-assistant-send" class="acs-button acs-button-primary acs-assistant-send" type="button"></button></div></section>
             <section class="acs-assistant-panel acs-assistant-knowledge" data-assistant-panel="knowledge" hidden>
-                <div class="acs-assistant-knowledge-intro"><div><h3>知识库</h3><p>每个条目都是独立快照；启用后会在每轮对话中提供给助手。</p></div><div class="acs-assistant-knowledge-toolbar"><button class="acs-assistant-toolbar-button" type="button" data-assistant-knowledge-new><i class="fa-solid fa-plus"></i>新建知识条目</button><button class="acs-assistant-toolbar-button" type="button" data-assistant-import="artifact"><i class="fa-solid fa-box-open"></i>导入产物</button><button class="acs-assistant-toolbar-button" type="button" data-assistant-import="artifact-all"><i class="fa-solid fa-boxes-stacked"></i>导入所有产物</button><button class="acs-assistant-toolbar-button" type="button" data-assistant-import="preset"><i class="fa-solid fa-file-import"></i>导入预设条目</button></div></div>
+                <div class="acs-assistant-knowledge-intro"><div><h3>知识库</h3><p>每个条目都是独立快照；启用后会在每轮对话中提供给助手。</p></div><div class="acs-assistant-knowledge-toolbar"><button class="acs-button acs-assistant-toolbar-button" type="button" data-assistant-knowledge-new><i class="fa-solid fa-plus"></i>新建知识条目</button><button class="acs-button acs-assistant-toolbar-button" type="button" data-assistant-import="artifact"><i class="fa-solid fa-box-open"></i>导入产物</button><button class="acs-button acs-assistant-toolbar-button" type="button" data-assistant-import="artifact-all"><i class="fa-solid fa-boxes-stacked"></i>导入所有产物</button><button class="acs-button acs-assistant-toolbar-button" type="button" data-assistant-import="preset"><i class="fa-solid fa-file-import"></i>导入预设条目</button></div></div>
                 <div class="acs-assistant-knowledge-workspace">
                     <aside class="acs-assistant-knowledge-sidebar"><div class="acs-assistant-knowledge-sidebar-head"><div class="acs-assistant-knowledge-block-head"><strong>知识条目</strong><span id="acs-assistant-knowledge-count" class="acs-assistant-knowledge-count">0</span></div><label class="acs-assistant-search"><i class="fa-solid fa-magnifying-glass"></i><span class="acs-visually-hidden">搜索知识条目</span><input id="acs-assistant-knowledge-search" type="text" placeholder="搜索标题或来源"></label></div><div id="acs-assistant-knowledge-list" class="acs-assistant-knowledge-list"></div></aside>
                     <section class="acs-assistant-knowledge-editor"><form id="acs-assistant-knowledge-form" class="acs-assistant-knowledge-form"><div class="acs-assistant-knowledge-editor-head"><div><h4 id="acs-assistant-knowledge-editor-title">新建知识条目</h4><p id="acs-assistant-knowledge-source" hidden></p></div><input id="acs-assistant-knowledge-enabled" type="hidden" value="true"><button class="acs-assistant-enabled-toggle" type="button" data-assistant-enabled-toggle aria-pressed="true"><span class="acs-assistant-toggle-track" aria-hidden="true"><span></span></span><span>启用条目</span></button></div><label><span>标题</span><input id="acs-assistant-knowledge-title" type="text" maxlength="120" required placeholder="例如：世界观核心规则"></label><div class="acs-assistant-field"><span>作用范围</span><input id="acs-assistant-knowledge-scope" type="hidden" value="project"><div class="acs-assistant-segmented" role="group" aria-label="知识条目作用范围"><button type="button" data-assistant-scope="project" aria-pressed="true">当前项目</button><button type="button" data-assistant-scope="global" aria-pressed="false">全局</button></div></div><label class="is-wide"><span>条目内容</span><textarea id="acs-assistant-knowledge-content" maxlength="30000" required placeholder="填写要提供给创作助手的知识内容。"></textarea></label><div class="acs-assistant-knowledge-form-actions"><button id="acs-assistant-knowledge-delete" class="acs-button" type="button" hidden><i class="fa-regular fa-trash-can"></i> 删除条目</button><div class="acs-assistant-knowledge-form-actions-right"><button class="acs-button" type="button" data-assistant-knowledge-new>清空编辑器</button><button id="acs-assistant-knowledge-save" class="acs-button acs-button-primary" type="submit"><i class="fa-solid fa-plus"></i> 创建条目</button></div></div></form></section>
