@@ -5007,10 +5007,10 @@ const MOBILE_POLISH_CSS = `
   white-space: nowrap;
 }
 
-/* 四个主要操作共用一行；生成中由“停止”原位接替“生成”。 */
+/* 五个主要操作共用一行；生成中由“停止”原位接替“生成”。 */
 .acs-shell.acs-mobile-layout .acs-composer-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 5px;
   align-items: stretch;
 }
@@ -5023,7 +5023,8 @@ const MOBILE_POLISH_CSS = `
 .acs-shell.acs-mobile-layout #acs-generation-hint { display: none; }
 
 .acs-shell.acs-mobile-layout .acs-composer-actions .acs-button,
-.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle {
+.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle,
+.acs-shell.acs-mobile-layout #acs-conversation-history-toggle {
   width: 100%;
   min-width: 0;
   min-height: 38px;
@@ -5035,14 +5036,17 @@ const MOBILE_POLISH_CSS = `
 }
 
 .acs-shell.acs-mobile-layout .acs-composer-actions .acs-button i,
-.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle i {
+.acs-shell.acs-mobile-layout #acs-future-artifacts-toggle i,
+.acs-shell.acs-mobile-layout #acs-conversation-history-toggle i {
   font-size: 9px;
 }
 
 .acs-shell.acs-mobile-layout #acs-future-artifacts-toggle span,
+.acs-shell.acs-mobile-layout #acs-conversation-history-toggle span,
 .acs-shell.acs-mobile-layout #acs-preview-prompt span { display: none; }
 
 .acs-shell.acs-mobile-layout #acs-future-artifacts-toggle::after,
+.acs-shell.acs-mobile-layout #acs-conversation-history-toggle::after,
 .acs-shell.acs-mobile-layout #acs-preview-prompt::after,
 .acs-shell.acs-mobile-layout #acs-generate::after,
 .acs-shell.acs-mobile-layout #acs-stop-generation::after,
@@ -5051,6 +5055,7 @@ const MOBILE_POLISH_CSS = `
 }
 
 .acs-shell.acs-mobile-layout #acs-future-artifacts-toggle::after { content: '后序'; }
+.acs-shell.acs-mobile-layout #acs-conversation-history-toggle::after { content: '会话'; }
 .acs-shell.acs-mobile-layout #acs-preview-prompt::after { content: '提示词'; }
 .acs-shell.acs-mobile-layout #acs-generate::after { content: '生成'; }
 .acs-shell.acs-mobile-layout #acs-stop-generation::after { content: '停止'; }
@@ -6994,6 +6999,7 @@ function createDefaultProject() {
             worldbookName: '',
         },
         includeFutureArtifacts: false,
+        suppressCurrentConversationHistory: false,
         contextHiddenArtifacts: [],
         artifactContextOverrides: {},
         conversationShieldVersionIds: [],
@@ -7040,6 +7046,7 @@ function normalizeProject(saved) {
         preferences: { ...clean.preferences, ...(saved.preferences || {}) },
         output: { ...clean.output, ...(saved.output || {}) },
         includeFutureArtifacts: saved.includeFutureArtifacts === true,
+        suppressCurrentConversationHistory: saved.suppressCurrentConversationHistory === true,
         contextHiddenArtifacts: legacyHiddenArtifacts,
         artifactContextOverrides,
         conversationShieldVersionIds: Array.isArray(saved.conversationShieldVersionIds)
@@ -8588,6 +8595,7 @@ function renderCurrentStep() {
     }
 
     renderFutureArtifactsToggle();
+    renderConversationHistoryToggle();
     const dependencyMessage = generationDependencyMessage();
     const conversationHidden = isCurrentStepConversationHidden(step.number);
     const generateButton = shell.querySelector('#acs-generate');
@@ -8636,6 +8644,33 @@ function toggleFutureArtifactsContext() {
     notify('success', project.includeFutureArtifacts
         ? '已开启后序产物：本步骤之后已有的正式产物也会发送给 AI。'
         : '已关闭后序产物：恢复为只发送前序与当前阶段的正式产物。');
+}
+
+function renderConversationHistoryToggle() {
+    const button = shell?.querySelector('#acs-conversation-history-toggle');
+    if (!button) return;
+    const suppressed = isCurrentStepConversationHidden(project.currentStep);
+    button.disabled = isGenerating;
+    button.setAttribute('aria-pressed', String(suppressed));
+    button.setAttribute('aria-label', suppressed ? '当前不发送本轮会话历史' : '当前发送本轮会话历史');
+    button.title = suppressed
+        ? '当前只发送本轮输入、项目上下文与已开启的正式产物；点击恢复发送会话历史'
+        : '当前会发送本轮会话历史；点击后屏蔽历史并改用正式产物上下文';
+    button.querySelector('span').textContent = suppressed ? '不发会话' : '发送会话';
+}
+
+function toggleConversationHistoryContext() {
+    if (isGenerating) return;
+    const currentlySuppressed = isCurrentStepConversationHidden(project.currentStep);
+    project.suppressCurrentConversationHistory = !currentlySuppressed;
+    // 用户明确恢复发送时，一并清理旧版由单项产物触发的隐式屏蔽状态。
+    if (currentlySuppressed) clearConversationShieldsForStep(project.currentStep);
+    saveProject();
+    renderCurrentStep();
+    renderArtifacts();
+    notify('success', project.suppressCurrentConversationHistory
+        ? '已屏蔽本轮会话历史；将发送本轮输入、项目上下文与已开启的正式产物。'
+        : '已恢复发送本轮会话历史；会话中已有的产物默认不再重复发送。');
 }
 
 async function clearCurrentStepConversation() {
@@ -8717,12 +8752,17 @@ function isArtifactHiddenFromContext(stepNumber, identity) {
         if (closedWhileCurrent) return false;
         return override.mode === 'off';
     }
+    // 屏蔽当前会话时，改用当前步骤正式产物承接上下文；用户手动关闭的产物仍由上方覆盖规则控制。
+    if (Number(stepNumber) === Number(project.currentStep)
+        && project.suppressCurrentConversationHistory === true) return false;
     // 只有当前步骤会发送本步骤会话；若会话已含所选产物，默认关闭重复的产物上下文。
     return Number(stepNumber) === Number(project.currentStep)
         && conversationContainsArtifactVersion(stepNumber, version);
 }
 
 function isCurrentStepConversationHidden(stepNumber = project.currentStep) {
+    if (Number(stepNumber) === Number(project.currentStep)
+        && project.suppressCurrentConversationHistory === true) return true;
     const shieldedIds = new Set(project.conversationShieldVersionIds || []);
     if (!shieldedIds.size) return false;
     return collectArtifactGroups().some(group => {
@@ -8778,7 +8818,8 @@ async function toggleArtifactContext(button) {
     const shieldedIds = new Set(project.conversationShieldVersionIds || []);
     if (willHide) {
         shieldedIds.delete(version.id);
-    } else if (Number(stepNumber) === Number(project.currentStep)
+    } else if (project.suppressCurrentConversationHistory !== true
+        && Number(stepNumber) === Number(project.currentStep)
         && conversationContainsArtifactVersion(stepNumber, version)) {
         const shouldShieldConversation = await showStudioConfirm({
             title: '当前对话已包含这项产物',
@@ -10280,8 +10321,15 @@ function installStudioToolsUI() {
         futureArtifactsToggle.setAttribute('aria-pressed', 'false');
         futureArtifactsToggle.innerHTML = '<i class="fa-solid fa-forward-step" aria-hidden="true"></i><span>不含后序</span>';
 
+        const conversationHistoryToggle = document.createElement('button');
+        conversationHistoryToggle.id = 'acs-conversation-history-toggle';
+        conversationHistoryToggle.className = 'acs-context-range-toggle';
+        conversationHistoryToggle.type = 'button';
+        conversationHistoryToggle.setAttribute('aria-pressed', 'false');
+        conversationHistoryToggle.innerHTML = '<i class="fa-solid fa-message" aria-hidden="true"></i><span>发送会话</span>';
+
         generationHint.before(contextControls);
-        contextControls.append(futureArtifactsToggle, generationHint);
+        contextControls.append(conversationHistoryToggle, futureArtifactsToggle, generationHint);
     }
     if (!shell.querySelector('#acs-preview-prompt')) {
         const previewButton = document.createElement('button');
@@ -15840,6 +15888,7 @@ function bindStudioEvents() {
     conversation.addEventListener('touchend', () => { conversationTouchY = null; }, { passive: true });
     conversation.addEventListener('touchcancel', () => { conversationTouchY = null; }, { passive: true });
     shell.querySelector('#acs-future-artifacts-toggle').addEventListener('click', toggleFutureArtifactsContext);
+    shell.querySelector('#acs-conversation-history-toggle').addEventListener('click', toggleConversationHistoryContext);
     shell.querySelector('#acs-generate').addEventListener('click', generateCurrentStep);
     shell.querySelector('#acs-preview-prompt').addEventListener('click', openPromptPreview);
     shell.querySelector('#acs-copy-prompt-preview').addEventListener('click', copyPromptPreview);
