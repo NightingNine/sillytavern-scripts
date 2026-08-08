@@ -3074,7 +3074,7 @@ const TEST_BRANCH_UPDATE_MODE = true;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
 const TEST_BRANCH_PIN_KEY = 'auto-card-studio:test-branch-pin:v1';
 const TEST_BRANCH_API_URL = 'https://api.github.com/repos/NightingNine/sillytavern-scripts/branches/auto-card-studio-mobile-test';
-const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.09-96';
+const TEST_BRANCH_BUILD_LABEL = '测试版 2026.08.09-97';
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const VERSIONED_SCRIPT_URL = version => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-v${version}/dist/character-creation/auto-card-studio/index.js`;
 const TEST_SCRIPT_URL_BY_REF = ref => `https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@${ref}/dist/character-creation/auto-card-studio/index.js`;
@@ -16305,11 +16305,20 @@ const CREATIVE_ASSISTANT_CSS = `
 .acs-assistant-composer textarea,.acs-assistant-config textarea,.acs-assistant-config input,.acs-assistant-knowledge textarea,.acs-assistant-knowledge input,.acs-assistant-knowledge select { width:100%; box-sizing:border-box; border:1px solid rgba(255,255,255,.15); border-radius:12px; background:#302e2b; color:#f1e8df; padding:11px 12px; font:inherit; }
 .acs-assistant-composer textarea { min-height:68px; resize:vertical; }
 .acs-assistant-send { min-width:104px; align-self:end; }
-.acs-assistant-config { overflow:auto; padding:22px 24px 28px; }
-.acs-assistant-config-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.acs-assistant-config { overflow:auto; padding:24px; }
+.acs-assistant-config-intro { margin-bottom:18px; }
+.acs-assistant-config-intro h3 { margin:0 0 5px; font-size:19px; }
+.acs-assistant-config-intro p { margin:0; color:#a79a8f; line-height:1.55; }
+.acs-assistant-config-card { padding:18px; border:1px solid rgba(218,171,116,.26); border-radius:16px; background:linear-gradient(145deg,rgba(91,70,47,.18),rgba(255,255,255,.018)); }
+.acs-assistant-config-section + .acs-assistant-config-section { margin-top:20px; padding-top:20px; border-top:1px solid rgba(255,255,255,.08); }
+.acs-assistant-config-section-head { margin-bottom:13px; }
+.acs-assistant-config-section-head strong { display:block; font-size:15px; }
+.acs-assistant-config-section-head small { display:block; margin-top:4px; color:#9f9388; font-weight:400; }
+.acs-assistant-config-grid { display:grid; grid-template-columns:minmax(180px,.65fr) minmax(0,1.35fr); gap:16px; }
 .acs-assistant-config label { display:grid; gap:7px; color:#cfc2b5; font-size:13px; font-weight:700; }
 .acs-assistant-config label.is-wide { grid-column:1 / -1; }
-.acs-assistant-config textarea { min-height:118px; resize:vertical; font-weight:400; line-height:1.55; }
+.acs-assistant-config textarea { min-height:96px; resize:vertical; font-weight:400; line-height:1.55; }
+.acs-assistant-config #acs-assistant-system-prompt { min-height:180px; }
 .acs-assistant-reference { margin-top:20px; padding:15px; border:1px solid rgba(218,171,116,.3); border-radius:15px; background:rgba(91,70,47,.17); }
 .acs-assistant-reference-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .acs-assistant-reference-head strong { display:block; }
@@ -16323,17 +16332,26 @@ const CREATIVE_ASSISTANT_CSS = `
 .acs-assistant-artifact input { inline-size:16px; block-size:16px; accent-color:#d97850; }
 .acs-assistant-artifact span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .acs-assistant-artifact small { margin-left:auto; color:#9e9185; white-space:nowrap; }
-.acs-assistant-config-footer { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
-.acs-assistant-knowledge { overflow:auto; padding:22px 24px 28px; }
+.acs-assistant-config-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:18px; }
+.acs-assistant-config-footer-group { display:flex; gap:10px; }
+.acs-assistant-knowledge { overflow:auto; padding:24px; }
 .acs-assistant-knowledge-intro { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
 .acs-assistant-knowledge-intro h3 { margin:0 0 5px; font-size:18px; }
 .acs-assistant-knowledge-intro p { margin:0; color:#a79a8f; line-height:1.55; }
-.acs-assistant-knowledge-form { display:grid; grid-template-columns:minmax(0,1fr) 180px; gap:13px; padding:15px; border:1px solid rgba(218,171,116,.3); border-radius:15px; background:rgba(91,70,47,.17); }
+.acs-assistant-knowledge-workspace { display:grid; grid-template-columns:minmax(280px,.72fr) minmax(360px,1.28fr); gap:16px; align-items:start; }
+.acs-assistant-knowledge-editor,.acs-assistant-knowledge-library,.acs-assistant-reference { min-width:0; border:1px solid rgba(218,171,116,.25); border-radius:16px; background:rgba(91,70,47,.13); }
+.acs-assistant-knowledge-editor,.acs-assistant-knowledge-library { padding:16px; }
+.acs-assistant-knowledge-block-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.acs-assistant-knowledge-block-head strong { display:block; font-size:15px; }
+.acs-assistant-knowledge-block-head small { display:block; margin-top:4px; color:#9f9388; line-height:1.45; }
+.acs-assistant-knowledge-count { flex:0 0 auto; min-width:28px; padding:4px 8px; border-radius:999px; background:rgba(219,124,83,.15); color:#dda07f; text-align:center; font:700 11px/1.4 ui-monospace,monospace; }
+.acs-assistant-knowledge-form { display:grid; grid-template-columns:minmax(0,1fr) 132px; gap:13px; }
 .acs-assistant-knowledge-form label { display:grid; gap:7px; color:#cfc2b5; font-size:13px; font-weight:700; }
 .acs-assistant-knowledge-form .is-wide { grid-column:1 / -1; }
-.acs-assistant-knowledge-form textarea { min-height:120px; resize:vertical; font-weight:400; line-height:1.55; }
+.acs-assistant-knowledge-form textarea { min-height:190px; resize:vertical; font-weight:400; line-height:1.55; }
 .acs-assistant-knowledge-form-actions { grid-column:1 / -1; display:flex; justify-content:flex-end; gap:9px; }
-.acs-assistant-knowledge-list { display:grid; gap:10px; margin-top:16px; }
+.acs-assistant-knowledge-list { display:grid; align-content:start; gap:10px; max-height:360px; overflow:auto; padding-right:3px; }
+.acs-assistant-knowledge-list>.acs-assistant-empty { width:auto; margin:0; padding:30px 20px; }
 .acs-assistant-knowledge-card { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px 16px; padding:14px 15px; border:1px solid rgba(255,255,255,.1); border-radius:13px; background:rgba(255,255,255,.025); }
 .acs-assistant-knowledge-card.is-disabled { opacity:.62; }
 .acs-assistant-knowledge-card h4 { margin:0; overflow-wrap:anywhere; }
@@ -16342,7 +16360,10 @@ const CREATIVE_ASSISTANT_CSS = `
 .acs-assistant-knowledge-scope { display:inline-flex; margin-top:7px; padding:3px 7px; border-radius:999px; background:rgba(219,124,83,.16); color:#dda07f; font-size:11px; font-weight:700; }
 .acs-assistant-knowledge-actions button { border:1px solid rgba(255,255,255,.14); border-radius:9px; background:#36322e; color:#e8ddd2; padding:7px 10px; cursor:pointer; }
 .acs-assistant-knowledge-actions button.is-danger { color:#f0a59a; }
-@media (max-width:720px) { .acs-assistant-overlay { padding:0; } .acs-assistant-dialog { width:100%; height:100%; border-radius:0; } .acs-assistant-head { padding:16px 17px; } .acs-assistant-head h2 { font-size:20px; } .acs-assistant-tabs,.acs-assistant-turns,.acs-assistant-composer,.acs-assistant-config,.acs-assistant-knowledge { padding-left:15px; padding-right:15px; } .acs-assistant-config-grid,.acs-assistant-knowledge-form { grid-template-columns:1fr; } .acs-assistant-config label.is-wide,.acs-assistant-knowledge-form .is-wide,.acs-assistant-knowledge-form-actions { grid-column:auto; } .acs-assistant-composer { grid-template-columns:1fr; } .acs-assistant-send { width:100%; } .acs-assistant-knowledge-intro,.acs-assistant-knowledge-card { grid-template-columns:1fr; } .acs-assistant-knowledge-actions { justify-content:flex-start; } }
+.acs-assistant-knowledge .acs-assistant-reference { margin-top:16px; padding:16px; background:rgba(255,255,255,.018); }
+.acs-assistant-knowledge .acs-assistant-artifacts { max-height:260px; }
+@media (max-width:860px) { .acs-assistant-knowledge-workspace { grid-template-columns:1fr; } .acs-assistant-knowledge-list { max-height:320px; } }
+@media (max-width:720px) { .acs-assistant-overlay { padding:0; } .acs-assistant-dialog { width:100%; height:100%; border-radius:0; } .acs-assistant-head { padding:16px 17px; } .acs-assistant-head h2 { font-size:20px; } .acs-assistant-tabs,.acs-assistant-turns,.acs-assistant-composer,.acs-assistant-config,.acs-assistant-knowledge { padding-left:15px; padding-right:15px; } .acs-assistant-config-grid,.acs-assistant-knowledge-form { grid-template-columns:1fr; } .acs-assistant-config label.is-wide,.acs-assistant-knowledge-form .is-wide,.acs-assistant-knowledge-form-actions { grid-column:auto; } .acs-assistant-composer { grid-template-columns:1fr; } .acs-assistant-send { width:100%; } .acs-assistant-knowledge-intro,.acs-assistant-knowledge-card { grid-template-columns:1fr; } .acs-assistant-knowledge-actions { justify-content:flex-start; } .acs-assistant-config-footer { align-items:stretch; flex-direction:column-reverse; } .acs-assistant-config-footer-group,.acs-assistant-config-footer .acs-button { width:100%; } }
 /* 顶栏新增助手入口后，窄手机仍保持同一行，不挤压现有的关闭与检查器按钮。 */
 @media (max-width:420px) { .acs-shell.acs-mobile-layout .acs-brand h1 { max-width:19vw; } .acs-shell.acs-mobile-layout .acs-icon-button { width:28px; height:28px; min-height:28px; } }
 `;
@@ -16387,6 +16408,8 @@ function renderCreativeAssistantKnowledge() {
     const list = shell.querySelector('#acs-assistant-knowledge-list');
     if (!list) return;
     const entries = creativeAssistantKnowledgeEntries();
+    const count = shell.querySelector('#acs-assistant-knowledge-count');
+    if (count) count.textContent = String(entries.length);
     list.replaceChildren();
     if (!entries.length) {
         const empty = document.createElement('p');
@@ -16560,11 +16583,14 @@ function installCreativeAssistantUI() {
         <div class="acs-assistant-body">
             <section class="acs-assistant-panel acs-assistant-chat" data-assistant-panel="chat"><div id="acs-assistant-turns" class="acs-assistant-turns" aria-live="polite"></div><div class="acs-assistant-composer"><textarea id="acs-assistant-input" rows="3" placeholder="向创作助手提问；Enter 发送，Shift + Enter 换行。"></textarea><button id="acs-assistant-send" class="acs-button acs-button-primary acs-assistant-send" type="button"></button></div></section>
             <section class="acs-assistant-panel acs-assistant-knowledge" data-assistant-panel="knowledge" hidden>
-                <div class="acs-assistant-knowledge-intro"><div><h3>自建知识条目</h3><p>启用的全局知识和当前项目知识会在每轮对话中自动提供给助手。</p></div></div>
-                <form id="acs-assistant-knowledge-form" class="acs-assistant-knowledge-form"><label><span>标题</span><input id="acs-assistant-knowledge-title" maxlength="120" required placeholder="例如：世界观核心规则"></label><label><span>作用范围</span><select id="acs-assistant-knowledge-scope"><option value="project">当前项目</option><option value="global">全局</option></select></label><label class="is-wide"><span>正文</span><textarea id="acs-assistant-knowledge-content" maxlength="30000" required placeholder="填写要提供给创作助手的知识内容。"></textarea></label><div class="acs-assistant-knowledge-form-actions"><button id="acs-assistant-knowledge-cancel" class="acs-button" type="button" hidden>取消编辑</button><button id="acs-assistant-knowledge-save" class="acs-button acs-button-primary" type="submit"><i class="fa-solid fa-plus"></i> 新增条目</button></div></form>
-                <div id="acs-assistant-knowledge-list" class="acs-assistant-knowledge-list"></div>
+                <div class="acs-assistant-knowledge-intro"><div><h3>知识与参考资料</h3><p>集中管理助手每轮可以读取的自建知识和当前项目产物。</p></div></div>
+                <div class="acs-assistant-knowledge-workspace">
+                    <section class="acs-assistant-knowledge-editor"><div class="acs-assistant-knowledge-block-head"><div><strong>新建知识</strong><small>保存后默认启用，可随时停用或修改。</small></div></div><form id="acs-assistant-knowledge-form" class="acs-assistant-knowledge-form"><label><span>标题</span><input id="acs-assistant-knowledge-title" maxlength="120" required placeholder="例如：世界观核心规则"></label><label><span>作用范围</span><select id="acs-assistant-knowledge-scope"><option value="project">当前项目</option><option value="global">全局</option></select></label><label class="is-wide"><span>正文</span><textarea id="acs-assistant-knowledge-content" maxlength="30000" required placeholder="填写要提供给创作助手的知识内容。"></textarea></label><div class="acs-assistant-knowledge-form-actions"><button id="acs-assistant-knowledge-cancel" class="acs-button" type="button" hidden>取消编辑</button><button id="acs-assistant-knowledge-save" class="acs-button acs-button-primary" type="submit"><i class="fa-solid fa-plus"></i> 新增条目</button></div></form></section>
+                    <section class="acs-assistant-knowledge-library"><div class="acs-assistant-knowledge-block-head"><div><strong>已有知识</strong><small>全局条目与当前项目条目会在这里统一显示。</small></div><span id="acs-assistant-knowledge-count" class="acs-assistant-knowledge-count">0</span></div><div id="acs-assistant-knowledge-list" class="acs-assistant-knowledge-list"></div></section>
+                </div>
+                <section class="acs-assistant-reference"><div class="acs-assistant-reference-head"><div><strong>引用当前项目产物</strong><small>仅发送勾选产物的当前版本；不会读取步骤对话或 A.U.T.O 预设。</small></div><label class="acs-assistant-switch"><input id="acs-assistant-include-artifacts" type="checkbox"><span>启用引用</span></label></div><div class="acs-assistant-artifact-actions"><button type="button" data-assistant-artifacts="all">全选当前产物</button><button type="button" data-assistant-artifacts="none">清空选择</button></div><div id="acs-assistant-artifacts" class="acs-assistant-artifacts"></div></section>
             </section>
-            <section class="acs-assistant-panel acs-assistant-config" data-assistant-panel="config" hidden><div class="acs-assistant-config-grid"><label><span>助手名称</span><input id="acs-assistant-name" maxlength="60" placeholder="例如：世界观编辑"></label><label><span>身份说明</span><input id="acs-assistant-identity" maxlength="6000" placeholder="例如：擅长角色卡结构与叙事设计的编辑"></label><label class="is-wide"><span>系统提示词</span><textarea id="acs-assistant-system-prompt" rows="6" placeholder="规定助手的工作方式、边界与输出偏好。"></textarea></label></div><section class="acs-assistant-reference"><div class="acs-assistant-reference-head"><div><strong>引用当前项目产物</strong><small>仅将下方已勾选的当前版本产物作为本次对话参考；不会读取步骤对话或 A.U.T.O 预设。</small></div><label class="acs-assistant-switch"><input id="acs-assistant-include-artifacts" type="checkbox"><span>启用</span></label></div><div class="acs-assistant-artifact-actions"><button type="button" data-assistant-artifacts="all">全选当前产物</button><button type="button" data-assistant-artifacts="none">清空选择</button></div><div id="acs-assistant-artifacts" class="acs-assistant-artifacts"></div></section><footer class="acs-assistant-config-footer"><button id="acs-assistant-clear" class="acs-button" type="button">清空助手对话</button><button id="acs-assistant-save-config" class="acs-button acs-button-primary" type="button"><i class="fa-solid fa-floppy-disk"></i> 保存配置</button></footer></section>
+            <section class="acs-assistant-panel acs-assistant-config" data-assistant-panel="config" hidden><div class="acs-assistant-config-intro"><h3>助手配置</h3><p>定义助手的身份和工作方式。知识与项目资料请在“知识库”中管理。</p></div><div class="acs-assistant-config-card"><section class="acs-assistant-config-section"><div class="acs-assistant-config-section-head"><strong>助手身份</strong><small>这些信息决定对话中的称呼和专业定位。</small></div><div class="acs-assistant-config-grid"><label><span>助手名称</span><input id="acs-assistant-name" maxlength="60" placeholder="例如：世界观编辑"></label><label><span>身份说明</span><textarea id="acs-assistant-identity" rows="3" maxlength="6000" placeholder="例如：擅长角色卡结构与叙事设计的编辑"></textarea></label></div></section><section class="acs-assistant-config-section"><div class="acs-assistant-config-section-head"><strong>工作方式</strong><small>说明回答原则、边界和偏好的输出形式。</small></div><label><span>系统提示词</span><textarea id="acs-assistant-system-prompt" rows="8" maxlength="12000" placeholder="规定助手的工作方式、边界与输出偏好。"></textarea></label></section></div><footer class="acs-assistant-config-footer"><button id="acs-assistant-clear" class="acs-button" type="button"><i class="fa-regular fa-trash-can"></i> 清空助手对话</button><div class="acs-assistant-config-footer-group"><button id="acs-assistant-save-config" class="acs-button acs-button-primary" type="button"><i class="fa-solid fa-floppy-disk"></i> 保存配置</button></div></footer></section>
         </div>
     </section>`;
     shell.append(overlay); button.addEventListener('click', openCreativeAssistant);
