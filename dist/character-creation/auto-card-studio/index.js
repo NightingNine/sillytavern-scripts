@@ -1,4 +1,4 @@
-// A.U.T.O 角色卡创作台 v0.6.59 · 酒馆助手脚本核心包（内置自动更新器）
+// A.U.T.O 角色卡创作台 v0.6.60 · 酒馆助手脚本核心包（内置自动更新器）
 
 // 酒馆助手脚本运行在隐藏 iframe 中；界面需要挂载到 SillyTavern 主页面。
 const hostWindow = window.parent;
@@ -3058,7 +3058,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = '0.6.59';
+const AUTO_CARD_STUDIO_VERSION = '0.6.60';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -14210,22 +14210,9 @@ function taggedArtifactsFromWorldbookEntries(worldbookEntries = []) {
     return [...artifactsByIdentity.values()];
 }
 
-function hasOriginalAutoPresetStructure(artifacts = []) {
-    // Step 20/21 接受任意 WORLD_*，不能用来证明角色卡来自原 A.U.T.O 预设。
-    // 至少两个不同的专用标签可以兼顾旧卡识别与普通世界书的误判防护。
-    const signatureIdentities = new Set(artifacts
-        .filter(artifact => ![20, 21].includes(Number(artifact?.step)))
-        .map(artifact => String(artifact?.identity || '').trim())
-        .filter(Boolean));
-    return signatureIdentities.size >= 2;
-}
-
 function partialContinuationFromCharacter(character, worldbookEntries = []) {
     const marker = `${character.creator_notes || ''}\n${character.description || ''}`;
-    const taggedArtifacts = taggedArtifactsFromWorldbookEntries(worldbookEntries);
-    const hasStudioMarker = /由\s*A\.U\.T\.O\s*角色卡创作台生成/iu.test(marker);
-    const hasOriginalPresetStructure = hasOriginalAutoPresetStructure(taggedArtifacts);
-    if (!hasStudioMarker && !hasOriginalPresetStructure) return null;
+    if (!/由\s*A\.U\.T\.O\s*角色卡创作台生成/iu.test(marker)) return null;
     const imported = createDefaultProject();
     imported.name = character.name || '导入的角色卡';
     imported.brief = character.description || character.creator_notes || '';
@@ -14251,7 +14238,7 @@ function partialContinuationFromCharacter(character, worldbookEntries = []) {
         imported.steps[step].status = 'accepted';
         imported.steps[step].updatedAt = now;
     };
-    for (const artifact of taggedArtifacts) addArtifact(artifact);
+    for (const artifact of taggedArtifactsFromWorldbookEntries(worldbookEntries)) addArtifact(artifact);
     if (character.first_messages?.[0]) {
         addArtifact({ step: 30, identity: 'opening', content: character.first_messages[0], displayName: '正式开场白' });
     }
@@ -14265,12 +14252,7 @@ function partialContinuationFromCharacter(character, worldbookEntries = []) {
     vault.updatedAt = now;
     imported.createdAt = now;
     imported.updatedAt = now;
-    return {
-        project: imported,
-        vault,
-        exact: false,
-        sourceKind: hasStudioMarker ? 'legacy-studio' : 'original-auto-preset',
-    };
+    return { project: imported, vault, exact: false };
 }
 
 // 发布后的角色世界书是世界书产物的唯一事实源。续作快照只保存项目状态以及
@@ -14408,16 +14390,13 @@ async function importContinuationCharacter(character, suppliedWorldbookEntries =
     if (!result) {
         result = partialContinuationFromCharacter(character, worldbookEntries);
     }
-    if (!result) throw new Error('未识别到创作台续作数据或原 A.U.T.O 预设结构，无法继续创作。');
+    if (!result) throw new Error('这不是由 A.U.T.O 角色卡创作台生成的角色卡。');
     const summary = projectDataSummary(result.project, result.vault);
-    const originalPresetCard = result.sourceKind === 'original-auto-preset';
     const confirmed = await showStudioConfirm({
-        title: result.exact
-            ? '导入可继续创作项目？'
-            : originalPresetCard ? '导入原 A.U.T.O 预设角色卡？' : '导入旧版角色卡？',
+        title: result.exact ? '导入可继续创作项目？' : '导入旧版角色卡？',
         message: result.exact
             ? `将创建新项目“${result.project.name}”。\n恢复 ${summary.artifacts} 项当前产物${rebuiltWorldbookArtifacts ? `；其中 ${rebuiltWorldbookArtifacts} 项按最终世界书重建` : ''}，不包含对话、历史版本和废弃项。`
-            : `${originalPresetCard ? '已根据世界书中的 A.U.T.O 专用结构标签识别该角色卡。' : '该卡没有续作快照。'}\n将从现有世界书、开场白和状态栏正则部分恢复 ${summary.artifacts} 项当前内容，不包含原步骤对话和历史版本。`,
+            : `该卡没有续作快照，将从现有世界书、开场白和状态栏正则部分恢复。\n恢复 ${summary.artifacts} 项当前内容，不包含原步骤对话和历史版本。`,
         confirmLabel: '创建续作项目',
     });
     if (!confirmed) return false;
@@ -17860,10 +17839,15 @@ async function recoverPublishedVersionFromFormalBootstrap() {
     const requestedRevision = String(hostWindow.sessionStorage.getItem(TEST_BRANCH_UPDATE_KEY) || '').trim();
     try {
         const latestVersion = await getLatestPublishedVersion(true);
-        if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) <= 0) return false;
+        // 测试分支同步正式版后版本号可能相同；以当前脚本是否已来自正式标签判断，避免循环导入。
+        if (String(import.meta.url).includes(`@auto-card-studio-v${latestVersion}/`)) return false;
         const targetUrl = VERSIONED_SCRIPT_URL(latestVersion);
         const response = await hostWindow.fetch(targetUrl, { cache: 'no-store' });
         if (!response.ok) throw new Error(`正式版 v${latestVersion} 尚未就绪：HTTP ${response.status}`);
+        const targetSource = await response.text();
+        if (!targetSource.includes('const TEST_BRANCH_UPDATE_MODE = false;')) {
+            throw new Error(`正式版 v${latestVersion} 的运行模式校验失败`);
+        }
 
         clearTestBranchRoutingState();
         hostWindow.sessionStorage.setItem(UPDATE_REOPEN_KEY, latestVersion);
