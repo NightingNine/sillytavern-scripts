@@ -12439,11 +12439,14 @@ function acceptCurrentStep() {
     shell.querySelector('#acs-user-input').focus();
 }
 
+// 标签名继续遵守原有字符范围，仅额外允许酒馆中两种稳定角色宏。
+const ARTIFACT_XML_TAG_NAME_SOURCE = String.raw`[A-Za-z](?:[A-Za-z0-9_:\-\u4e00-\u9fff]|\{\{(?:user|char)\}\})*`;
+
 function extractXmlBlocks(text) {
     const source = String(text || '');
     const blocks = [];
     const stacks = new Map();
-    const pattern = /<(\/)?([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)(?:\s[^>]*)?>/g;
+    const pattern = new RegExp(`<(/)?(${ARTIFACT_XML_TAG_NAME_SOURCE})(?:\\s[^>]*)?>`, 'g');
     let match;
     while ((match = pattern.exec(source)) !== null) {
         const closing = Boolean(match[1]);
@@ -12519,7 +12522,7 @@ function artifactTagMatchesRule(tag, rules) {
 function extractRecoverableFencedXmlBlocks(text, rules, existingBlocks) {
     if (!rules.recoverableXmlFences?.length) return [];
     const recovered = [];
-    const openingPattern = /^<([A-Za-z][A-Za-z0-9_:\-\u4e00-\u9fff]*)(?:\s[^>]*)?>/;
+    const openingPattern = new RegExp(`^<(${ARTIFACT_XML_TAG_NAME_SOURCE})(?:\\s[^>]*)?>`);
     for (const fence of extractFencedBlocks(text)) {
         if (!rules.recoverableXmlFences.includes(fence.language)) continue;
         const match = fence.content.match(openingPattern);
@@ -14206,9 +14209,22 @@ function taggedArtifactsFromWorldbookEntries(worldbookEntries = []) {
     return [...artifactsByIdentity.values()];
 }
 
+function hasOriginalAutoPresetStructure(artifacts = []) {
+    // Step 20/21 接受任意 WORLD_*，不能用来证明角色卡来自原 A.U.T.O 预设。
+    // 至少两个不同的专用标签可以兼顾旧卡识别与普通世界书的误判防护。
+    const signatureIdentities = new Set(artifacts
+        .filter(artifact => ![20, 21].includes(Number(artifact?.step)))
+        .map(artifact => String(artifact?.identity || '').trim())
+        .filter(Boolean));
+    return signatureIdentities.size >= 2;
+}
+
 function partialContinuationFromCharacter(character, worldbookEntries = []) {
     const marker = `${character.creator_notes || ''}\n${character.description || ''}`;
-    if (!/由\s*A\.U\.T\.O\s*角色卡创作台生成/iu.test(marker)) return null;
+    const taggedArtifacts = taggedArtifactsFromWorldbookEntries(worldbookEntries);
+    const hasStudioMarker = /由\s*A\.U\.T\.O\s*角色卡创作台生成/iu.test(marker);
+    const hasOriginalPresetStructure = hasOriginalAutoPresetStructure(taggedArtifacts);
+    if (!hasStudioMarker && !hasOriginalPresetStructure) return null;
     const imported = createDefaultProject();
     imported.name = character.name || '导入的角色卡';
     imported.brief = character.description || character.creator_notes || '';
@@ -14234,7 +14250,7 @@ function partialContinuationFromCharacter(character, worldbookEntries = []) {
         imported.steps[step].status = 'accepted';
         imported.steps[step].updatedAt = now;
     };
-    for (const artifact of taggedArtifactsFromWorldbookEntries(worldbookEntries)) addArtifact(artifact);
+    for (const artifact of taggedArtifacts) addArtifact(artifact);
     if (character.first_messages?.[0]) {
         addArtifact({ step: 30, identity: 'opening', content: character.first_messages[0], displayName: '正式开场白' });
     }
@@ -14248,7 +14264,12 @@ function partialContinuationFromCharacter(character, worldbookEntries = []) {
     vault.updatedAt = now;
     imported.createdAt = now;
     imported.updatedAt = now;
-    return { project: imported, vault, exact: false };
+    return {
+        project: imported,
+        vault,
+        exact: false,
+        sourceKind: hasStudioMarker ? 'legacy-studio' : 'original-auto-preset',
+    };
 }
 
 // 发布后的角色世界书是世界书产物的唯一事实源。续作快照只保存项目状态以及
@@ -14386,13 +14407,16 @@ async function importContinuationCharacter(character, suppliedWorldbookEntries =
     if (!result) {
         result = partialContinuationFromCharacter(character, worldbookEntries);
     }
-    if (!result) throw new Error('这不是由 A.U.T.O 角色卡创作台生成的角色卡。');
+    if (!result) throw new Error('未识别到创作台续作数据或原 A.U.T.O 预设结构，无法继续创作。');
     const summary = projectDataSummary(result.project, result.vault);
+    const originalPresetCard = result.sourceKind === 'original-auto-preset';
     const confirmed = await showStudioConfirm({
-        title: result.exact ? '导入可继续创作项目？' : '导入旧版角色卡？',
+        title: result.exact
+            ? '导入可继续创作项目？'
+            : originalPresetCard ? '导入原 A.U.T.O 预设角色卡？' : '导入旧版角色卡？',
         message: result.exact
             ? `将创建新项目“${result.project.name}”。\n恢复 ${summary.artifacts} 项当前产物${rebuiltWorldbookArtifacts ? `；其中 ${rebuiltWorldbookArtifacts} 项按最终世界书重建` : ''}，不包含对话、历史版本和废弃项。`
-            : `该卡没有续作快照，将从现有世界书、开场白和状态栏正则部分恢复。\n恢复 ${summary.artifacts} 项当前内容，不包含原步骤对话和历史版本。`,
+            : `${originalPresetCard ? '已根据世界书中的 A.U.T.O 专用结构标签识别该角色卡。' : '该卡没有续作快照。'}\n将从现有世界书、开场白和状态栏正则部分恢复 ${summary.artifacts} 项当前内容，不包含原步骤对话和历史版本。`,
         confirmLabel: '创建续作项目',
     });
     if (!confirmed) return false;
