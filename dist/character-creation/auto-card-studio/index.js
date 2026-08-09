@@ -3069,6 +3069,7 @@ const UPDATE_REOPEN_KEY = 'auto-card-studio:reopen-after-update:v1';
 // 兼容直接导入旧版 index.js 的用户：刷新后先跳转到本次确认的不可变正式标签。
 const UPDATE_LOAD_KEY = 'auto-card-studio:load-after-update:v1';
 const TOUR_COMPLETED_KEY = 'auto-card-studio:tour-completed:v1';
+const FORMAL_BOOTSTRAP_STATE_KEY = '__AUTO_CARD_STUDIO_BOOTSTRAP_V4__';
 // 测试分支不参与正式版版本号比较；手动更新直接重新拉取本分支的最新脚本。
 const TEST_BRANCH_UPDATE_MODE = false;
 const TEST_BRANCH_UPDATE_KEY = 'auto-card-studio:reload-test-branch:v1';
@@ -17847,8 +17848,41 @@ function startStudioRuntime() {
     }
 }
 
+function clearTestBranchRoutingState() {
+    localStorage.removeItem(TEST_BRANCH_PIN_KEY);
+    hostWindow.sessionStorage.removeItem(TEST_BRANCH_UPDATE_KEY);
+}
+
+async function recoverPublishedVersionFromFormalBootstrap() {
+    // 只有正式 bootstrap-v4 误载入测试构建时才自动回正式版；直接安装测试启动器的用户不受影响。
+    if (!hostWindow[FORMAL_BOOTSTRAP_STATE_KEY]) return false;
+    const pinnedRevision = String(localStorage.getItem(TEST_BRANCH_PIN_KEY) || '').trim();
+    const requestedRevision = String(hostWindow.sessionStorage.getItem(TEST_BRANCH_UPDATE_KEY) || '').trim();
+    try {
+        const latestVersion = await getLatestPublishedVersion(true);
+        if (compareVersions(latestVersion, AUTO_CARD_STUDIO_VERSION) <= 0) return false;
+        const targetUrl = VERSIONED_SCRIPT_URL(latestVersion);
+        const response = await hostWindow.fetch(targetUrl, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`正式版 v${latestVersion} 尚未就绪：HTTP ${response.status}`);
+
+        clearTestBranchRoutingState();
+        hostWindow.sessionStorage.setItem(UPDATE_REOPEN_KEY, latestVersion);
+        console.info(`[A.U.T.O Card Studio] 检测到正式启动器误入测试分支，正在恢复正式版 v${latestVersion}。`);
+        await import(targetUrl);
+        return true;
+    } catch (error) {
+        // 恢复失败时保留原测试路由，避免本轮连创作台也无法启动。
+        if (pinnedRevision) localStorage.setItem(TEST_BRANCH_PIN_KEY, pinnedRevision);
+        if (requestedRevision) hostWindow.sessionStorage.setItem(TEST_BRANCH_UPDATE_KEY, requestedRevision);
+        hostWindow.sessionStorage.removeItem(UPDATE_REOPEN_KEY);
+        console.warn('[A.U.T.O Card Studio] 自动恢复正式版失败，继续使用当前测试构建。', error);
+        return false;
+    }
+}
+
 async function startStudioWithAutoUpdate() {
     if (TEST_BRANCH_UPDATE_MODE) {
+        if (await recoverPublishedVersionFromFormalBootstrap()) return;
         const requestedRevision = String(
             hostWindow.sessionStorage.getItem(TEST_BRANCH_UPDATE_KEY)
             || localStorage.getItem(TEST_BRANCH_PIN_KEY)
@@ -17867,6 +17901,9 @@ async function startStudioWithAutoUpdate() {
         startStudioRuntime();
         return;
     }
+
+    // 正式版不消费历史测试分支固定记录，载入成功后顺手清理遗留路由。
+    clearTestBranchRoutingState();
 
     // 兼容用户曾直接导入某个 index.js 固定版本的情况：更新确认后，旧脚本会在刷新后
     // 先加载本次目标标签，而不是再次启动自己，从根源上避免移动端反复弹出同一更新公告。
