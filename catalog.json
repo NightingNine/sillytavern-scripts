@@ -13,6 +13,19 @@
           "TavernHelper"
         ]
       }
+    ],
+    "worldbook-creation": [
+      {
+        "id": "worldbook-studio",
+        "name": "世界书创作台",
+        "version": "0.1.0",
+        "entry": "dist/worldbook-creation/worldbook-studio/index.js",
+        "documentation": "docs/worldbook-creation/worldbook-studio.md",
+        "requires": [
+          "SillyTavern",
+          "TavernHelper >= 4.9.1"
+        ]
+      }
     ]
   }
 }
