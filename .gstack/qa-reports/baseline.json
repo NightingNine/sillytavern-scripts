@@ -1,0 +1,30 @@
+{
+  "date": "2026-07-24",
+  "target": "auto-card-studio-android",
+  "device": {
+    "type": "MuMu 12",
+    "android": "12",
+    "adb_serial": "127.0.0.1:7555"
+  },
+  "result": "pass",
+  "health_score": 98,
+  "checks": {
+    "automated_tests": "20/20 pass",
+    "typescript_and_vite": "pass",
+    "android_arm64_build": "pass",
+    "layout": "pass",
+    "project_library": "pass",
+    "inspector_tabs": "pass",
+    "four_action_bar": "pass",
+    "fatal_runtime_errors": 0
+  },
+  "apk": {
+    "version_name": "0.2.0",
+    "version_code": 2000,
+    "size_bytes": 253311707,
+    "sha256": "BB8F653220BE27E59CC31661CA0543D43E975FC9EDFDD0D94DCD26DC95C3B4AD"
+  },
+  "known_non_blocking_warnings": [
+    "MuMu WebView could not create the wasm Code Cache directory"
+  ]
+}

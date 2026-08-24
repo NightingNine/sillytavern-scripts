@@ -1,0 +1,10 @@
+# 前端依赖与构建产物
+node_modules/
+dist/
+*.log
+
+# Rust / Tauri 生成物
+src-tauri/target/
+src-tauri/gen/schemas/
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/app/build/
