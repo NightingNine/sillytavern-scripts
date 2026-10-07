@@ -6,21 +6,21 @@ function installShortcut() {
     const form = document.querySelector('#send_form');
     if (!form) return;
     const bar = form.querySelector('#qr--bar');
+    const row = bar?.querySelector(':scope > .qr--buttons') || bar;
     let container = document.getElementById(FALLBACK_ID);
     if (!container) {
         container = document.createElement('div');
         container.id = FALLBACK_ID;
-        container.style.cssText = 'display:flex;flex:0 0 auto;gap:4px;align-items:center;justify-content:center;order:1;';
+        container.style.cssText = 'display:contents;';
     }
-    if (bar && container.parentElement !== bar) bar.append(container);
+    if (row && container.parentElement !== row) row.append(container);
     else if (!bar && container.parentElement !== form) form.prepend(container);
     let button = document.getElementById(ID);
     if (!button) {
         button = document.createElement('button');
         button.id = ID;
         button.type = 'button';
-        button.className = 'menu_button interactable';
-        button.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;margin:0;padding:2px 6px;min-width:28px;font-size:13px;line-height:1.4;';
+        button.className = 'qr--button menu_button interactable';
         button.textContent = '🔨';
         button.title = '打开 A.U.T.O 角色卡创作台';
         button.setAttribute('aria-label', button.title);
