@@ -3088,7 +3088,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = EXTENSION_MODE ? '0.7.0' : '0.6.60';
+const AUTO_CARD_STUDIO_VERSION = EXTENSION_MODE ? '0.7.1' : '0.6.60';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -5898,6 +5898,8 @@ let environment = {
     presetName: '',
 };
 let studioResources = { loaded: false, preset: null, regexes: [], referenceWorldbooks: [] };
+let autoResources = studioResources;
+let simpleResources = { loaded: true, preset: null, regexes: [], referenceWorldbooks: [] };
 
 function openResourceDatabase() {
     return new Promise((resolve, reject) => {
@@ -5974,6 +5976,7 @@ function normalizeArtifactVault(raw, projectId) {
             createdAt: String(item.createdAt || new Date().toISOString()),
             updatedAt: String(item.updatedAt || item.createdAt || new Date().toISOString()),
             source: String(item.source || 'stored'),
+            studioMode: item.studioMode === 'simple' ? 'simple' : 'auto',
         }];
     });
     const storedSelections = raw.selectedVersionIds && typeof raw.selectedVersionIds === 'object'
@@ -6004,6 +6007,7 @@ function artifactVaultFor(projectId = project?.id) {
 }
 
 function appendArtifactsToVault(vault, text, stepNumber, metadata = {}) {
+    if (isSimpleStudioMode() && vault.projectId === project.id) return 0;
     const blocks = extractArtifactBlocks(text, stepNumber);
     const now = String(metadata.createdAt || new Date().toISOString());
     for (const block of blocks) {
@@ -6024,6 +6028,7 @@ function appendArtifactsToVault(vault, text, stepNumber, metadata = {}) {
 }
 
 function migrateConversationArtifacts(projectData, vault) {
+    if (projectData.studioMode === 'simple') return 0;
     if (vault.migratedAt) return 0;
     let migrated = 0;
     for (const step of STEPS) {
@@ -6046,6 +6051,7 @@ function migrateConversationArtifacts(projectData, vault) {
 }
 
 function recoverRestoreOverwriteArtifacts(projectData, vault) {
+    if (projectData.studioMode === 'simple') return { attempted: false, recovered: 0 };
     const affectedKeys = new Set(vault.versions
         .filter(item => item.source === 'restored-overwrite')
         .map(item => artifactContextKey(item.step, item.identity)));
@@ -6094,6 +6100,7 @@ function recoverRestoreOverwriteArtifacts(projectData, vault) {
 }
 
 function recoverMalformedFencedArtifacts(projectData, vault) {
+    if (projectData.studioMode === 'simple') return { attempted: false, recovered: 0 };
     if (vault.malformedFenceRepairAt) return { attempted: false, recovered: 0 };
     let recovered = 0;
     const stepNumber = 5;
@@ -6222,6 +6229,7 @@ async function readResourceRecord(key) {
 }
 
 async function writeResourceRecord(key, value) {
+    if (isSimpleStudioMode() && ['preset', 'regexes'].includes(key)) key = 'simple:' + key;
     const database = await openResourceDatabase();
     try {
         await new Promise((resolve, reject) => {
@@ -6483,6 +6491,10 @@ async function loadStudioResources() {
         regexes: normalizedRegexes,
         referenceWorldbooks: normalizeReferenceWorldbookLibrary(referenceWorldbooks),
     };
+    autoResources = studioResources;
+    const [simplePreset, simpleRegexes] = await Promise.all([readResourceRecord('simple:preset'), readResourceRecord('simple:regexes')]);
+    simpleResources = { loaded: true, preset: simplePreset, regexes: simpleRegexes || [], referenceWorldbooks: studioResources.referenceWorldbooks };
+    selectStudioModeResources();
     // 旧数据首次升级时，以已导入预设的参数填充创作台独立参数。
     ensureModelParameters(studioResources.preset);
 }
@@ -7672,6 +7684,7 @@ async function inspectEnvironment() {
 }
 
 function renderEnvironmentSelectors() {
+    selectStudioModeResources();
     const presetLock = shell.querySelector('#acs-preset-lock');
     const presetName = shell.querySelector('#acs-preset-name');
     const presetReady = Boolean(environment.presetName);
@@ -7921,6 +7934,7 @@ function installCustomModelPicker() {
 function renderStepRail() {
     const rail = shell.querySelector('#acs-step-rail');
     rail.replaceChildren();
+    if (isSimpleStudioMode()) return;
 
     for (const phase of PHASES) {
         const phaseSteps = STEPS.filter(item => item.phase === phase.id);
@@ -8583,13 +8597,13 @@ function renderCurrentStep() {
         edit.setAttribute('aria-label', '编辑这条消息');
         edit.innerHTML = '<i class="fa-solid fa-pencil" aria-hidden="true"></i>';
         actions.append(edit);
-        if (turn.role === 'assistant' && extractArtifactBlocks(turn.content, step.number).length) {
+        if (turn.role === 'assistant' && (isSimpleStudioMode() || extractArtifactBlocks(turn.content, step.number).length)) {
             const addArtifacts = document.createElement('button');
             addArtifacts.className = 'acs-turn-action acs-turn-add-artifacts';
             addArtifacts.type = 'button';
             addArtifacts.dataset.addTurnArtifacts = String(turnIndex);
             addArtifacts.disabled = isGenerating;
-            addArtifacts.title = '把这条 AI 回复中的合规产物加入产物库';
+            addArtifacts.title = isSimpleStudioMode() ? '手动把这条回复保存为产物' : '把这条 AI 回复中的合规产物加入产物库';
             addArtifacts.setAttribute('aria-label', '添加回复中的产物');
             addArtifacts.innerHTML = '<i class="fa-solid fa-box-archive" aria-hidden="true"></i><span>加入产物</span>';
             actions.append(addArtifacts);
@@ -8640,6 +8654,7 @@ function renderCurrentStep() {
             : `会带上当前会话，${project.includeFutureArtifacts ? '包含后序正式产物' : '不含后序产物'} · ${connectionDisplayName()}`
         : `可留空生成；${project.includeFutureArtifacts ? '包含后序正式产物' : '默认不含后序产物'} · ${connectionDisplayName()}`);
 
+    renderStudioModeUI();
     requestAnimationFrame(() => {
         const conversation = shell.querySelector('.acs-conversation');
         if (!conversation) {
@@ -8878,6 +8893,7 @@ function collectArtifactGroups(projectData = project) {
     const groups = new Map();
     const vault = artifactVaultFor(projectData.id);
     for (const stored of vault.versions) {
+        if ((stored.studioMode || 'auto') !== (projectData.studioMode || 'auto')) continue;
         const groupKey = `${stored.step}:${stored.identity}`;
         if (!groups.has(groupKey)) groups.set(groupKey, { key: groupKey, tag: stored.identity, versions: [] });
         groups.get(groupKey).versions.push({
@@ -9192,7 +9208,7 @@ function renderArtifacts() {
         title.className = 'acs-artifact-title';
         const step = document.createElement('span');
         step.className = 'acs-artifact-step';
-        step.textContent = `S${String(artifact.step).padStart(2, '0')}${artifact.accepted ? ' · 已确认' : ' · 草案'}`;
+        step.textContent = isSimpleStudioMode() ? '手动产物' : `S${String(artifact.step).padStart(2, '0')}${artifact.accepted ? ' · 已确认' : ' · 草案'}`;
         const meta = document.createElement('span');
         meta.className = 'acs-artifact-meta';
         const contextToggle = document.createElement('button');
@@ -9346,7 +9362,7 @@ function openManualArtifactDialog(artifactId = '') {
     overlay.dataset.artifactId = stored?.id || '';
     overlay.querySelector('#acs-manual-artifact-title').textContent = stored ? '修改自建产物' : '新建自建产物';
     const stepSelect = overlay.querySelector('#acs-manual-artifact-step');
-    stepSelect.replaceChildren(...STEPS.map(step => {
+    stepSelect.replaceChildren(...(isSimpleStudioMode() ? STEPS.slice(0, 1) : STEPS).map(step => {
         const option = document.createElement('option');
         option.value = String(step.number);
         option.textContent = `Step ${step.number} · ${step.name}`;
@@ -9404,6 +9420,7 @@ async function saveManualArtifact() {
             createdAt: now,
             updatedAt: now,
             source: 'manual',
+            studioMode: project.studioMode || 'auto',
         };
         vault.versions.push(version);
         vault.selectedVersionIds[artifactContextKey(stepNumber, identity)] = version.id;
@@ -10763,6 +10780,7 @@ function connectionDisplayName() {
 function generationDependencyMessage() {
     if (!environment.checked) return '';
     if (!helper) return '未检测到酒馆助手，暂时不能调用 AI。';
+    if (isSimpleStudioMode()) return '';
     if (!studioResources.preset) return '尚未向创作台导入 A.U.T.O 预设。';
     if (project?.currentStep === 29 && !currentReorgAnalysis()) return '请先点击“分析当前产物”生成结构报告。';
     return '';
@@ -11143,6 +11161,9 @@ function renderConnectionSettings() {
 }
 
 function renderAll() {
+    selectStudioModeResources();
+    const manualStepLabel = shell.querySelector('#acs-manual-artifact-step')?.closest('label');
+    if (manualStepLabel) manualStepLabel.hidden = isSimpleStudioMode();
     renderProjectFields();
     renderOverviewState();
     renderStepRail();
@@ -11152,6 +11173,7 @@ function renderAll() {
     renderReferenceWorldbooks();
     renderProjectMenu();
     renderRuntimeDataStatus();
+    renderStudioModeUI();
 }
 
 function updateStudioViewportScale() {
@@ -11281,6 +11303,7 @@ function prepareTemplateMacrosForGeneration(text) {
 }
 
 function repairProjectTemplateMacros(projectData) {
+    if (projectData.studioMode === 'simple') return;
     for (const [stepNumber, state] of Object.entries(projectData.steps || {})) {
         for (const collectionName of ['turns', 'artifactHistory']) {
             for (const collection of stepConversationCollections(state, Number(stepNumber), collectionName)) {
@@ -11446,6 +11469,7 @@ function buildCurrentConversationMessages(currentStep, options = {}) {
 }
 
 function buildOrderedPrompts(preset, currentStep, options = {}) {
+    if (isSimpleStudioMode()) return buildSimpleStudioPrompts(options);
     const includePreviewMetadata = Object.prototype.hasOwnProperty.call(options, 'previewUserInput');
     const reorgOnly = Boolean(options.reorgOnly);
     const ordered = [];
@@ -11524,6 +11548,7 @@ function buildOrderedPrompts(preset, currentStep, options = {}) {
 }
 
 function resolvedCurrentUserInput(step, state) {
+    if (isSimpleStudioMode()) return shell.querySelector('#acs-user-input').value.trim() || '请继续协助完善角色设定。';
     return shell.querySelector('#acs-user-input').value.trim()
         || (state.turns.length
             ? '请基于既有对话继续完善本阶段产物，并保持 A.U.T.O 规定的输出格式。'
@@ -11653,7 +11678,7 @@ function togglePromptMessage(toggle) {
 
 function openPromptPreview() {
     try {
-        const preset = getAutoPresetSafe();
+        const preset = getAutoPresetSafe() || (isSimpleStudioMode() ? {} : null);
         if (!preset) {
             notify('warning', '请先导入 A.U.T.O 预设。');
             return;
@@ -11940,6 +11965,7 @@ function prepareGeneration() {
         notify('error', '未检测到酒馆助手，无法调用 A.U.T.O 生成。');
         return null;
     }
+    if (isSimpleStudioMode()) return { step: STEPS[0], state: project.steps[1] };
     if (!studioResources.preset) {
         notify('error', '请先在创作台设置页导入 A.U.T.O 预设 JSON。');
         switchInspectorTab('settings');
@@ -12014,6 +12040,7 @@ async function runStepGeneration(step, state, userInput, {
     const targetStepNumber = Number(step.number);
     state = generationProject.steps[targetStepNumber];
     if (!state) throw new Error(`无法定位 Step ${targetStepNumber} 的对话存档`);
+    if (isSimpleStudioMode()) return runSimpleStudioGeneration(state, userInput, { appendUserTurn, retried });
     const repairedBeforeGeneration = repairCrossStepTurnOwnership(generationProject);
     if (repairedBeforeGeneration) {
         void syncConversationVaults(generationProject);
@@ -12327,6 +12354,11 @@ function addArtifactsFromAssistantTurn(turnIndex) {
     const state = project.steps[stepNumber];
     const turn = state?.turns?.[turnIndex];
     if (turn?.role !== 'assistant') return;
+    if (isSimpleStudioMode()) {
+        openManualArtifactDialog();
+        shell.querySelector('#acs-manual-artifact-content').value = turn.content;
+        return;
+    }
     const blocks = extractArtifactBlocks(turn.content, stepNumber);
     if (!blocks.length) {
         notify('info', '这条 AI 回复中没有识别到符合当前步骤格式的产物块。');
@@ -13493,6 +13525,7 @@ function applyReorgPlan(selectedArtifacts, allArtifacts, planResult) {
 }
 
 function buildOutputWorldbook(selectedArtifacts, allArtifacts = selectedArtifacts) {
+    if (isSimpleStudioMode()) return { applied: false, entries: buildDefaultOutputWorldbook(selectedArtifacts) };
     return applyReorgPlan(selectedArtifacts, allArtifacts, latestReorgPlanResult());
 }
 
@@ -13636,6 +13669,7 @@ function recoverIncompleteReorgBuild(build, selectedArtifacts) {
 }
 
 async function ensureDeliveryReorg(selectedArtifacts) {
+    if (isSimpleStudioMode()) return { applied: false, entries: buildDefaultOutputWorldbook(selectedArtifacts), discardedArtifacts: 0, omittedArtifacts: 0 };
     const selectedWorldbook = selectedArtifacts.filter(item => item.target.kind === 'worldbook');
     if (!selectedWorldbook.length) {
         return { applied: true, entries: [], usedArtifacts: 0, omittedArtifacts: 0, unresolvedBlockIds: [] };
@@ -13944,7 +13978,7 @@ async function confirmProjectDelivery() {
             `项目: ${project.name}`,
             `更新时间: ${new Date().toLocaleString('zh-CN')}`,
             `本次交付: ${selectedArtifacts.map(item => item.displayName).join('、')}`,
-            `发布自动重组: 已执行并通过完整性校验；废弃 ${worldbookBuild.discardedArtifacts || 0} 项（原产物保留）`,
+            isSimpleStudioMode() ? '简洁模式发布：按手动产物直接组装世界书。' : `发布自动重组: 已执行并通过完整性校验；废弃 ${worldbookBuild.discardedArtifacts || 0} 项（原产物保留）`,
             '',
             project.brief,
         ].join('\n');
@@ -15699,7 +15733,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
     if (!items.length) {
         const empty = document.createElement('div');
         empty.className = 'acs-resource-empty';
-        empty.textContent = kind === 'prompts' ? '导入 A.U.T.O 预设后，这里会显示步骤之外的预设条目。' : '导入所需正则后，可以在这里逐项启用或停用。';
+        empty.textContent = isSimpleStudioMode() ? (kind === 'prompts' ? '简洁模式没有 AUTO 预设条目。基础定义在设置页编辑。' : '简洁模式没有 AUTO 正则。') : (kind === 'prompts' ? '导入 A.U.T.O 预设后，这里会显示步骤之外的预设条目。' : '导入所需正则后，可以在这里逐项启用或停用。');
         list.append(empty);
         return;
     }
@@ -17953,6 +17987,8 @@ void startStudioWithAutoUpdate();
 
 export const autoMode = {
     open: requestOpenStudio,
+    setMode: setStudioMode,
+    getMode: () => project.studioMode || 'auto',
     close() {
         if (isGenerating || creativeAssistantGenerating) return false;
         closeStudio();
@@ -17960,3 +17996,129 @@ export const autoMode = {
     },
     isGenerating: () => isGenerating || creativeAssistantGenerating,
 };
+
+// Both modes use the same studio shell. Only workflow, resources and generation differ.
+function isSimpleStudioMode() { return project?.studioMode === 'simple'; }
+function selectStudioModeResources() {
+    studioResources = isSimpleStudioMode() ? simpleResources : autoResources;
+    environment.presetName = studioResources.preset?.name || '';
+}
+async function setStudioMode(mode) {
+    if (!['auto', 'simple'].includes(mode) || mode === (project.studioMode || 'auto')) return;
+    if (isGenerating || creativeAssistantGenerating) { notify('warning', '请先停止当前生成，再切换模式。'); return; }
+    flushPendingProjectEdits();
+    project.modeWorkspaces ||= {};
+    project.modeWorkspaces[project.studioMode || 'auto'] = { steps: project.steps, currentStep: project.currentStep, draft: shell.querySelector('#acs-user-input').value };
+    let workspace = project.modeWorkspaces[mode];
+    if (!workspace) {
+        workspace = { steps: createDefaultProject().steps, currentStep: 1 };
+        if (mode === 'simple') {
+            // Preserve definitions and free conversation created by v0.7.0's separate panel.
+            let legacy = {};
+            try { legacy = JSON.parse(localStorage.getItem('auto-card-studio:simple-mode:v1') || '{}') || {}; } catch (error) { console.warn('[角色创作台] 旧简洁模式数据读取失败', error); }
+            workspace.steps[1] = normalizeStepState({ turns: legacy.turns || [] }, 1);
+            if (legacy.definitions) for (const key of ['aiRole', 'creatorRole', 'language', 'person', 'wordCount']) { if (typeof legacy.definitions[key] === 'string') project.preferences[key] = legacy.definitions[key]; }
+            project.simpleDefinitions ||= { aiPersona: legacy.definitions?.aiPersona || '', systemPrompt: legacy.definitions?.systemPrompt || '根据创作者的要求协助设计角色。' };
+        }
+    }
+    project.steps = workspace.steps;
+    project.currentStep = mode === 'simple' ? 1 : workspace.currentStep;
+    project.studioMode = mode;
+    selectStudioModeResources();
+    localStorage.setItem('auto-card-studio:mode:v1', mode);
+    artifactFilterScope = 'all'; artifactFilterQuery = '';
+    saveProject();
+    renderEnvironmentSelectors(); renderResourceDrawer(); renderAll();
+    const legacyDraft = mode === 'simple' && !workspace.draft ? (() => { try { return JSON.parse(localStorage.getItem('auto-card-studio:simple-mode:v1') || '{}')?.draft || ''; } catch { return ''; } })() : '';
+    shell.querySelector('#acs-user-input').value = workspace.draft || legacyDraft;
+}
+function buildSimpleStudioPrompts(options = {}) {
+    const prefs = project.preferences, defs = project.simpleDefinitions || {};
+    const ordered = [{ role: 'system', content: [
+        'AI 身份：' + prefs.aiRole, 'AI 人设：' + (defs.aiPersona || ''),
+        '创作者身份：' + prefs.creatorRole, defs.systemPrompt || '根据创作者的要求协助设计角色。',
+        '输出语言：' + prefs.language, '叙述人称：' + prefs.person, '篇幅偏好：' + prefs.wordCount,
+    ].join('\n') }];
+    if (project.brief.trim()) ordered.push({ role: 'user', content: project.brief });
+    for (const group of collectArtifactGroups()) {
+        const artifact = selectedArtifactForGroup(group);
+        if (!isArtifactHiddenFromContext(artifact.step, group.tag)) ordered.push({ role: 'user', content: artifact.displayName + '\n' + artifact.content });
+    }
+    ordered.push(...buildCurrentConversationMessages(STEPS[0], options));
+    if (Object.prototype.hasOwnProperty.call(options, 'previewUserInput')) ordered.push({ role: 'user', content: options.previewUserInput });
+    else ordered.push('user_input');
+    return ordered;
+}
+async function runSimpleStudioGeneration(state, userInput, { appendUserTurn = true, retried = false } = {}) {
+    const generationProject = project;
+    setGenerating(true);
+    let succeeded = false;
+    try {
+        const orderedPrompts = buildSimpleStudioPrompts();
+        const customApi = presetGenerationOptions(null);
+        const connectionError = customConnectionError();
+        if (connectionError) throw new Error(connectionError.message);
+        await assertContextWithinLimit({}, orderedPrompts, userInput);
+        if (appendUserTurn) state.turns.push({ id: crypto.randomUUID(), role: 'user', content: userInput, step: 1, createdAt: new Date().toISOString() });
+        saveProject(); renderCurrentStep();
+        activeGenerationId = 'card-studio-simple-' + crypto.randomUUID();
+        const response = await generateRawWithOpaqueRetry({
+            generation_id: activeGenerationId, user_input: userInput, should_stream: false, should_silence: true,
+            ordered_prompts: orderedPrompts, custom_api: customApi,
+            overrides: { chat_history: { prompts: [], with_depth_entries: false, author_note: '' }, char_description: '', char_personality: '', scenario: '', persona_description: '', dialogue_examples: '', world_info_before: '', world_info_after: '' },
+        }, '简洁模式生成');
+        if (project !== generationProject) throw new Error('生成期间项目已切换。');
+        if (typeof response !== 'string') throw new Error('生成接口未返回文本。');
+        state.turns.push({ id: crypto.randomUUID(), role: 'assistant', content: response, step: 1, createdAt: new Date().toISOString() });
+        state.status = 'draft'; state.updatedAt = new Date().toISOString();
+        shell.querySelector('#acs-user-input').value = '';
+        saveProject(); succeeded = true;
+        notify('success', retried ? '回复已重新生成；产物请手动添加。' : '回复已生成；产物请手动添加。');
+    } catch (error) { notify('error', generationErrorMessage(error, String(error.message || error))); }
+    finally { activeGenerationId = null; setGenerating(false); renderAll(); }
+    return succeeded;
+}
+function renderStudioModeUI() {
+    if (!shell) return;
+    const simple = isSimpleStudioMode();
+    shell.classList.toggle('acs-simple-logic', simple);
+    if (!shell.querySelector('#acs-mode-style')) {
+        const style = document.createElement('style'); style.id = 'acs-mode-style';
+        style.textContent = '.acs-simple-logic #acs-step-rail,.acs-simple-logic .acs-progress-track,.acs-simple-logic .acs-progress-copy,.acs-simple-logic #acs-accept-step,.acs-simple-logic #acs-current-step-requirement,.acs-simple-logic #acs-step-help,.acs-simple-logic #acs-tour-launch,.acs-simple-logic #acs-future-artifacts-toggle,.acs-simple-logic [data-artifact-scope]:not([data-artifact-scope="all"]),.acs-simple-logic #acs-manual-artifact-step,.acs-simple-logic #acs-import-preset-button,.acs-simple-logic #acs-import-regex-button{display:none!important}.acs-simple-logic #acs-simple-definitions{display:grid;gap:12px}.acs-simple-logic #acs-simple-definitions textarea{width:100%;font:inherit;min-height:100px}';
+        shell.append(style);
+    }
+    let defs = shell.querySelector('#acs-simple-definitions');
+    if (!defs) {
+        defs = document.createElement('div'); defs.id = 'acs-simple-definitions';
+        defs.innerHTML = '<label>AI 人设<textarea data-simple-definition="aiPersona" spellcheck="false"></textarea></label><label>系统提示词<textarea data-simple-definition="systemPrompt" spellcheck="false"></textarea></label>';
+        shell.querySelector('#acs-ai-role').closest('label').parentElement.append(defs);
+        defs.addEventListener('input', event => { if (!event.target.dataset.simpleDefinition) return; project.simpleDefinitions ||= {}; project.simpleDefinitions[event.target.dataset.simpleDefinition] = event.target.value; saveProject(); });
+    }
+    defs.hidden = !simple;
+    for (const input of defs.querySelectorAll('textarea')) input.value = project.simpleDefinitions?.[input.dataset.simpleDefinition] || (input.dataset.simpleDefinition === 'systemPrompt' ? '根据创作者的要求协助设计角色。' : '');
+    const switchButton = shell.querySelector('[data-studio-mode-switch]');
+    if (switchButton) { switchButton.title = simple ? '简洁模式 · 切换到 AUTO 模式' : 'AUTO 模式 · 切换到简洁模式'; switchButton.setAttribute('aria-label', switchButton.title); switchButton.disabled = isGenerating || creativeAssistantGenerating; }
+    const dependencyStatus = shell.querySelector('#acs-dependency-status');
+    if (dependencyStatus && environment.checked) {
+        const ready = Boolean(helper) && (simple || Boolean(environment.presetName));
+        dependencyStatus.classList.toggle('is-ready', ready); dependencyStatus.classList.toggle('is-error', !ready);
+        dependencyStatus.querySelector('span:last-child').textContent = simple ? (helper ? '简洁模式已就绪' : '未检测到酒馆助手') : (environment.presetName ? '独立预设与正则已就绪' : '请导入 A.U.T.O 预设');
+    }
+    if (!simple) {
+        const note = shell.querySelector('#acs-publish-note'); if (note) note.textContent = `建议至少完成 Step 1、Step 5 与 Step ${STEPS.length} 后发布。`;
+        return;
+    }
+    const setText = (selector, text) => { const el = shell.querySelector(selector); if (el) el.textContent = text; };
+    setText('#acs-step-kicker', 'SIMPLE'); setText('#acs-step-title', '自由创作'); setText('#acs-step-goal', '基于基础定义对话，产物由你手动添加。');
+    setText('#acs-empty-kicker', '角色创作台'); setText('#acs-empty-title', '开始自由创作'); setText('#acs-empty-description', '在下方描述角色或提出修改要求；需要保存的内容可手动加入右侧产物库。');
+    shell.querySelector('#acs-empty-prompts').replaceChildren();
+    setText('#acs-user-input-label', '本轮输入'); shell.querySelector('#acs-user-input').placeholder = '描述角色或提出修改要求';
+    setText('#acs-step-state', '简洁模式'); setText('#acs-generation-hint', '基础定义与当前对话 · ' + connectionDisplayName());
+    shell.querySelector('#acs-generate').lastChild.textContent = isGenerating ? ' 正在生成' : ' 生成回复';
+    shell.querySelector('#acs-generate').title = '使用基础系统提示词生成回复';
+    setText('.acs-inspector-help', '产物由你手动创建，或从 AI 回复中选择“加入产物”；不会按 AUTO 格式自动添加。');
+    setText('#acs-progress-copy', ''); setText('#acs-progress-percent', ''); shell.querySelector('#acs-progress-bar').style.width = '0%';
+    setText('#acs-preset-name', '简洁模式：无 AUTO 预设'); setText('#acs-preset-lock .acs-fixed-resource-badge', '基础定义'); setText('#acs-preset-lock .acs-fixed-resource-copy small', '只使用身份、人设等基础系统提示词。');
+    setText('#acs-regex-summary', '无 AUTO 正则'); setText('#acs-publish-note', '发布手动添加的正式产物。');
+    const stepSelect = shell.querySelector('#acs-manual-artifact-step'); if (stepSelect) stepSelect.closest('label').hidden = true;
+}
