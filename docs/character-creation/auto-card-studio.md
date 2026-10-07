@@ -11,9 +11,18 @@
 
 ## 安装
 
-1. 在酒馆助手中新建“脚本”。
-2. 将下方内容粘贴到脚本正文并保存。
-3. 启用脚本，然后点击“打开 A.U.T.O 创作台”。
+1. 在 SillyTavern 的扩展管理中点击“安装扩展”，填入 `https://github.com/NightingNine/sillytavern-scripts`。
+2. 保持酒馆助手扩展启用；角色卡创作台仍使用它的生成、世界书和角色卡 API。
+3. 停用酒馆助手中原有的 A.U.T.O 正式版和测试版脚本，避免重复启动。
+4. 刷新页面，在魔法棒菜单中点击“A.U.T.O 角色卡创作台”。
+
+扩展版本为 `0.6.61`，从仓库本地加载核心，不依赖 CDN 启动器。更新通过 SillyTavern 扩展管理或创作台的“检查更新”按钮完成。
+
+迁移保留原有 IndexedDB 数据库和 localStorage 键：同一客户端、同一浏览器来源下，项目、步骤、产物与连接设置继续使用。迁移前可先导出项目备份。
+
+### 旧脚本入口（兼容保留）
+
+仅供尚未迁移的用户使用；安装扩展后请停用此脚本：
 
 ```javascript
 import 'https://cdn.jsdelivr.net/gh/NightingNine/sillytavern-scripts@auto-card-studio-bootstrap-v4/dist/character-creation/auto-card-studio-bootstrap/index.js';

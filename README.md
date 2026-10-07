@@ -9,7 +9,15 @@
 | 角色卡创作 | A.U.T.O 角色卡创作台 | 0.6.60 | [查看文档](docs/character-creation/auto-card-studio.md) |
 | 世界书创作 | 世界书创作台 | 0.1.0 | [查看文档](docs/worldbook-creation/worldbook-studio.md) |
 
-## 酒馆助手导入
+## 角色卡创作台扩展安装
+
+在 SillyTavern 的扩展管理中点击“安装扩展”，输入：
+
+`https://github.com/NightingNine/sillytavern-scripts`
+
+刷新后从魔法棒菜单打开“A.U.T.O 角色卡创作台”。扩展版为 `0.6.61`，仍依赖酒馆助手 API，但不需要在酒馆助手中运行创作台脚本。迁移时停用原正式版及测试版脚本，原项目与设置沿用；后续通过扩展管理更新。
+
+## 旧版酒馆助手导入（兼容保留）
 
 在酒馆助手中新建一个脚本，并填入：
 

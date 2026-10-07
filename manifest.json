@@ -1,0 +1,11 @@
+{
+  "display_name": "A.U.T.O 角色卡创作台",
+  "loading_order": 110,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "author": "NightingNine",
+  "version": "0.6.61",
+  "homePage": "https://github.com/NightingNine/sillytavern-scripts",
+  "auto_update": true
+}
