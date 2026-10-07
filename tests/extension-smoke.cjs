@@ -27,10 +27,10 @@ const sandbox = { window, console, URL, localStorage, setTimeout: window.setTime
 };
 vm.createContext(sandbox);
 const source = fs.readFileSync(require('node:path').join(__dirname, '../dist/character-creation/auto-card-studio/index.js'), 'utf8')
-  .replaceAll('import.meta.url', JSON.stringify('http://localhost/scripts/extensions/third-party/auto-card-studio/dist/character-creation/auto-card-studio/index.js?sillytavern-extension'));
+  .replace('export const autoMode', 'const autoMode').replaceAll('import.meta.url', JSON.stringify('http://localhost/scripts/extensions/third-party/auto-card-studio/dist/character-creation/auto-card-studio/index.js?sillytavern-extension'));
 vm.runInContext(source, sandbox);
 assert.equal(menu.item.id, 'auto-card-studio-wand-launcher');
-assert.equal(window.__autoCardStudioRuntimeControllerV1.version, '0.6.61');
+assert.equal(window.__autoCardStudioRuntimeControllerV1.version, '0.7.0');
 assert.equal(events.size, 0, 'Extension startup must not subscribe to script buttons');
 vm.runInContext('globalThis.testSubscription = subscribeStudioEvent("stream", () => {});', sandbox);
 assert.equal(events.size, 1);

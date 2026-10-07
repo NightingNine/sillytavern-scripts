@@ -29,7 +29,7 @@ function installShortcut() {
         button.type = 'button';
         button.className = 'qr--button menu_button interactable';
         button.textContent = '🔨';
-        button.title = '打开 A.U.T.O 角色卡创作台';
+        button.title = '打开角色创作台';
         button.setAttribute('aria-label', button.title);
         button.addEventListener('click', () => window.__autoCardStudioOpenHandler?.());
     }

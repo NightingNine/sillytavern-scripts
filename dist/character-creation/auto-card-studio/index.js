@@ -3088,7 +3088,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = EXTENSION_MODE ? '0.6.61' : '0.6.60';
+const AUTO_CARD_STUDIO_VERSION = EXTENSION_MODE ? '0.7.0' : '0.6.60';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -17950,3 +17950,13 @@ async function startStudioWithAutoUpdate() {
 }
 
 void startStudioWithAutoUpdate();
+
+export const autoMode = {
+    open: requestOpenStudio,
+    close() {
+        if (isGenerating || creativeAssistantGenerating) return false;
+        closeStudio();
+        return true;
+    },
+    isGenerating: () => isGenerating || creativeAssistantGenerating,
+};
