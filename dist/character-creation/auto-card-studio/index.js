@@ -3088,7 +3088,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = EXTENSION_MODE ? '0.7.1' : '0.6.60';
+const AUTO_CARD_STUDIO_VERSION = EXTENSION_MODE ? '0.7.2' : '0.6.60';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -15282,6 +15282,7 @@ function installSettingsCollapsibles() {
     if (preferenceGrid) preferenceStack.append(preferenceGrid);
     if (personField) preferenceStack.append(personField);
     preferences.body.append(preferenceStack);
+    preferences.section.hidden = true; preferences.section.style.display = 'none';
 
     const interfaceData = createSection('interface-data', '界面与数据', '对话显示、运行检查与数据重置');
     const reading = settingsPanel.querySelector('#acs-reading-settings');
@@ -15725,6 +15726,7 @@ function toggleResourceDrawer(force) {
 function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-tab.is-active')?.dataset.resourceKind || 'prompts') {
     if (!shell?.querySelector('#acs-resource-list')) return;
     for (const tab of shell.querySelectorAll('.acs-resource-drawer-tab')) tab.classList.toggle('is-active', tab.dataset.resourceKind === kind);
+    installResourceEntryControls();
     const list = shell.querySelector('#acs-resource-list');
     list.replaceChildren();
     const items = kind === 'prompts'
@@ -15733,7 +15735,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
     if (!items.length) {
         const empty = document.createElement('div');
         empty.className = 'acs-resource-empty';
-        empty.textContent = isSimpleStudioMode() ? (kind === 'prompts' ? '简洁模式没有 AUTO 预设条目。基础定义在设置页编辑。' : '简洁模式没有 AUTO 正则。') : (kind === 'prompts' ? '导入 A.U.T.O 预设后，这里会显示步骤之外的预设条目。' : '导入所需正则后，可以在这里逐项启用或停用。');
+        empty.textContent = isSimpleStudioMode() ? (kind === 'prompts' ? '尚无预设条目，点击“新建预设条目”添加。' : '尚无正则条目，点击“新建正则条目”添加。') : (kind === 'prompts' ? '导入 A.U.T.O 预设后，这里会显示步骤之外的预设条目。' : '导入所需正则后，可以在这里逐项启用或停用。');
         list.append(empty);
         return;
     }
@@ -15776,41 +15778,78 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
                 renderCurrentStep();
             }
         });
+        if (kind === 'regexes') {
+            row.classList.add('is-editable'); row.tabIndex = 0;
+            row.addEventListener('click', event => { if (!event.target.closest('.acs-resource-switch')) openResourceEditor(item.id, 'regexes'); });
+            row.addEventListener('keydown', event => { if (event.target === row && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openResourceEditor(item.id, 'regexes'); } });
+        }
         label.append(input, document.createElement('span'));
         row.append(copy, label);
         list.append(row);
     }
 }
 
-function openResourceEditor(promptId) {
-    const prompt = (studioResources.preset?.prompts || []).find(item => String(item.id) === String(promptId));
-    const overlay = shell?.querySelector('#acs-resource-editor-overlay');
-    if (!prompt || !overlay) return;
-    resourceEditorPrompt = prompt;
-    overlay.querySelector('#acs-resource-editor-title').textContent = prompt.name || '未命名预设条目';
-    overlay.querySelector('#acs-resource-editor-content').value = prompt.content || '';
-    overlay.hidden = false;
-    overlay.setAttribute('aria-hidden', 'false');
-    overlay.querySelector('#acs-resource-editor-content')?.focus({ preventScroll: true });
+function installResourceEntryControls() {
+    if (!shell.querySelector('#acs-new-resource-entry')) {
+        const button = document.createElement('button'); button.id = 'acs-new-resource-entry'; button.type = 'button'; button.className = 'acs-button acs-button-compact';
+        button.innerHTML = '<i class="fa-solid fa-plus" aria-hidden="true"></i> 新建条目'; button.style.margin = '12px 18px';
+        shell.querySelector('#acs-resource-list').before(button);
+        button.addEventListener('click', () => openResourceEditor('', shell.querySelector('.acs-resource-drawer-tab.is-active')?.dataset.resourceKind || 'prompts'));
+        const body = shell.querySelector('.acs-resource-editor-body');
+        const fields = document.createElement('div'); fields.id = 'acs-resource-entry-fields';
+        fields.innerHTML = '<label>名称<input id="acs-entry-name" maxlength="100" type="text"></label><label data-entry-prompt>角色<select id="acs-entry-role"><option value="system">系统</option><option value="user">用户</option><option value="assistant">AI</option></select></label><label data-entry-regex>查找表达式<input id="acs-entry-find" type="text" placeholder="/表达式/g"></label><label data-entry-regex>作用范围<select id="acs-entry-destination"><option value="markdown">显示正文</option><option value="prompt">发送给 AI 的正文</option><option value="output">输出正文（显示与发送）</option></select></label>';
+        body.prepend(fields);
+        const style = document.createElement('style'); style.textContent = '#acs-resource-drawer{grid-template-rows:auto auto auto minmax(0,1fr)}#acs-new-resource-entry{justify-self:start;min-height:36px}#acs-resource-editor-overlay .acs-resource-editor-body{display:block;overflow:auto}#acs-resource-entry-fields{display:grid;gap:12px;margin-bottom:16px}#acs-resource-entry-fields label{display:grid;gap:6px}#acs-resource-entry-fields input,#acs-resource-entry-fields select{width:100%;padding:10px;font:16px/1.5 system-ui;color:inherit;background:#302e29;border:1px solid #59534b;border-radius:8px}#acs-resource-entry-fields [hidden]{display:none!important}#acs-resource-editor-content{min-height:180px;height:260px;font-size:16px}'; shell.append(style);
+    }
+    const kind = shell.querySelector('.acs-resource-drawer-tab.is-active')?.dataset.resourceKind || 'prompts';
+    shell.querySelector('#acs-new-resource-entry').disabled = isGenerating || creativeAssistantGenerating;
+    shell.querySelector('#acs-new-resource-entry').lastChild.textContent = kind === 'prompts' ? ' 新建预设条目' : ' 新建正则条目';
 }
-
+function openResourceEditor(entryId, kind = 'prompts') {
+    if (isGenerating || creativeAssistantGenerating) { notify('warning', '请先停止生成，再编辑条目。'); return; }
+    installResourceEntryControls();
+    const item = kind === 'prompts' ? studioResources.preset?.prompts?.find(item => String(item.id) === String(entryId)) : studioResources.regexes.find(item => String(item.id) === String(entryId));
+    if (entryId && !item) return;
+    const overlay = shell.querySelector('#acs-resource-editor-overlay'); overlay.dataset.entryKind = kind; overlay.dataset.entryNew = String(!item);
+    resourceEditorPrompt = item || { id: crypto.randomUUID() };
+    const regex = kind === 'regexes';
+    overlay.querySelector('#acs-resource-editor-title').textContent = (item ? '编辑' : '新建') + (regex ? '正则条目' : '预设条目');
+    overlay.querySelector('#acs-entry-name').value = (regex ? item?.scriptName : item?.name) || '';
+    overlay.querySelector('#acs-entry-role').value = item?.role || 'system';
+    overlay.querySelector('#acs-entry-find').value = item?.findRegex || '';
+    overlay.querySelector('#acs-entry-destination').value = item?.promptOnly ? 'prompt' : item?.markdownOnly === false ? 'output' : 'markdown';
+    for (const el of overlay.querySelectorAll('[data-entry-regex]')) el.hidden = !regex;
+    for (const el of overlay.querySelectorAll('[data-entry-prompt]')) el.hidden = regex;
+    const content = overlay.querySelector('#acs-resource-editor-content'); content.value = regex ? item?.replaceString || '' : item?.content || '';
+    content.setAttribute('aria-label', regex ? '替换内容' : '预设条目内容'); content.placeholder = regex ? '替换内容，可留空以删除匹配文本' : '输入系统提示词或其他预设条目内容';
+    overlay.hidden = false; overlay.setAttribute('aria-hidden', 'false'); overlay.querySelector('#acs-entry-name').focus({preventScroll:true});
+}
 function closeResourceEditor() {
-    const overlay = shell?.querySelector('#acs-resource-editor-overlay');
-    if (!overlay || overlay.hidden) return;
-    overlay.hidden = true;
-    overlay.setAttribute('aria-hidden', 'true');
-    resourceEditorPrompt = null;
+    const overlay = shell?.querySelector('#acs-resource-editor-overlay'); if (!overlay || overlay.hidden) return;
+    overlay.hidden = true; overlay.setAttribute('aria-hidden', 'true'); resourceEditorPrompt = null;
 }
-
 async function saveResourceEditor() {
-    if (!resourceEditorPrompt) return;
-    const content = shell.querySelector('#acs-resource-editor-content').value;
-    resourceEditorPrompt.content = content;
-    await writeResourceRecord('preset', studioResources.preset);
-    closeResourceEditor();
-    renderResourceDrawer('prompts');
-    renderCurrentStep();
-    notify('success', '预设条目已保存。');
+    if (!resourceEditorPrompt || isGenerating || creativeAssistantGenerating) return;
+    const overlay = shell.querySelector('#acs-resource-editor-overlay'), kind = overlay.dataset.entryKind;
+    const name = overlay.querySelector('#acs-entry-name').value.trim(), content = overlay.querySelector('#acs-resource-editor-content').value;
+    if (!name) { notify('warning', '请填写条目名称。'); return; }
+    const isNew = overlay.dataset.entryNew === 'true';
+    let entry;
+    if (kind === 'regexes') {
+        const findRegex = overlay.querySelector('#acs-entry-find').value.trim();
+        if (!findRegex || !compileResponseRegex(findRegex)) { notify('warning', '请填写有效的查找表达式。'); return; }
+        const destination = overlay.querySelector('#acs-entry-destination').value;
+        entry = { ...resourceEditorPrompt, scriptName: name, findRegex, replaceString: content, placement: [2], trimStrings: resourceEditorPrompt.trimStrings || [], disabled: resourceEditorPrompt.disabled || false, markdownOnly: destination === 'markdown', promptOnly: destination === 'prompt' };
+        const next = isNew ? [...studioResources.regexes, entry] : studioResources.regexes.map(item => item.id === entry.id ? entry : item);
+        await writeResourceRecord('regexes', next); studioResources.regexes = next;
+    } else {
+        if (!content.trim()) { notify('warning', '请填写预设条目内容。'); return; }
+        entry = { ...resourceEditorPrompt, name, content, role: overlay.querySelector('#acs-entry-role').value, enabled: resourceEditorPrompt.enabled !== false };
+        const preset = studioResources.preset || { name: '自建预设', importFormatVersion: 2, prompts: [] };
+        const next = { ...preset, prompts: isNew ? [...preset.prompts, entry] : preset.prompts.map(item => item.id === entry.id ? entry : item) };
+        await writeResourceRecord('preset', next); studioResources.preset = next;
+    }
+    closeResourceEditor(); renderResourceDrawer(kind); renderEnvironmentSelectors(); renderAll(); notify('success', '条目已保存。');
 }
 
 async function importPresetFile(event) {
@@ -16144,7 +16183,7 @@ function bindStudioEvents() {
     shell.querySelector('#acs-resource-editor-overlay').addEventListener('keydown', event => {
         if (event.key === 'Escape') closeResourceEditor();
     });
-    shell.querySelector('#acs-save-resource-entry').addEventListener('click', () => { void saveResourceEditor(); });
+    shell.querySelector('#acs-save-resource-entry').addEventListener('click', () => { void saveResourceEditor().catch(error => notify('error', '条目保存失败：' + (error.message || error)));  });
     shell.querySelector('#acs-update-notes-overlay').addEventListener('click', event => {
         const result = event.target.closest('[data-update-result]');
         if (result) closeUpdateNotes(result.dataset.updateResult === 'true');
@@ -18033,12 +18072,8 @@ async function setStudioMode(mode) {
     shell.querySelector('#acs-user-input').value = workspace.draft || legacyDraft;
 }
 function buildSimpleStudioPrompts(options = {}) {
-    const prefs = project.preferences, defs = project.simpleDefinitions || {};
-    const ordered = [{ role: 'system', content: [
-        'AI 身份：' + prefs.aiRole, 'AI 人设：' + (defs.aiPersona || ''),
-        '创作者身份：' + prefs.creatorRole, defs.systemPrompt || '根据创作者的要求协助设计角色。',
-        '输出语言：' + prefs.language, '叙述人称：' + prefs.person, '篇幅偏好：' + prefs.wordCount,
-    ].join('\n') }];
+    const ordered = (studioResources.preset?.prompts || []).filter(prompt => prompt.enabled !== false && prompt.content?.trim()).map(prompt => ({ role: prompt.role || 'system', content: prompt.content }));
+    if (!ordered.length) ordered.push({ role: 'system', content: '根据创作者的要求协助设计角色。' });
     if (project.brief.trim()) ordered.push({ role: 'user', content: project.brief });
     for (const group of collectArtifactGroups()) {
         const artifact = selectedArtifactForGroup(group);
@@ -18118,7 +18153,7 @@ function renderStudioModeUI() {
     shell.querySelector('#acs-generate').title = '使用基础系统提示词生成回复';
     setText('.acs-inspector-help', '产物由你手动创建，或从 AI 回复中选择“加入产物”；不会按 AUTO 格式自动添加。');
     setText('#acs-progress-copy', ''); setText('#acs-progress-percent', ''); shell.querySelector('#acs-progress-bar').style.width = '0%';
-    setText('#acs-preset-name', '简洁模式：无 AUTO 预设'); setText('#acs-preset-lock .acs-fixed-resource-badge', '基础定义'); setText('#acs-preset-lock .acs-fixed-resource-copy small', '只使用身份、人设等基础系统提示词。');
-    setText('#acs-regex-summary', '无 AUTO 正则'); setText('#acs-publish-note', '发布手动添加的正式产物。');
+    setText('#acs-preset-name', studioResources.preset?.name || '简洁模式：可手动新建预设'); setText('#acs-preset-lock .acs-fixed-resource-badge', '基础定义'); setText('#acs-preset-lock .acs-fixed-resource-copy small', '使用预设与正则侧栏中手动创建的条目。');
+    setText('#acs-regex-summary', studioResources.regexes.length ? studioResources.regexes.length + ' 个手动正则' : '可手动新建正则'); setText('#acs-publish-note', '发布手动添加的正式产物。');
     const stepSelect = shell.querySelector('#acs-manual-artifact-step'); if (stepSelect) stepSelect.closest('label').hidden = true;
 }
