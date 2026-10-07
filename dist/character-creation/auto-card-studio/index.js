@@ -3088,7 +3088,7 @@ const SCRIPT_RUNTIME_MARK = 'tavern-helper-global-script';
 const SCRIPT_STYLE_ID = 'auto-card-studio-script-style';
 const RUNTIME_CONTROLLER_KEY = '__autoCardStudioRuntimeControllerV1';
 const RUNTIME_INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `acs-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-const AUTO_CARD_STUDIO_VERSION = EXTENSION_MODE ? '0.7.2' : '0.6.60';
+const AUTO_CARD_STUDIO_VERSION = EXTENSION_MODE ? '0.7.3' : '0.6.60';
 // GitHub Contents API 有低频匿名限流；更新器不能把单一源的 403 当成用户更新失败。
 const UPDATE_CATALOG_URLS = [
     'https://raw.githubusercontent.com/NightingNine/sillytavern-scripts/main/catalog.json',
@@ -15742,6 +15742,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
     for (const item of items) {
         const row = document.createElement('div');
         row.className = 'acs-resource-item';
+        installResourceEntryDrag(row, item, kind);
         if (kind === 'prompts') {
             row.classList.add('is-editable');
             row.classList.toggle('is-empty', !item.content.trim());
@@ -15780,7 +15781,7 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
         });
         if (kind === 'regexes') {
             row.classList.add('is-editable'); row.tabIndex = 0;
-            row.addEventListener('click', event => { if (!event.target.closest('.acs-resource-switch')) openResourceEditor(item.id, 'regexes'); });
+            row.addEventListener('click', event => { if (!event.target.closest('.acs-resource-switch, .acs-resource-drag-handle')) openResourceEditor(item.id, 'regexes'); });
             row.addEventListener('keydown', event => { if (event.target === row && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openResourceEditor(item.id, 'regexes'); } });
         }
         label.append(input, document.createElement('span'));
@@ -15789,6 +15790,43 @@ function renderResourceDrawer(kind = shell?.querySelector('.acs-resource-drawer-
     }
 }
 
+let resourceDragEntry = null;
+function installResourceEntryDrag(row, item, kind) {
+    row.style.gridTemplateColumns = '22px minmax(0,1fr) auto';
+    row.draggable = !isGenerating && !creativeAssistantGenerating;
+    const grip = document.createElement('span'); grip.className = 'acs-resource-drag-handle'; grip.title = '拖动调整条目顺序';
+    grip.innerHTML = '<i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>'; grip.style.cssText = 'cursor:grab;color:var(--acs-muted);align-self:center;'; row.append(grip);
+    row.addEventListener('dragstart', event => {
+        if (isGenerating || creativeAssistantGenerating) { event.preventDefault(); return; }
+        resourceDragEntry = { id: item.id, kind }; event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id); row.style.opacity = '.5';
+    });
+    row.addEventListener('dragend', () => { row.style.opacity = ''; resourceDragEntry = null; for (const el of shell.querySelectorAll('.acs-resource-item')) el.style.outline = ''; });
+    row.addEventListener('dragover', event => {
+        if (!resourceDragEntry || resourceDragEntry.kind !== kind || resourceDragEntry.id === item.id) return;
+        event.preventDefault(); event.dataTransfer.dropEffect = 'move'; row.style.outline = '1px solid var(--acs-cyan)';
+    });
+    row.addEventListener('dragleave', event => { if (!row.contains(event.relatedTarget)) row.style.outline = ''; });
+    row.addEventListener('drop', event => {
+        if (!resourceDragEntry || resourceDragEntry.kind !== kind || resourceDragEntry.id === item.id) return;
+        event.preventDefault(); row.style.outline = '';
+        const sourceId = resourceDragEntry.id; resourceDragEntry = null;
+        const after = event.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+        void reorderResourceEntry(kind, sourceId, item.id, after).catch(error => notify('error', '排序保存失败：' + (error.message || error)));
+    });
+}
+async function reorderResourceEntry(kind, sourceId, targetId, after) {
+    if (isGenerating || creativeAssistantGenerating) return;
+    const items = kind === 'prompts' ? studioResources.preset?.prompts || [] : studioResources.regexes;
+    const source = items.find(item => item.id === sourceId);
+    if (!source || !items.some(item => item.id === targetId)) return;
+    const next = items.filter(item => item.id !== sourceId);
+    const targetIndex = next.findIndex(item => item.id === targetId); next.splice(targetIndex + (after ? 1 : 0), 0, source);
+    if (kind === 'prompts') {
+        const preset = { ...studioResources.preset, prompts: next };
+        await writeResourceRecord('preset', preset); studioResources.preset = preset;
+    } else { await writeResourceRecord('regexes', next); studioResources.regexes = next; }
+    renderResourceDrawer(kind); renderCurrentStep(); notify('success', '条目顺序已保存。');
+}
 function installResourceEntryControls() {
     if (!shell.querySelector('#acs-new-resource-entry')) {
         const button = document.createElement('button'); button.id = 'acs-new-resource-entry'; button.type = 'button'; button.className = 'acs-button acs-button-compact';
@@ -15799,6 +15837,9 @@ function installResourceEntryControls() {
         const fields = document.createElement('div'); fields.id = 'acs-resource-entry-fields';
         fields.innerHTML = '<label>名称<input id="acs-entry-name" maxlength="100" type="text"></label><label data-entry-prompt>角色<select id="acs-entry-role"><option value="system">系统</option><option value="user">用户</option><option value="assistant">AI</option></select></label><label data-entry-regex>查找表达式<input id="acs-entry-find" type="text" placeholder="/表达式/g"></label><label data-entry-regex>作用范围<select id="acs-entry-destination"><option value="markdown">显示正文</option><option value="prompt">发送给 AI 的正文</option><option value="output">输出正文（显示与发送）</option></select></label>';
         body.prepend(fields);
+        const remove = document.createElement('button'); remove.id = 'acs-delete-resource-entry'; remove.type = 'button'; remove.className = 'acs-button'; remove.textContent = '删除条目'; remove.style.color = 'var(--acs-red)';
+        shell.querySelector('.acs-resource-editor-actions').prepend(remove);
+        remove.addEventListener('click', () => { void deleteResourceEntry().catch(error => notify('error', '条目删除失败：' + (error.message || error))); });
         const style = document.createElement('style'); style.textContent = '#acs-resource-drawer{grid-template-rows:auto auto auto minmax(0,1fr)}#acs-new-resource-entry{justify-self:start;min-height:36px}#acs-resource-editor-overlay .acs-resource-editor-body{display:block;overflow:auto}#acs-resource-entry-fields{display:grid;gap:12px;margin-bottom:16px}#acs-resource-entry-fields label{display:grid;gap:6px}#acs-resource-entry-fields input,#acs-resource-entry-fields select{width:100%;padding:10px;font:16px/1.5 system-ui;color:inherit;background:#302e29;border:1px solid #59534b;border-radius:8px}#acs-resource-entry-fields [hidden]{display:none!important}#acs-resource-editor-content{min-height:180px;height:260px;font-size:16px}'; shell.append(style);
     }
     const kind = shell.querySelector('.acs-resource-drawer-tab.is-active')?.dataset.resourceKind || 'prompts';
@@ -15812,6 +15853,7 @@ function openResourceEditor(entryId, kind = 'prompts') {
     if (entryId && !item) return;
     const overlay = shell.querySelector('#acs-resource-editor-overlay'); overlay.dataset.entryKind = kind; overlay.dataset.entryNew = String(!item);
     resourceEditorPrompt = item || { id: crypto.randomUUID() };
+    overlay.querySelector('#acs-delete-resource-entry').hidden = !item;
     const regex = kind === 'regexes';
     overlay.querySelector('#acs-resource-editor-title').textContent = (item ? '编辑' : '新建') + (regex ? '正则条目' : '预设条目');
     overlay.querySelector('#acs-entry-name').value = (regex ? item?.scriptName : item?.name) || '';
@@ -15850,6 +15892,23 @@ async function saveResourceEditor() {
         await writeResourceRecord('preset', next); studioResources.preset = next;
     }
     closeResourceEditor(); renderResourceDrawer(kind); renderEnvironmentSelectors(); renderAll(); notify('success', '条目已保存。');
+}
+
+async function deleteResourceEntry() {
+    if (!resourceEditorPrompt || isGenerating || creativeAssistantGenerating) return;
+    const overlay = shell.querySelector('#acs-resource-editor-overlay');
+    if (overlay.dataset.entryNew === 'true') return;
+    const kind = overlay.dataset.entryKind, entry = resourceEditorPrompt;
+    const name = kind === 'regexes' ? entry.scriptName : entry.name;
+    if (!await showStudioConfirm({ title: '删除条目？', message: '将删除“' + name + '”，该条目将不再参与生成或正则处理。', confirmLabel: '删除条目', danger: true })) return;
+    if (kind === 'regexes') {
+        const next = studioResources.regexes.filter(item => item.id !== entry.id);
+        await writeResourceRecord('regexes', next); studioResources.regexes = next;
+    } else {
+        const next = { ...studioResources.preset, prompts: studioResources.preset.prompts.filter(item => item.id !== entry.id) };
+        await writeResourceRecord('preset', next); studioResources.preset = next;
+    }
+    closeResourceEditor(); renderResourceDrawer(kind); renderEnvironmentSelectors(); renderAll(); notify('success', '条目已删除。');
 }
 
 async function importPresetFile(event) {
@@ -16407,6 +16466,7 @@ function ensureStudioStyle() {
     const style = document.createElement('style');
     style.id = SCRIPT_STYLE_ID;
     style.textContent = `${STUDIO_CSS}\n${WORKSPACE_RESIZER_CSS}\n${HTML_PREVIEW_CSS}\n${OUTPUT_MODE_CSS}\n${MODEL_PICKER_CSS}\n${CONVERSATION_NAV_CSS}\n${PROJECT_LIBRARY_CSS}\n${ARTIFACT_HISTORY_CSS}\n${FUTURE_ARTIFACT_CONTEXT_CSS}\n${PROMPT_INSPECTOR_CSS}\n${INTERACTIVE_TOUR_CSS}\n${STEP_HELP_CSS}\n${MULTI_CONVERSATION_CSS}\n${REORG_ANALYSIS_CSS}\n${RESOURCE_MANAGER_CSS}\n${DELIVERY_DIALOG_CSS}\n${CONFIRM_DIALOG_CSS}\n${MOBILE_ADAPTATION_CSS}\n${COMPACT_STAGE_HEADER_CSS}\n${CONNECTION_PROFILE_CSS}\n${RUNTIME_DATA_CSS}\n${CONVERSATION_READING_CSS}\n${SETTINGS_LAYOUT_CSS}\n${REFERENCE_ASSET_CSS}\n${MOBILE_POLISH_CSS}`;
+    style.textContent += STUDIO_FIELD_THEME_CSS;
     document.head.append(style);
 }
 
@@ -18157,3 +18217,30 @@ function renderStudioModeUI() {
     setText('#acs-regex-summary', studioResources.regexes.length ? studioResources.regexes.length + ' 个手动正则' : '可手动新建正则'); setText('#acs-publish-note', '发布手动添加的正式产物。');
     const stepSelect = shell.querySelector('#acs-manual-artifact-step'); if (stepSelect) stepSelect.closest('label').hidden = true;
 }
+
+// One field palette for both modes and every studio dialog. The doubled ID
+// keeps host theme !important rules from replacing the studio's own colors.
+const STUDIO_FIELD_THEME_CSS = `
+#auto-card-studio#auto-card-studio :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="color"]):not([type="hidden"]), textarea, select, .acs-select-trigger) {
+  background: linear-gradient(180deg, rgba(232,224,212,.025), rgba(30,28,25,.06)), var(--acs-panel, #302e29) !important;
+  color: var(--acs-text, #e8e2d8) !important;
+  border-color: var(--acs-line, #59534b) !important;
+  caret-color: var(--acs-gold, #d3ad72);
+  box-shadow: inset 0 1px 3px rgba(10,9,8,.12) !important;
+  color-scheme: dark;
+}
+#auto-card-studio#auto-card-studio :is(input, textarea)::placeholder {
+  color: var(--acs-muted, #aba297) !important;
+  opacity: .8;
+}
+#auto-card-studio#auto-card-studio :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="color"]):not([type="hidden"]), textarea, select, .acs-select-trigger):focus-visible {
+  border-color: var(--acs-cyan, #d97757) !important;
+  outline: 2px solid var(--acs-cyan-soft, rgba(217,119,87,.14)) !important;
+  outline-offset: 2px;
+  box-shadow: inset 0 1px 3px rgba(10,9,8,.12), 0 0 0 1px var(--acs-cyan-soft) !important;
+}
+#auto-card-studio#auto-card-studio select option {
+  background: var(--acs-panel, #302e29) !important;
+  color: var(--acs-text, #e8e2d8) !important;
+}
+`;
