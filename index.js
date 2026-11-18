@@ -1,3 +1,3 @@
 // Native SillyTavern extension entry. The core retains the existing project storage.
-import './modes/index.js';
+import './dist/character-creation/auto-card-studio/index.js?sillytavern-extension';
 import './toolbar.js';
